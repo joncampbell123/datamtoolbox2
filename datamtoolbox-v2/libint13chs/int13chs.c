@@ -13,21 +13,18 @@ int int13cnv_parse_chs_geometry(struct chs_geometry_t *chs,const char *sgeo) {
 	// cylinder
 	if (!isdigit(*sgeo)) return -1;
 	chs->cylinders = (uint16_t)strtoul(sgeo,(char**)(&sgeo),0);
-	if (!chs->cylinders) return -1;
 	if (*sgeo != '/') return -1;
 	sgeo++;
 
 	// head
 	if (!isdigit(*sgeo)) return -1;
 	chs->heads = (uint16_t)strtoul(sgeo,(char**)(&sgeo),0);
-	if (!chs->heads) return -1;
 	if (*sgeo != '/') return -1;
 	sgeo++;
 
 	// sectors
 	if (!isdigit(*sgeo)) return -1;
 	chs->sectors = (uint16_t)strtoul(sgeo,(char**)(&sgeo),0);
-	if (!chs->sectors) return -1;
 	if (*sgeo != 0) return -1;
 
 	return 0;
@@ -38,6 +35,12 @@ int int13cnv_is_chs_geometry_valid(const struct chs_geometry_t *chs) {
 	if (chs->cylinders == 0) return 0;
 	if (chs->heads == 0 || chs->heads > 256) return 0;
 	if (chs->sectors == 0 || chs->sectors > 63) return 0;
+	return 1;
+}
+
+int int13cnv_is_chs_location_valid(const struct chs_geometry_t *chs) {
+	if (chs == NULL) return 0;
+	if (chs->sectors == 0) return 0;
 	return 1;
 }
 
@@ -54,6 +57,21 @@ int int13cnv_lba_to_chs(struct chs_geometry_t *chs_res,const struct chs_geometry
 	lba /= (uint32_t)chs_geo->heads;
 
 	chs_res->cylinders = (uint16_t)lba;
+	return 0;
+}
+
+int int13cnv_chs_to_lba(uint32_t *lba,const struct chs_geometry_t *chs_geo,struct chs_geometry_t *chs_res) {
+	uint32_t res;
+
+	if (chs_res == NULL || chs_geo == NULL) return -1;
+	if (chs_res->sectors == 0) return -1;
+
+	/* this code assumes you validated the geometry, and that heads <= 256 and sectors <= 63 and none are zero */
+	/* it also assumes the LBA is in range. */
+	res  = (uint32_t)chs_res->sectors - (uint32_t)1;
+	res += (uint32_t)chs_res->heads * (uint32_t)chs_geo->sectors;
+	res += (uint32_t)chs_res->cylinders * (uint32_t)chs_geo->sectors * (uint32_t)chs_geo->heads;
+	*lba = res;
 	return 0;
 }
 

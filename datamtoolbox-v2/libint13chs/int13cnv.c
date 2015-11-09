@@ -8,6 +8,8 @@
 
 #include <datamtoolbox-v2/libint13chs/int13chs.h>
 
+const char *int13cnv_default_large_chs = "16384/255/63";
+
 struct chs_geometry_t chs_geo;
 struct chs_geometry_t chs_res;
 
@@ -19,9 +21,8 @@ int do_lba2chs(const char *s_geometry,const char *s_lba) {
 		return 1;
 	}
 
-	/* if no geometry, assume C/H/S = 16384/255/63 */
 	if (s_geometry == NULL)
-		s_geometry = "16384/255/63";
+		s_geometry = int13cnv_default_large_chs;
 
 	if (int13cnv_parse_chs_geometry(&chs_geo,s_geometry)) {
 		fprintf(stderr,"Failed to parse C/H/S pair\n");
@@ -43,12 +44,48 @@ int do_lba2chs(const char *s_geometry,const char *s_lba) {
 	}
 
 	printf("CHS result:     %u/%u/%u\n",(unsigned int)chs_res.cylinders,(unsigned int)chs_res.heads,(unsigned int)chs_res.sectors);
-
 	return 0;
 }
 
 int do_chs2lba(const char *s_geometry,const char *s_chs) {
-	return 1;
+	uint32_t lba;
+
+	if (s_chs == NULL) {
+		fprintf(stderr,"You must specify a CHS pair\n");
+		return 1;
+	}
+
+	if (s_geometry == NULL)
+		s_geometry = int13cnv_default_large_chs;
+
+	if (int13cnv_parse_chs_geometry(&chs_geo,s_geometry)) {
+		fprintf(stderr,"Failed to parse C/H/S pair\n");
+		return 1;
+	}
+	if (!int13cnv_is_chs_geometry_valid(&chs_geo)) {
+		fprintf(stderr,"Invalid C/H/S pair given\n");
+		return 1;
+	}
+
+	if (int13cnv_parse_chs_geometry(&chs_res,s_chs)) {
+		fprintf(stderr,"Failed to parse C/H/S pair for source\n");
+		return 1;
+	}
+	if (!int13cnv_is_chs_location_valid(&chs_res)) {
+		fprintf(stderr,"Invalid C/H/S pair given for source\n");
+		return 1;
+	}
+
+	printf("CHS given:      %u/%u/%u\n",(unsigned int)chs_res.cylinders,(unsigned int)chs_res.heads,(unsigned int)chs_res.sectors);
+	printf("Geometry (CHS): %u/%u/%u\n",(unsigned int)chs_geo.cylinders,(unsigned int)chs_geo.heads,(unsigned int)chs_geo.sectors);
+
+	if (int13cnv_chs_to_lba(&lba,&chs_geo,&chs_res)) {
+		fprintf(stderr,"Failed to convert CHS to LBA\n");
+		return 1;
+	}
+
+	printf("LBA result:     %lu (0x%08lx)\n",(unsigned long)lba,(unsigned long)lba);
+	return 0;
 }
 
 int do_chs2int13(const char *s_chs) {
@@ -103,15 +140,15 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"int13cnv -c <command> ...\n");
 		fprintf(stderr,"\n");
 
-		fprintf(stderr,"int13cnv -c lba2chs --geometry <cyl,head,sect> --lba <lba>\n");
+		fprintf(stderr,"int13cnv -c lba2chs --geometry <cyl/head/sect> --lba <lba>\n");
 		fprintf(stderr," ^ convert LBA sector number to C/H/S given the geometry\n");
 		fprintf(stderr,"\n");
 
-		fprintf(stderr,"int13cnv -c chs2lba --geometry <cyl,head,sect> --chs <cyl,head,sect>\n");
+		fprintf(stderr,"int13cnv -c chs2lba --geometry <cyl/head/sect> --chs <cyl,head,sect>\n");
 		fprintf(stderr," ^ convert C/H/S sector number to LBA given the geometry\n");
 		fprintf(stderr,"\n");
 
-		fprintf(stderr,"int13cnv -c chs2int13 --chs <cyl,head,sect>\n");
+		fprintf(stderr,"int13cnv -c chs2int13 --chs <cyl/head/sect>\n");
 		fprintf(stderr," ^ convert C/H/S sector number to packed form for use with INT 13h\n");
 		fprintf(stderr,"\n");
 
