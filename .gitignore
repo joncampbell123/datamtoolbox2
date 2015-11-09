@@ -9,4 +9,6 @@
 *.idb
 *.tlog
 *.lastbuildstate
+*.iobj
+*.ipdb
 
