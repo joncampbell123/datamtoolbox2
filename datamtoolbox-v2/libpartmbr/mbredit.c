@@ -5,6 +5,8 @@
 #include <sys/stat.h>
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
+#include <endian.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -17,11 +19,102 @@
 # define O_BINARY 0
 #endif
 
-static uint8_t			diskimage_sector[LIBPARTMBR_SECTOR_SIZE];
+enum {
+	LIBPARTMBR_TYPE_EMPTY=0x00
+};
 
-static struct chs_geometry_t	diskimage_chs;
-static int			diskimage_fd = -1;
-static unsigned char		diskimage_use_chs = 0;
+const char *libpartmbr_partition_type_to_str(const uint8_t t) {
+	switch (t) {
+		case 0x00: return "empty";
+	};
+
+	return "";
+}
+
+enum libpartmbr_type_t {
+	LIBPARTMBR_TYPE_CLASSIC=0,
+	LIBPARTMBR_TYPE_MODERN,
+	LIBPARTMBR_TYPE_AAP,
+	LIBPARTMBR_TYPE_NEWLDR,
+	LIBPARTMBR_TYPE_AST_SPEEDSTOR,
+	LIBPARTMBR_TYPE_DISK_MANAGER,
+
+	LIBPARTMBR_TYPE_MAX
+};
+
+const char *libpartmbr_type_str[LIBPARTMBR_TYPE_MAX] = {
+	"classic",
+	"modern",
+	"AAP",
+	"NEWLDR",
+	"AST/SPEEDSTOR",
+	"Disk manager"
+};
+
+static inline const char *libpartmbr_type_to_string(enum libpartmbr_type_t x) {
+	if (x >= LIBPARTMBR_TYPE_MAX) return "";
+	return libpartmbr_type_str[x];
+}
+
+struct libpartmbr_state_t {
+	enum libpartmbr_type_t	type;
+	unsigned char		entries;
+};
+
+typedef uint8_t libpartmbr_sector_t[LIBPARTMBR_SECTOR_SIZE];
+
+void libpartmbr_state_zero(struct libpartmbr_state_t *x) {
+	x->type = LIBPARTMBR_TYPE_CLASSIC;
+	x->entries = 4;
+}
+
+int libpartmbr_state_probe(struct libpartmbr_state_t *x,libpartmbr_sector_t sct) {
+	/* the sector must end in 0x55 0xAA */
+	if (memcmp(sct+0x1FE,"\x55\xAA",2)) return 1;
+	x->type = LIBPARTMBR_TYPE_CLASSIC;
+	x->entries = 4;
+	return 0;
+}
+
+#pragma pack(push,1)
+struct libpartmbr_entry_t {
+	uint8_t				bootable_flag;		/* +0 or "status" or "physical flag". 0x80 for bootable, 0x00 for not */
+	struct int13h_packed_geometry_t	first_chs_sector;	/* +1 first absolute sector */
+	uint8_t				partition_type;		/* +4 */
+	struct int13h_packed_geometry_t	last_chs_sector;	/* +5 last absolute sector */
+	uint32_t			first_lba_sector;	/* +8 CONVERTED TO/FROM HOST BYTE ORDER */
+	uint32_t			number_lba_sectors;	/* +12 CONVERTED TO/FROM HOST BYTE ORDER */
+};								/* =16 */
+#pragma pack(pop)
+
+int libpartmbr_read_entry(struct libpartmbr_entry_t *ent,struct libpartmbr_state_t *state,libpartmbr_sector_t sector,unsigned int entry) {
+	if (entry >= state->entries) return 1;
+
+	/* classic MBR reading, one of 4 entries */
+	unsigned char *s = sector + 0x1BE + (entry * 0x10);
+	assert(sizeof(*ent) == 0x10);
+	memcpy(ent,s,0x10);
+
+	/* next, convert byte order for the caller */
+	ent->number_lba_sectors = le32toh(ent->number_lba_sectors);
+	ent->first_lba_sector = le32toh(ent->first_lba_sector);
+	return 0;
+}
+
+int libpartmbr_sanity_check() {
+	if (sizeof(struct libpartmbr_entry_t) != 16) return 0;
+	if (sizeof(struct int13h_packed_geometry_t) != 3) return 0;
+	return -1;
+}
+
+
+
+
+static struct libpartmbr_state_t	diskimage_state;
+static libpartmbr_sector_t		diskimage_sector;
+static struct chs_geometry_t		diskimage_chs;
+static int				diskimage_fd = -1;
+static unsigned char			diskimage_use_chs = 0;
 
 static int do_dump() {
 	unsigned int i;
@@ -37,6 +130,53 @@ static int do_dump() {
 }
 
 static int do_list() {
+	struct libpartmbr_entry_t ent;
+	struct chs_geometry_t chs;
+	unsigned int entry;
+
+	printf("MBR partition list:\n");
+	for (entry=0;entry < diskimage_state.entries;entry++) {
+		if (libpartmbr_read_entry(&ent,&diskimage_state,diskimage_sector,entry))
+			continue;
+
+		printf("#%d: ",entry+1);
+		if (ent.partition_type != LIBPARTMBR_TYPE_EMPTY) {
+			printf("type=%s(0x%02x) ",
+				libpartmbr_partition_type_to_str(ent.partition_type),
+				ent.partition_type);
+
+			printf("bootable=0x%02x ",
+				ent.bootable_flag);
+
+			printf("first_lba=%lu number_lba=%lu ",
+				(unsigned long)ent.first_lba_sector,
+				(unsigned long)ent.number_lba_sectors);
+
+			printf("first_chs=");
+			if (int13cnv_int13_to_chs(&chs,&ent.first_chs_sector) == 0)
+				printf("%u/%u/%u",
+					(unsigned int)chs.cylinders,
+					(unsigned int)chs.heads,
+					(unsigned int)chs.sectors);
+			else
+				printf("N/A");
+			printf(" ");
+
+			printf("last_chs=");
+			if (int13cnv_int13_to_chs(&chs,&ent.last_chs_sector) == 0)
+				printf("%u/%u/%u",
+					(unsigned int)chs.cylinders,
+					(unsigned int)chs.heads,
+					(unsigned int)chs.sectors);
+			else
+				printf("N/A");
+		}
+		else {
+			printf("(empty)");
+		}
+		printf("\n");
+	}
+
 	return 0;
 }
 
@@ -107,6 +247,9 @@ int main(int argc,char **argv) {
 		diskimage_use_chs = 0;
 	}
 
+	assert(sizeof(diskimage_sector) >= LIBPARTMBR_SECTOR_SIZE);
+	assert(libpartmbr_sanity_check());
+
 	diskimage_fd = open(s_image,O_RDONLY|O_BINARY);
 	if (diskimage_fd < 0) {
 		fprintf(stderr,"Failed to open disk image, error=%s\n",strerror(errno));
@@ -128,8 +271,15 @@ int main(int argc,char **argv) {
 	diskimage_fd = -1;
 
 	if (!strcmp(s_command,"dump"))
-		ret = do_dump();
-	else if (!strcmp(s_command,"list"))
+		return do_dump();
+
+	if (libpartmbr_state_probe(&diskimage_state,diskimage_sector)) {
+		fprintf(stderr,"Doesn't look like MBR\n");
+		return 1;
+	}
+	printf("MBR partition type: %s\n",libpartmbr_type_to_string(diskimage_state.type));
+
+	if (!strcmp(s_command,"list"))
 		ret = do_list();
 	else
 		fprintf(stderr,"Unknown command '%s'\n",s_command);

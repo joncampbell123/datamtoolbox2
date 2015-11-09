@@ -18,14 +18,17 @@ struct chs_geometry_t {
 	uint16_t	sectors;
 };
 
+#pragma pack(push,1)
 /* structure to hold packed INT 13h format (for use with AH=2 and AH=3 for disk access) */
+/* this exists in the same form as it exists in the MBR record of the partition table */
 struct int13h_packed_geometry_t {
-	uint8_t		CL,CH,DH;
+	uint8_t		DH,CL,CH;
 // CL[7:6] = cylinder bits 9-8
 // CL[5:0] = sector
 // CH      = cylinder bits 7-0
 // DH      = head
 };
+#pragma pack(pop)
 
 extern const char *int13cnv_default_large_chs;
 
