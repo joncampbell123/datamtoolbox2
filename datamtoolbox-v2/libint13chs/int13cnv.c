@@ -115,7 +115,25 @@ int do_chs2int13(const char *s_chs) {
 }
 
 int do_int132chs(const char *s_int13) {
-	return 1;
+	if (s_int13 == NULL) {
+		fprintf(stderr,"You must specify INT 13h registers in CL,CH,DH\n");
+		return 1;
+	}
+
+	if (int13cnv_parse_int13_pair(&int13_pck,s_int13)) {
+		fprintf(stderr,"Failed to parse INT 13h pair\n");
+		return 1;
+	}
+
+	printf("INT 13 given:   CL=%02xh CH=%02xh DH=0x%02x\n",int13_pck.CL,int13_pck.CH,int13_pck.DH);
+
+	if (int13cnv_int13_to_chs(&chs_res,&int13_pck)) {
+		fprintf(stderr,"Invalid INT 13h to C/H/S conversion\n");
+		return 1;
+	}
+
+	printf("CHS result:     %u/%u/%u\n",(unsigned int)chs_res.cylinders,(unsigned int)chs_res.heads,(unsigned int)chs_res.sectors);
+	return 0;
 }
 
 int main(int argc,char **argv) {

@@ -88,3 +88,30 @@ int int13cnv_chs_to_int13(struct int13h_packed_geometry_t *pck,const struct chs_
 	return 0;
 }
 
+int int13cnv_int13_to_chs(struct chs_geometry_t *chs,const struct int13h_packed_geometry_t *pck) {
+	if (chs == NULL || pck == NULL) return -1;
+
+	chs->sectors = (pck->CL & 0x3F);
+	chs->cylinders = pck->CH + ((pck->CL >> 6) << 8);
+	chs->heads = pck->DH;
+	return 0;
+}
+
+int int13cnv_parse_int13_pair(struct int13h_packed_geometry_t *pck,const char *s) {
+	if (!isdigit(*s)) return -1;
+	pck->CL = (uint8_t)strtoul(s,(char**)(&s),0);
+	if (*s != ',') return -1;
+	s++;
+
+	if (!isdigit(*s)) return -1;
+	pck->CH = (uint8_t)strtoul(s,(char**)(&s),0);
+	if (*s != ',') return -1;
+	s++;
+
+	if (!isdigit(*s)) return -1;
+	pck->DH = (uint8_t)strtoul(s,(char**)(&s),0);
+	if (*s != 0) return -1;
+
+	return 0;
+}
+
