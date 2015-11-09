@@ -1,12 +1,16 @@
 #include <stdlib.h>
-#if !defined(_MSC_VER)
+#if defined(_MSC_VER)
+/*hack: Microsoft C++ does not have le32toh() and friends, but Windows is Little Endian anyway*/
+# define le32toh(x) (x)
+# define htole32(x) (x)
+#else
 # include <unistd.h>
+# include <endian.h>
 #endif
 #include <sys/stat.h>
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
-#include <endian.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -82,8 +86,8 @@ int libpartmbr_write_entry(libpartmbr_sector_t sector,const struct libpartmbr_en
 	*d = *ent;
 
 	/* next, convert byte order for the caller */
-	d->number_lba_sectors = le32toh(d->number_lba_sectors);
-	d->first_lba_sector = le32toh(d->first_lba_sector);
+	d->number_lba_sectors = htole32(d->number_lba_sectors);
+	d->first_lba_sector = htole32(d->first_lba_sector);
 	return 0;
 }
 
