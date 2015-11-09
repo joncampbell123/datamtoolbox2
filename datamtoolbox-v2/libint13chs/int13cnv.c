@@ -10,6 +10,7 @@
 
 const char *int13cnv_default_large_chs = "16384/255/63";
 
+struct int13h_packed_geometry_t int13_pck;
 struct chs_geometry_t chs_geo;
 struct chs_geometry_t chs_res;
 
@@ -89,7 +90,28 @@ int do_chs2lba(const char *s_geometry,const char *s_chs) {
 }
 
 int do_chs2int13(const char *s_chs) {
-	return 1;
+	if (s_chs == NULL) {
+		fprintf(stderr,"You must specify a CHS pair\n");
+		return 1;
+	}
+
+	if (int13cnv_parse_chs_geometry(&chs_res,s_chs)) {
+		fprintf(stderr,"Failed to parse C/H/S pair for source\n");
+		return 1;
+	}
+	if (!int13cnv_is_chs_location_valid(&chs_res)) {
+		fprintf(stderr,"Invalid C/H/S pair given for source\n");
+		return 1;
+	}
+
+	if (int13cnv_chs_to_int13(&int13_pck,&chs_res)) {
+		fprintf(stderr,"Invalid C/H/S to INT 13h conversion\n");
+		return 1;
+	}
+
+	printf("CHS given:      %u/%u/%u\n",(unsigned int)chs_res.cylinders,(unsigned int)chs_res.heads,(unsigned int)chs_res.sectors);
+	printf("INT 13:         CL=%02xh CH=%02xh DH=0x%02x\n",int13_pck.CL,int13_pck.CH,int13_pck.DH);
+	return 0;
 }
 
 int do_int132chs(const char *s_int13) {
@@ -152,7 +174,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr," ^ convert C/H/S sector number to packed form for use with INT 13h\n");
 		fprintf(stderr,"\n");
 
-		fprintf(stderr,"int13cnv -c int132chs --int13 <dh,dl,cx>\n");
+		fprintf(stderr,"int13cnv -c int132chs --int13 <cl,ch,dh>\n");
 		fprintf(stderr," ^ convert INT 13h packed form to C/H/S sector number\n");
 		fprintf(stderr,"\n");
 

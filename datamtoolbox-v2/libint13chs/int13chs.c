@@ -60,7 +60,7 @@ int int13cnv_lba_to_chs(struct chs_geometry_t *chs_res,const struct chs_geometry
 	return 0;
 }
 
-int int13cnv_chs_to_lba(uint32_t *lba,const struct chs_geometry_t *chs_geo,struct chs_geometry_t *chs_res) {
+int int13cnv_chs_to_lba(uint32_t *lba,const struct chs_geometry_t *chs_geo,const struct chs_geometry_t *chs_res) {
 	uint32_t res;
 
 	if (chs_res == NULL || chs_geo == NULL) return -1;
@@ -72,6 +72,19 @@ int int13cnv_chs_to_lba(uint32_t *lba,const struct chs_geometry_t *chs_geo,struc
 	res += (uint32_t)chs_res->heads * (uint32_t)chs_geo->sectors;
 	res += (uint32_t)chs_res->cylinders * (uint32_t)chs_geo->sectors * (uint32_t)chs_geo->heads;
 	*lba = res;
+	return 0;
+}
+
+int int13cnv_chs_to_int13(struct int13h_packed_geometry_t *pck,const struct chs_geometry_t *chs) {
+	if (chs == NULL || pck == NULL) return -1;
+	if (chs->sectors == 0) return -1;
+	if (chs->cylinders >= 1024) return -1;
+	if (chs->sectors >= 64) return -1;
+	if (chs->heads >= 256) return -1;
+
+	pck->CL = (uint8_t)chs->sectors + (uint8_t)((chs->cylinders >> 8) << 6);
+	pck->CH = (uint8_t)chs->cylinders;
+	pck->DH = (uint8_t)chs->heads;
 	return 0;
 }
 

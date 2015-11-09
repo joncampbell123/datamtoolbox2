@@ -33,7 +33,8 @@ int int13cnv_parse_chs_geometry(struct chs_geometry_t *chs,const char *sgeo);
 int int13cnv_is_chs_geometry_valid(const struct chs_geometry_t *chs);
 int int13cnv_is_chs_location_valid(const struct chs_geometry_t *chs);
 int int13cnv_lba_to_chs(struct chs_geometry_t *chs_res,const struct chs_geometry_t *chs_geo,uint32_t lba);
-int int13cnv_chs_to_lba(uint32_t *lba,const struct chs_geometry_t *chs_geo,struct chs_geometry_t *chs_res);
+int int13cnv_chs_to_lba(uint32_t *lba,const struct chs_geometry_t *chs_geo,const struct chs_geometry_t *chs_res);
+int int13cnv_chs_to_int13(struct int13h_packed_geometry_t *pck,const struct chs_geometry_t *chs);
 
 # ifdef __cplusplus
 }
