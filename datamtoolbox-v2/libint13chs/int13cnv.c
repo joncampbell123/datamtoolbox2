@@ -1,5 +1,7 @@
 #include <stdlib.h>
-#include <unistd.h>
+#if !defined(_MSC_VER)
+# include <unistd.h>
+#endif
 #include <stdint.h>
 #include <string.h>
 #include <fcntl.h>

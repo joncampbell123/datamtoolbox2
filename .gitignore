@@ -1,2 +1,12 @@
 *~
+*.obj
+*.sdf
+*.exe
+*.ilk
+*.pdb
+*.lib
+*.log
+*.idb
+*.tlog
+*.lastbuildstate
 

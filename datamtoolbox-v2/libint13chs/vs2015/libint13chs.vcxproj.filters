@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{6878f811-ac25-4fb6-a8be-6e5ae0303ff6}</UniqueIdentifier>
+      <Extensions>*.c;*.cpp;*.cxx</Extensions>
+    </Filter>
+    <Filter Include="Headers">
+      <UniqueIdentifier>{0a426d06-a033-445a-9c5e-bb1a3953c567}</UniqueIdentifier>
+      <Extensions>*.h;*.hxx;*.hpp</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\int13chs.c">
+      <Filter>Source</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\int13chs.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
