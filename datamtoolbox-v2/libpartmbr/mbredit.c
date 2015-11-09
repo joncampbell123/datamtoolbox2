@@ -20,12 +20,40 @@
 #endif
 
 enum {
-	LIBPARTMBR_TYPE_EMPTY=0x00
+	LIBPARTMBR_TYPE_EMPTY=0x00,				// empty
+	LIBPARTMBR_TYPE_FAT12_32MB=0x01,			// FAT12 within the first 32MB, or anywhere in logical drivve
+	LIBPARTMBR_TYPE_XENIX_ROOT=0x02,			// XENIX root
+	LIBPARTMBR_TYPE_XENIX_USR=0x03,				// XENIX usr
+	LIBPARTMBR_TYPE_FAT16_32MB=0x04,			// FAT16 within the first 32MB, less than 65536 sectors, or anywhere in logical drive
+	LIBPARTMBR_TYPE_EXTENDED_CHS=0x05,			// extended partition (CHS mapping)
+	LIBPARTMBR_TYPE_FAT16B_8GB=0x06,			// FAT16B (CHS) within the first 8GB, 65536 or more sectors, or FAT12/FAT16 outside first 32MB, or in type 0x05 extended part
+	LIBPARTMBR_TYPE_NTFS_HPFS=0x07,				// OS/2 IFS/HPFS, Windows NT NTFS, Windows CE exFAT
+	LIBPARTMBR_TYPE_LOGSECT_FAT16=0x08,			// Logically sectored FAT12/FAT16 (larger sectors to overcome limits)
+
+	LIBPARTMBR_TYPE_FAT32_CHS=0x0B,				// FAT32 (CHS)
+	LIBPARTMBR_TYPE_FAT32_LBA=0x0C,				// FAT32 (LBA)
+
+	LIBPARTMBR_TYPE_FAT16B_LBA=0x0E,			// FAT16B (LBA)
+	LIBPARTMBR_TYPE_EXTENDED_LBA=0x0F,			// extended partition (LBA mapping)
 };
 
 const char *libpartmbr_partition_type_to_str(const uint8_t t) {
 	switch (t) {
 		case 0x00: return "empty";
+		case 0x01: return "FAT12 (first 32MB)";
+		case 0x02: return "XENIX root";
+		case 0x03: return "XENIX usr";
+		case 0x04: return "FAT16 (first 32MB, <65536)";
+		case 0x05: return "Extended (CHS)";
+		case 0x06: return "FAT16B (CHS) (first 8GB, >=65536)";
+		case 0x07: return "IFS/HPFS/NTFS/exFAT";
+		case 0x08: return "Logical sectored FAT12/FAT16";
+
+		case 0x0B: return "FAT32 (CHS)";
+		case 0x0C: return "FAT32 (LBA)";
+
+		case 0x0E: return "FAT16B (LBA)";
+		case 0x0F: return "Extended (LBA)";
 	};
 
 	return "";
