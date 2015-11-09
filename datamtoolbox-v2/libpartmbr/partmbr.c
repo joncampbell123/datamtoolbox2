@@ -68,13 +68,17 @@ int libpartmbr_read_entry(struct libpartmbr_entry_t *ent,const struct libpartmbr
 	if (entry >= state->entries) return 1;
 
 	/* classic MBR reading, one of 4 entries */
-	const struct libpartmbr_entry_t *s = (const struct libpartmbr_entry_t*)((const unsigned char*)sector + 0x1BE + (entry * 0x10));
-	assert(sizeof(*ent) == 0x10);
-	*ent = *s;
+	if (entry >= 4) return 1;
+	{
+		const struct libpartmbr_entry_t *s = (const struct libpartmbr_entry_t*)((const unsigned char*)sector + 0x1BE + (entry * 0x10));
+		assert(sizeof(*ent) == 0x10);
+		*ent = *s;
 
-	/* next, convert byte order for the caller */
-	ent->number_lba_sectors = le32toh(ent->number_lba_sectors);
-	ent->first_lba_sector = le32toh(ent->first_lba_sector);
+		/* next, convert byte order for the caller */
+		ent->number_lba_sectors = le32toh(ent->number_lba_sectors);
+		ent->first_lba_sector = le32toh(ent->first_lba_sector);
+	}
+
 	return 0;
 }
 
@@ -82,13 +86,17 @@ int libpartmbr_write_entry(libpartmbr_sector_t sector,const struct libpartmbr_en
 	if (entry >= state->entries) return 1;
 
 	/* classic MBR reading, one of 4 entries */
-	struct libpartmbr_entry_t *d = (struct libpartmbr_entry_t*)((unsigned char*)sector + 0x1BE + (entry * 0x10));
-	assert(sizeof(*ent) == 0x10);
-	*d = *ent;
+	if (entry >= 4) return 1;
+	{
+		struct libpartmbr_entry_t *d = (struct libpartmbr_entry_t*)((unsigned char*)sector + 0x1BE + (entry * 0x10));
+		assert(sizeof(*ent) == 0x10);
+		*d = *ent;
 
-	/* next, convert byte order for the caller */
-	d->number_lba_sectors = htole32(d->number_lba_sectors);
-	d->first_lba_sector = htole32(d->first_lba_sector);
+		/* next, convert byte order for the caller */
+		d->number_lba_sectors = htole32(d->number_lba_sectors);
+		d->first_lba_sector = htole32(d->first_lba_sector);
+	}
+
 	return 0;
 }
 
