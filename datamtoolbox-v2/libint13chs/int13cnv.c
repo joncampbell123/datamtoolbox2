@@ -8,11 +8,11 @@
 
 #include <datamtoolbox-v2/libint13chs/int13chs.h>
 
-struct int13h_packed_geometry_t int13_pck;
-struct chs_geometry_t chs_geo;
-struct chs_geometry_t chs_res;
+static struct int13h_packed_geometry_t int13_pck;
+static struct chs_geometry_t chs_geo;
+static struct chs_geometry_t chs_res;
 
-int do_lba2chs(const char *s_geometry,const char *s_lba) {
+static int do_lba2chs(const char *s_geometry,const char *s_lba) {
 	uint32_t lba;
 
 	if (s_lba == NULL) {
@@ -46,7 +46,7 @@ int do_lba2chs(const char *s_geometry,const char *s_lba) {
 	return 0;
 }
 
-int do_chs2lba(const char *s_geometry,const char *s_chs) {
+static int do_chs2lba(const char *s_geometry,const char *s_chs) {
 	uint32_t lba;
 
 	if (s_chs == NULL) {
@@ -87,7 +87,7 @@ int do_chs2lba(const char *s_geometry,const char *s_chs) {
 	return 0;
 }
 
-int do_chs2int13(const char *s_chs) {
+static int do_chs2int13(const char *s_chs) {
 	if (s_chs == NULL) {
 		fprintf(stderr,"You must specify a CHS pair\n");
 		return 1;
@@ -112,7 +112,7 @@ int do_chs2int13(const char *s_chs) {
 	return 0;
 }
 
-int do_int132chs(const char *s_int13) {
+static int do_int132chs(const char *s_int13) {
 	if (s_int13 == NULL) {
 		fprintf(stderr,"You must specify INT 13h registers in CL,CH,DH\n");
 		return 1;
