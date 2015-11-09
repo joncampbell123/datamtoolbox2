@@ -11,4 +11,5 @@
 *.lastbuildstate
 *.iobj
 *.ipdb
+.vs
 
