@@ -1,6 +1,6 @@
 SUBDIR=
 TARGET_EXE=int13cnv
-TARGET_LIB=
+TARGET_LIB=libint13chs.a
 
 AR := ar
 CC := gcc

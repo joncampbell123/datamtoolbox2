@@ -1,4 +1,4 @@
-SUBDIR=libint13chs
+SUBDIR=libint13chs libpartmbr
 
 all:
 	for i in $(SUBDIR); do make -C "$$i" all || break; done
