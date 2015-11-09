@@ -1,0 +1,3 @@
+
+#define LIBPARTMBR_SECTOR_SIZE	512
+
