@@ -8,6 +8,9 @@
 
 #include <datamtoolbox-v2/libint13chs/int13chs.h>
 
+/* useful */
+const char *int13cnv_default_large_chs = "16384/255/63";
+
 /* "C/H/S" -> C/H/S */
 int int13cnv_parse_chs_geometry(struct chs_geometry_t *chs,const char *sgeo) {
 	// cylinder

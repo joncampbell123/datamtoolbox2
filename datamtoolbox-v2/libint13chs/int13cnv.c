@@ -8,8 +8,6 @@
 
 #include <datamtoolbox-v2/libint13chs/int13chs.h>
 
-const char *int13cnv_default_large_chs = "16384/255/63";
-
 struct int13h_packed_geometry_t int13_pck;
 struct chs_geometry_t chs_geo;
 struct chs_geometry_t chs_res;
