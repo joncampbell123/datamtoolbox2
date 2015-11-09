@@ -40,6 +40,23 @@ static struct chs_geometry_t		diskimage_chs;
 static int				diskimage_fd = -1;
 static unsigned char			diskimage_use_chs = 0;
 
+static int do_create() {
+	libpartmbr_state_zero(&diskimage_state);
+
+	if (libpartmbr_create_partition_table(diskimage_sector,&diskimage_state)) {
+		fprintf(stderr,"Failed to create partition table sector\n");
+		return 1;
+	}
+
+	assert(diskimage_fd >= 0);
+	if (lseek(diskimage_fd,0,SEEK_SET) != 0 || write(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
+		fprintf(stderr,"Failed to write MBR back\n");
+		return 1;
+	}
+
+	return 0;
+}
+
 static int do_dump() {
 	unsigned int i;
 
@@ -149,6 +166,9 @@ int main(int argc,char **argv) {
 
 		fprintf(stderr,"-c list                     Print the contents of the partition table\n");
 		fprintf(stderr,"\n");
+
+		fprintf(stderr,"-c create                   Create a new partition table\n");
+		fprintf(stderr,"\n");
 		return 1;
 	}
 
@@ -174,7 +194,11 @@ int main(int argc,char **argv) {
 	assert(sizeof(diskimage_sector) >= LIBPARTMBR_SECTOR_SIZE);
 	assert(libpartmbr_sanity_check());
 
-	diskimage_fd = open(s_image,O_RDONLY|O_BINARY);
+	if (!strcmp(s_command,"create"))
+		diskimage_fd = open(s_image,O_RDWR|O_BINARY|O_CREAT,0644);
+	else
+		diskimage_fd = open(s_image,O_RDONLY|O_BINARY);
+
 	if (diskimage_fd < 0) {
 		fprintf(stderr,"Failed to open disk image, error=%s\n",strerror(errno));
 		return 1;
@@ -191,6 +215,10 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"Failed to read MBR\n");
 		return 1;
 	}
+
+	if (!strcmp(s_command,"create"))
+		return do_create();
+
 	close(diskimage_fd);
 	diskimage_fd = -1;
 

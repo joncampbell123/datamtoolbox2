@@ -54,11 +54,8 @@ int libpartmbr_read_entry(struct libpartmbr_entry_t *ent,const struct libpartmbr
 int libpartmbr_write_entry(libpartmbr_sector_t sector,const struct libpartmbr_entry_t *ent,const struct libpartmbr_state_t *state,const unsigned int entry);
 const char *libpartmbr_partition_type_to_str(const uint8_t t);
 int libpartmbr_sanity_check();
+int libpartmbr_create_partition_table(libpartmbr_sector_t sect,struct libpartmbr_state_t *state);
+const char *libpartmbr_type_to_string(enum libpartmbr_type_t x);
 
 extern const char *libpartmbr_type_str[LIBPARTMBR_TYPE_MAX];
-
-static const char *libpartmbr_type_to_string(enum libpartmbr_type_t x) {
-	if (x >= LIBPARTMBR_TYPE_MAX) return "";
-	return libpartmbr_type_str[x];
-}
 

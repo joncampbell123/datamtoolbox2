@@ -106,3 +106,22 @@ int libpartmbr_sanity_check() {
 	return -1;
 }
 
+int libpartmbr_create_partition_table(libpartmbr_sector_t sect,struct libpartmbr_state_t *state) {
+	if (sect == NULL || state == NULL) return -1;
+
+	if (state->type == LIBPARTMBR_TYPE_CLASSIC) {
+		memset((unsigned char*)sect + 0x1BE,0,0x10 * 4);
+	}
+	else {
+		return -1;
+	}
+
+	memcpy((unsigned char*)sect + 0x1FE,"\x55\xAA",2);
+	return 0;
+}
+
+const char *libpartmbr_type_to_string(enum libpartmbr_type_t x) {
+	if (x >= LIBPARTMBR_TYPE_MAX) return "";
+	return libpartmbr_type_str[x];
+}
+
