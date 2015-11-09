@@ -1,16 +1,31 @@
-#include <stdlib.h>
+#if defined(_MSC_VER)
+/* shut up Microsoft. how the fuck is strerror() unsafe? */
+# define _CRT_SECURE_NO_WARNINGS
+# include <io.h>
+/* shut up Microsoft. what the hell is your problem with POSIX functions? */
+# define open _open
+# define read _read
+# define close _close
+# define lseek _lseeki64
+#endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
 #endif
+#include <stdlib.h>
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
-#include <endian.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
+
+/* oh come on Microsoft ... */
+#if defined(_MSC_VER) && !defined(S_ISREG)
+# define S_ISREG(x) (x & _S_IFREG)
+#endif
 
 #include <datamtoolbox-v2/libint13chs/int13chs.h>
 #include <datamtoolbox-v2/libpartmbr/partmbr.h>

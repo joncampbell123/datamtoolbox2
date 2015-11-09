@@ -4,6 +4,17 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libpartmbr", "libpartmbr.vcxproj", "{81BA0D80-F8CE-410B-B664-8F77964941AB}"
+	ProjectSection(ProjectDependencies) = postProject
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8} = {DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mbredit", "mbredit.vcxproj", "{3ADFCC08-F3C4-412E-8EF8-17F1CB67C3BF}"
+	ProjectSection(ProjectDependencies) = postProject
+		{81BA0D80-F8CE-410B-B664-8F77964941AB} = {81BA0D80-F8CE-410B-B664-8F77964941AB}
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8} = {DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libint13chs", "..\..\libint13chs\vs2015\libint13chs.vcxproj", "{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +32,22 @@ Global
 		{81BA0D80-F8CE-410B-B664-8F77964941AB}.Release|x64.Build.0 = Release|x64
 		{81BA0D80-F8CE-410B-B664-8F77964941AB}.Release|x86.ActiveCfg = Release|Win32
 		{81BA0D80-F8CE-410B-B664-8F77964941AB}.Release|x86.Build.0 = Release|Win32
+		{3ADFCC08-F3C4-412E-8EF8-17F1CB67C3BF}.Debug|x64.ActiveCfg = Debug|x64
+		{3ADFCC08-F3C4-412E-8EF8-17F1CB67C3BF}.Debug|x64.Build.0 = Debug|x64
+		{3ADFCC08-F3C4-412E-8EF8-17F1CB67C3BF}.Debug|x86.ActiveCfg = Debug|Win32
+		{3ADFCC08-F3C4-412E-8EF8-17F1CB67C3BF}.Debug|x86.Build.0 = Debug|Win32
+		{3ADFCC08-F3C4-412E-8EF8-17F1CB67C3BF}.Release|x64.ActiveCfg = Release|x64
+		{3ADFCC08-F3C4-412E-8EF8-17F1CB67C3BF}.Release|x64.Build.0 = Release|x64
+		{3ADFCC08-F3C4-412E-8EF8-17F1CB67C3BF}.Release|x86.ActiveCfg = Release|Win32
+		{3ADFCC08-F3C4-412E-8EF8-17F1CB67C3BF}.Release|x86.Build.0 = Release|Win32
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Debug|x64.ActiveCfg = Debug|x64
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Debug|x64.Build.0 = Debug|x64
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Debug|x86.ActiveCfg = Debug|Win32
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Debug|x86.Build.0 = Debug|Win32
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Release|x64.ActiveCfg = Release|x64
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Release|x64.Build.0 = Release|x64
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Release|x86.ActiveCfg = Release|Win32
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

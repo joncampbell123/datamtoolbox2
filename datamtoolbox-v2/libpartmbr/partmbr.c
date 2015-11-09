@@ -1,12 +1,13 @@
-#include <stdlib.h>
 #if defined(_MSC_VER)
 /*hack: Microsoft C++ does not have le32toh() and friends, but Windows is Little Endian anyway*/
 # define le32toh(x) (x)
 # define htole32(x) (x)
-#else
+#endif
+#if !defined(_MSC_VER)
 # include <unistd.h>
 # include <endian.h>
 #endif
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <stdint.h>
 #include <string.h>

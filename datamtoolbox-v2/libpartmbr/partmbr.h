@@ -57,7 +57,7 @@ int libpartmbr_sanity_check();
 
 extern const char *libpartmbr_type_str[LIBPARTMBR_TYPE_MAX];
 
-static inline const char *libpartmbr_type_to_string(enum libpartmbr_type_t x) {
+static const char *libpartmbr_type_to_string(enum libpartmbr_type_t x) {
 	if (x >= LIBPARTMBR_TYPE_MAX) return "";
 	return libpartmbr_type_str[x];
 }
