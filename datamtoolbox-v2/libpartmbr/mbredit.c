@@ -5,6 +5,7 @@
 /* shut up Microsoft. what the hell is your problem with POSIX functions? */
 # define open _open
 # define read _read
+# define write _write
 # define close _close
 # define lseek _lseeki64
 #endif
