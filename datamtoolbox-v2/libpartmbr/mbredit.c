@@ -219,9 +219,6 @@ int main(int argc,char **argv) {
 	if (!strcmp(s_command,"create"))
 		return do_create();
 
-	close(diskimage_fd);
-	diskimage_fd = -1;
-
 	if (!strcmp(s_command,"dump"))
 		return do_dump();
 
@@ -236,6 +233,8 @@ int main(int argc,char **argv) {
 	else
 		fprintf(stderr,"Unknown command '%s'\n",s_command);
 
+	close(diskimage_fd);
+	diskimage_fd = -1;
 	return ret;
 }
 
