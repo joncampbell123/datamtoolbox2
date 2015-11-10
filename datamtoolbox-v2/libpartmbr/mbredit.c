@@ -175,6 +175,22 @@ static int do_dump() {
 	return 0;
 }
 
+/* In the extended MBR partition scheme, the extended partition contains a "singly linked list"
+ * of MBR partition tables. In each node, the first partition entry contains the partition of
+ * interest, and the second partition entry refers to the next MBR partition table. To read
+ * all partitions in the linked list, just read each node and follow to the next until the
+ * second entry is not an extended partition type or the LBA address is zero.
+ *
+ * the third and fourth entries are (apparently) not used.
+ *
+ * LBA starting numbers in each entry (first & second) are relative to the extended partition.
+ * Inside the linked list, an MBR entry with start sector 2048 would mean the physical disk
+ * location is 2048 + LBA of the extended partition containing the linked list. So if the
+ * main MBR lists an extended partition starting at sector 1024, the linked list entry's true
+ * starting sector would be 2048 + 1024.
+ *
+ * I'm not sure if this is true, but the C/H/S values appear to be relative to the extended
+ * partition as well, at least the way Linux fdisk generates the entries. */
 static int do_ext_list(uint32_t first_lba) {
 	struct libpartmbr_entry_t ent,ent2;
 	struct libpartmbr_state_t state;
@@ -304,6 +320,7 @@ static int do_list(unsigned int view_ext) {
 		}
 		printf("\n");
 
+		/* Extended MBR partitions have a linked list of partitions within to allow holding more than the main 4 in the MBR */
 		if (ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS || ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA)
 			do_ext_list(ent.first_lba_sector);
 	}
