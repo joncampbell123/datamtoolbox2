@@ -40,6 +40,35 @@ static struct chs_geometry_t		diskimage_chs;
 static int				diskimage_fd = -1;
 static unsigned char			diskimage_use_chs = 0;
 
+static int do_remove(int entry) {
+	if (entry < 0) {
+		fprintf(stderr,"You must specify a partition entry to remove\n");
+		return 1;
+	}
+	if (entry >= diskimage_state.entries) {
+		fprintf(stderr,"Entry number out of range (%u >= %u)\n",(unsigned int)entry,(unsigned int)diskimage_state.entries);
+		return 1;
+	}
+
+	{
+		struct libpartmbr_entry_t ent;
+
+		memset(&ent,0,sizeof(ent));
+		if (libpartmbr_write_entry(diskimage_sector,&ent,&diskimage_state,entry)) {
+			fprintf(stderr,"Unable to write entry %u\n",(unsigned int)entry);
+			return 1;
+		}
+	}
+
+	assert(diskimage_fd >= 0);
+	if (lseek(diskimage_fd,0,SEEK_SET) != 0 || write(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
+		fprintf(stderr,"Failed to write MBR back\n");
+		return 1;
+	}
+
+	return 0;
+}
+
 static int do_create() {
 	libpartmbr_state_zero(&diskimage_state);
 
@@ -125,7 +154,8 @@ int main(int argc,char **argv) {
 	const char *s_geometry = NULL;
 	const char *s_command = NULL;
 	const char *s_image = NULL;
-	int i,ret=1;
+	const char *s_entry = NULL;
+	int i,ret=1,entry=-1;
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -138,6 +168,9 @@ int main(int argc,char **argv) {
 			}
 			else if (!strcmp(a,"image")) {
 				s_image = argv[i++];
+			}
+			else if (!strcmp(a,"entry")) {
+				s_entry = argv[i++];
 			}
 			else if (!strcmp(a,"c")) {
 				s_command = argv[i++];
@@ -159,6 +192,7 @@ int main(int argc,char **argv) {
 
 		fprintf(stderr,"--geometry <C/H/S>          Specify geometry of the disk image\n");
 		fprintf(stderr,"--image <path>              Disk image path\n");
+		fprintf(stderr,"--entry <x>                 Partition entry\n");
 		fprintf(stderr,"\n");
 
 		fprintf(stderr,"-c dump                     Dump the sector containing the MBR\n");
@@ -169,6 +203,9 @@ int main(int argc,char **argv) {
 
 		fprintf(stderr,"-c create                   Create a new partition table\n");
 		fprintf(stderr,"\n");
+
+		fprintf(stderr,"-c remove                   Remove entry\n");
+		fprintf(stderr,"\n");
 		return 1;
 	}
 
@@ -176,6 +213,9 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"No image provided\n");
 		return 1;
 	}
+
+	if (s_entry != NULL)
+		entry = atoi(s_entry);
 
 	if (s_geometry != NULL) {
 		diskimage_use_chs = 1;
@@ -194,7 +234,7 @@ int main(int argc,char **argv) {
 	assert(sizeof(diskimage_sector) >= LIBPARTMBR_SECTOR_SIZE);
 	assert(libpartmbr_sanity_check());
 
-	if (!strcmp(s_command,"create"))
+	if (!strcmp(s_command,"create") || !strcmp(s_command,"remove"))
 		diskimage_fd = open(s_image,O_RDWR|O_BINARY|O_CREAT,0644);
 	else
 		diskimage_fd = open(s_image,O_RDONLY|O_BINARY);
@@ -230,6 +270,8 @@ int main(int argc,char **argv) {
 
 	if (!strcmp(s_command,"list"))
 		ret = do_list();
+	else if (!strcmp(s_command,"remove"))
+		ret = do_remove(entry);
 	else
 		fprintf(stderr,"Unknown command '%s'\n",s_command);
 
