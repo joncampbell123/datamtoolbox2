@@ -175,7 +175,89 @@ static int do_dump() {
 	return 0;
 }
 
-static int do_list() {
+static int do_ext_list(uint32_t first_lba) {
+	struct libpartmbr_entry_t ent,ent2;
+	struct libpartmbr_state_t state;
+	libpartmbr_sector_t sector;
+	struct chs_geometry_t chs;
+	uint32_t scan_lba,new_lba;
+	off_t seekofs;
+
+	printf("-->MBR extended partitions:\n");
+	scan_lba = first_lba;
+	while (1) {
+		seekofs = (off_t)512ULL * (off_t)scan_lba;
+		if (lseek(diskimage_fd,seekofs,SEEK_SET) != seekofs || read(diskimage_fd,sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE)
+			break;
+		if (libpartmbr_state_probe(&state,sector))
+			break;
+
+		/* first and second entries have different meaning.
+		 * first entry is the offset (relative to the EBR) of the partition and size.
+		 * second entry is the offset of the next EBR (relative to this partition) */
+		if (libpartmbr_read_entry(&ent,&state,sector,0))
+			break;
+
+		printf("-->ext at %10lu: ",(unsigned long)scan_lba);
+		if (ent.partition_type != LIBPARTMBR_TYPE_EMPTY) {
+			printf("    type=%s(0x%02x) ",
+				libpartmbr_partition_type_to_str(ent.partition_type),
+				ent.partition_type);
+
+			printf("bootable=0x%02x ",
+				ent.bootable_flag);
+
+			printf("first_lba=%lu(+%lu)=%lu number_lba=%lu ",
+				(unsigned long)ent.first_lba_sector,
+				(unsigned long)scan_lba,
+				(unsigned long)ent.first_lba_sector + (unsigned long)scan_lba,
+				(unsigned long)ent.number_lba_sectors);
+
+			printf("first_chs=");
+			if (int13cnv_int13_to_chs(&chs,&ent.first_chs_sector) == 0)
+				printf("%u/%u/%u",
+					(unsigned int)chs.cylinders,
+					(unsigned int)chs.heads,
+					(unsigned int)chs.sectors);
+			else
+				printf("N/A");
+			printf(" ");
+
+			printf("last_chs=");
+			if (int13cnv_int13_to_chs(&chs,&ent.last_chs_sector) == 0)
+				printf("%u/%u/%u",
+					(unsigned int)chs.cylinders,
+					(unsigned int)chs.heads,
+					(unsigned int)chs.sectors);
+			else
+				printf("N/A");
+		}
+		else {
+			printf("(empty)");
+		}
+		printf("\n");
+
+		/* just so you know... */
+		if (ent.partition_type == 0x05 || ent.partition_type == 0x0F)
+			printf("* WARNING: Extended partition INSIDE an extended partition is not supported\n");
+
+		/* next one...? */
+		if (libpartmbr_read_entry(&ent2,&state,sector,1))
+			break;
+		if (!(ent2.partition_type == 0x05 || ent2.partition_type == 0x0F))
+			break;
+		if (ent2.first_lba_sector == 0)
+			break;
+
+		new_lba = ent2.first_lba_sector + first_lba;
+		if (scan_lba >= new_lba) break;
+		scan_lba = new_lba;
+	}
+
+	return 0;
+}
+
+static int do_list(unsigned int view_ext) {
 	struct libpartmbr_entry_t ent;
 	struct chs_geometry_t chs;
 	unsigned int entry;
@@ -221,6 +303,9 @@ static int do_list() {
 			printf("(empty)");
 		}
 		printf("\n");
+
+		if (ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS || ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA)
+			do_ext_list(ent.first_lba_sector);
 	}
 
 	return 0;
@@ -372,7 +457,9 @@ int main(int argc,char **argv) {
 	printf("MBR partition type: %s\n",libpartmbr_type_to_string(diskimage_state.type));
 
 	if (!strcmp(s_command,"list"))
-		ret = do_list();
+		ret = do_list(0);
+	else if (!strcmp(s_command,"elist"))
+		ret = do_list(1);
 	else if (!strcmp(s_command,"remove"))
 		ret = do_remove(entry);
 	else if (!strcmp(s_command,"editloc"))
