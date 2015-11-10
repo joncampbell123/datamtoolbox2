@@ -1,0 +1,8 @@
+External references:
+
+Wikipedia: Master Boot Record
+   https://en.wikipedia.org/wiki/Master_boot_record
+
+Extended Partition Tables
+   http://www.rayknights.org/pc_boot/ext_tbls.htm
+
