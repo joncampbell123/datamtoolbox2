@@ -37,6 +37,21 @@ const char *libpartmbr_partition_type_to_str(const uint8_t t) {
 
 		case 0x0E: return "FAT16B (LBA)";
 		case 0x0F: return "Extended (LBA)";
+
+		case 0x11: return "FAT12 (first 32MB) (HIDDEN)";
+
+		case 0x14: return "FAT16 (first 32MB, <65536) (HIDDEN)";
+
+		case 0x16: return "FAT16B (CHS) (first 8GB, >=65536) (HIDDEN)";
+		case 0x17: return "IFS/HPFS/NTFS/exFAT (HIDDEN)";
+
+		case 0x1B: return "FAT32 (CHS) (HIDDEN)";
+		case 0x1C: return "FAT32 (LBA) (HIDDEN)";
+
+		case 0x1E: return "FAT16B (LBA) (HIDDEN)";
+
+		case 0x82: return "Linux swap";
+		case 0x83: return "Linux native";
 	};
 
 	return "";

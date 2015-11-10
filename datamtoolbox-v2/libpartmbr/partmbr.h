@@ -17,6 +17,21 @@ enum {
 
 	LIBPARTMBR_TYPE_FAT16B_LBA=0x0E,			// FAT16B (LBA)
 	LIBPARTMBR_TYPE_EXTENDED_LBA=0x0F,			// extended partition (LBA mapping)
+
+	LIBPARTMBR_TYPE_FAT12_32MB_HIDDEN=0x11,			// hidden version of type 0x01
+
+	LIBPARTMBR_TYPE_FAT16_32MB_HIDDEN=0x14,			// hidden version of type 0x04
+
+	LIBPARTMBR_TYPE_FAT16B_8GB_HIDDEN=0x16,			// hidden version of type 0x06
+	LIBPARTMBR_TYPE_NTFS_HPFS_HIDDEN=0x17,			// hidden version of type 0x07
+
+	LIBPARTMBR_TYPE_FAT32_CHS_HIDDEN=0x1B,			// hidden version of type 0x0B
+	LIBPARTMBR_TYPE_FAT32_LBA_HIDDEN=0x1C,			// hidden version of type 0x0C
+
+	LIBPARTMBR_TYPE_FAT16B_LBA_HIDDEN=0x1E,			// hidden version of type 0x0E
+
+	LIBPARTMBR_TYPE_LINUX_SWAP=0x82,			// Linux swap
+	LIBPARTMBR_TYPE_LINUX_NATIVE=0x83,			// Linux native partition
 };
 
 enum libpartmbr_type_t {
