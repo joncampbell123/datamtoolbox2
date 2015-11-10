@@ -255,7 +255,7 @@ static int do_ext_list(uint32_t first_lba) {
 		printf("\n");
 
 		/* just so you know... */
-		if (ent.partition_type == 0x05 || ent.partition_type == 0x0F)
+		if (ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS || ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA)
 			printf("* WARNING: Extended partition INSIDE an extended partition is not supported\n");
 
 		/* next one...? */
