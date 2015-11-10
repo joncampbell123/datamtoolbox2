@@ -125,3 +125,11 @@ const char *libpartmbr_type_to_string(enum libpartmbr_type_t x) {
 	return libpartmbr_type_str[x];
 }
 
+void int13cnv_chs_int13_cliprange(struct chs_geometry_t *chs,struct chs_geometry_t *geo) {
+	if (chs->cylinders > 1023) {
+		chs->cylinders = 1023;
+		chs->heads = geo->heads - 1;
+		chs->sectors = geo->sectors;
+	}
+}
+

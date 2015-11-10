@@ -40,6 +40,82 @@ static struct chs_geometry_t		diskimage_chs;
 static int				diskimage_fd = -1;
 static unsigned char			diskimage_use_chs = 0;
 
+static int do_editloc(int entry,uint32_t start,uint32_t num,int type) {
+	struct libpartmbr_entry_t ent;
+	struct chs_geometry_t chs;
+
+	if (type <= 0 || type > 255) {
+		fprintf(stderr,"Type %d is not valid. Please use --type to specify nonzero type code.\n",type);
+		return 1;
+	}
+	if (entry < 0) {
+		fprintf(stderr,"You must specify a partition entry to remove\n");
+		return 1;
+	}
+	if (entry >= diskimage_state.entries) {
+		fprintf(stderr,"Entry number out of range (%u >= %u)\n",(unsigned int)entry,(unsigned int)diskimage_state.entries);
+		return 1;
+	}
+	if (diskimage_use_chs == 0) {
+		fprintf(stderr,"You must specify a disk geometry in order for correct values to be written.\n");
+		fprintf(stderr,"If unsure, use '--geometry 1024/16/63' or '--geometry 16384/255/63'\n");
+		return 1;
+	}
+	if (num == 0) {
+		fprintf(stderr,"A partition entry cannot have zero sectors\n");
+		return 1;
+	}
+	if (start == 0) {
+		fprintf(stderr,"A partition entry cannot start at sector zero because the partition table sits there\n");
+		return 1;
+	}
+
+	if (libpartmbr_read_entry(&ent,&diskimage_state,diskimage_sector,entry)) {
+		fprintf(stderr,"Unable to read entry\n");
+		return 1;
+	}
+
+	ent.partition_type = (uint8_t)type;
+	ent.first_lba_sector = start; // write function will convert this field to little endian
+	ent.number_lba_sectors = num; // ...and this one too
+
+	/* update start C/H/S */
+	if (int13cnv_lba_to_chs(&chs,&diskimage_chs,start)) {
+		fprintf(stderr,"Failed to convert start LBA -> CHS\n");
+		return 1;
+	}
+	int13cnv_chs_int13_cliprange(&chs,&diskimage_chs);
+	if (int13cnv_chs_to_int13(&ent.first_chs_sector,&chs)) {
+		fprintf(stderr,"Failed to convert start CHS -> INT13\n");
+		return 1;
+	}
+
+	/* update end C/H/S */
+	if (int13cnv_lba_to_chs(&chs,&diskimage_chs,start + num - (uint32_t)1UL)) {
+		fprintf(stderr,"Failed to convert end LBA -> CHS\n");
+		return 1;
+	}
+	int13cnv_chs_int13_cliprange(&chs,&diskimage_chs);
+	if (int13cnv_chs_to_int13(&ent.last_chs_sector,&chs)) {
+		fprintf(stderr,"Failed to convert end CHS -> INT13\n");
+		return 1;
+	}
+
+	/* write back to disk */
+	if (libpartmbr_write_entry(diskimage_sector,&ent,&diskimage_state,entry)) {
+		fprintf(stderr,"Unable to write entry %u\n",(unsigned int)entry);
+		return 1;
+	}
+
+	assert(diskimage_fd >= 0);
+	if (lseek(diskimage_fd,0,SEEK_SET) != 0 || write(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
+		fprintf(stderr,"Failed to write MBR back\n");
+		return 1;
+	}
+
+	return 0;
+}
+
 static int do_remove(int entry) {
 	if (entry < 0) {
 		fprintf(stderr,"You must specify a partition entry to remove\n");
@@ -155,7 +231,11 @@ int main(int argc,char **argv) {
 	const char *s_command = NULL;
 	const char *s_image = NULL;
 	const char *s_entry = NULL;
-	int i,ret=1,entry=-1;
+	const char *s_start = NULL;
+	const char *s_type = NULL;
+	const char *s_num = NULL;
+	uint32_t start=0,num=0;
+	int i,ret=1,entry=-1,type=-1;
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -175,6 +255,15 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"c")) {
 				s_command = argv[i++];
 			}
+			else if (!strcmp(a,"start")) {
+				s_start = argv[i++];
+			}
+			else if (!strcmp(a,"type")) {
+				s_type = argv[i++];
+			}
+			else if (!strcmp(a,"num")) {
+				s_num = argv[i++];
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -193,6 +282,9 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--geometry <C/H/S>          Specify geometry of the disk image\n");
 		fprintf(stderr,"--image <path>              Disk image path\n");
 		fprintf(stderr,"--entry <x>                 Partition entry\n");
+		fprintf(stderr,"--start <x>                 Starting (LBA) sector\n");
+		fprintf(stderr,"--num <x>                   Number of (LBA) sectors\n");
+		fprintf(stderr,"--type <x>                  Partition type code\n");
 		fprintf(stderr,"\n");
 
 		fprintf(stderr,"-c dump                     Dump the sector containing the MBR\n");
@@ -206,6 +298,9 @@ int main(int argc,char **argv) {
 
 		fprintf(stderr,"-c remove                   Remove entry\n");
 		fprintf(stderr,"\n");
+
+		fprintf(stderr,"-c editloc                  Edit entry, change location and type\n");
+		fprintf(stderr,"\n");
 		return 1;
 	}
 
@@ -216,6 +311,13 @@ int main(int argc,char **argv) {
 
 	if (s_entry != NULL)
 		entry = atoi(s_entry);
+
+	if (s_start != NULL)
+		start = (uint32_t)strtoul(s_start,NULL,0);
+	if (s_num != NULL)
+		num = (uint32_t)strtoul(s_num,NULL,0);
+	if (s_type != NULL)
+		type = (int)strtol(s_type,NULL,0);
 
 	if (s_geometry != NULL) {
 		diskimage_use_chs = 1;
@@ -234,7 +336,8 @@ int main(int argc,char **argv) {
 	assert(sizeof(diskimage_sector) >= LIBPARTMBR_SECTOR_SIZE);
 	assert(libpartmbr_sanity_check());
 
-	if (!strcmp(s_command,"create") || !strcmp(s_command,"remove"))
+	if (!strcmp(s_command,"create") || !strcmp(s_command,"remove") ||
+		!strcmp(s_command,"editloc"))
 		diskimage_fd = open(s_image,O_RDWR|O_BINARY|O_CREAT,0644);
 	else
 		diskimage_fd = open(s_image,O_RDONLY|O_BINARY);
@@ -272,6 +375,8 @@ int main(int argc,char **argv) {
 		ret = do_list();
 	else if (!strcmp(s_command,"remove"))
 		ret = do_remove(entry);
+	else if (!strcmp(s_command,"editloc"))
+		ret = do_editloc(entry,start,num,type);
 	else
 		fprintf(stderr,"Unknown command '%s'\n",s_command);
 
