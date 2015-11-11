@@ -261,7 +261,7 @@ static int do_ext_list(uint32_t first_lba) {
 		/* next one...? */
 		if (libpartmbr_read_entry(&ent2,&state,sector,1))
 			break;
-		if (!(ent2.partition_type == 0x05 || ent2.partition_type == 0x0F))
+		if (!(ent2.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS || ent2.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA))
 			break;
 		if (ent2.first_lba_sector == 0)
 			break;
