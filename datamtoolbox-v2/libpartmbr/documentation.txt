@@ -1,0 +1,40 @@
+MS-DOS master boot record partition table parsing/support code.
+
+Normally used with 512 bytes per sector.
+Originally used with C/H/S geometry, but the table does have LBA sector numbers too.
+
+Sector 0:
+  +----- partition 1 (absolute offset + size)
+  +----- partition 2 (absolute offset + size)
+  +----- partition 3 (absolute offset + size)
+  +----- partition 4 (absolute offset + size)
+
+If "extended partitions" are involved:
+
+Sector 0:
+  +----- partition 1 (absolute offset + size)
+  +----- partition 2 (absolute offset + size)
+  +----- partition 3 (absolute offset + size) extended partition type with singly-linked list of extended MBR records
+     +---- extended MBR entry (absolute offset relative to extended partition base), and absolute offset relative pointing to next extended MBR entry
+                      |
+                      |
+                     \|/
+     +---- extended MBR entry (absolute offset relative to extended partition base), and absolute offset relative pointing to next extended MBR entry
+                      |
+                      |
+                     \|/
+     +---- extended MBR entry (absolute offset relative to extended partition base), and absolute offset relative pointing to next extended MBR entry
+                      |
+                      |
+                     \|/
+     +---- extended MBR entry (absolute offset relative to extended partition base), and absolute offset relative pointing to next extended MBR entry
+                      |
+                      |
+                     \|/
+     +---- extended MBR entry (absolute offset relative to extended partition base), and absolute offset relative pointing to next extended MBR entry
+                      |
+                      |
+                     \|/
+     +---- extended MBR entry (absolute offset relative to extended partition base), second entry is zero
+  +----- partition 4 (absolute offset + size)
+
