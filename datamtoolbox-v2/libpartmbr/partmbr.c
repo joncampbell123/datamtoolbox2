@@ -52,6 +52,8 @@ const char *libpartmbr_partition_type_to_str(const uint8_t t) {
 
 		case 0x82: return "Linux swap";
 		case 0x83: return "Linux native";
+
+		case 0xFD: return "Linux RAID";
 	};
 
 	return "";

@@ -32,6 +32,8 @@ enum {
 
 	LIBPARTMBR_TYPE_LINUX_SWAP=0x82,			// Linux swap
 	LIBPARTMBR_TYPE_LINUX_NATIVE=0x83,			// Linux native partition
+
+	LIBPARTMBR_TYPE_LINUX_RAID=0xFD,			// Linux RAID partition
 };
 
 enum libpartmbr_type_t {
