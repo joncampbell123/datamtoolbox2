@@ -263,7 +263,7 @@ static int do_ext_list(uint32_t first_lba) {
 			break;
 		if (!(ent2.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS || ent2.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA))
 			break;
-		if (ent2.first_lba_sector == 0)
+		if (ent2.first_lba_sector == 0 || ent2.number_lba_sectors == 0)
 			break;
 
 		new_lba = ent2.first_lba_sector + first_lba;
@@ -322,8 +322,10 @@ static int do_list(unsigned int view_ext) {
 		printf("\n");
 
 		/* Extended MBR partitions have a linked list of partitions within to allow holding more than the main 4 in the MBR */
-		if (ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS || ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA)
-			do_ext_list(ent.first_lba_sector);
+		if (ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS || ent.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA) {
+			if (ent.first_lba_sector != (uint32_t)0UL && ent.number_lba_sectors != (uint32_t)0UL)
+				do_ext_list(ent.first_lba_sector);
+		}
 	}
 
 	return 0;
