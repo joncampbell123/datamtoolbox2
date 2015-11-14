@@ -313,6 +313,7 @@ int libpartmbr_context_read_partition_table(struct libpartmbr_context_t *r) {
 			ent->parent_entry = (int)i;
 			ent->is_extended = 1;
 			ent->index = ext_count;
+			ent->extended_mbr_sector = scan_lba;
 
 			if (libpartmbr_read_entry(&ex1,&r->state,r->sector,0) || ex1.partition_type == 0) {
 				// failed/empty

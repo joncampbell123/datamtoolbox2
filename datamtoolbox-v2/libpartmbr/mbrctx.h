@@ -19,6 +19,7 @@ struct libpartmbr_context_entry_t {
 	unsigned int			start_lba_overflow:1; // extended partition start sector overflow
 	unsigned int			__reserved__:4;	// padding
 
+	uint32_t			extended_mbr_sector; // sector number of the extended MBR record, if is_extended
 	unsigned int			index;		// index in the partition list. MBR: index in the table  Extended: counter from the start of linked list
 	int				parent_entry;	// MBR: -1  Extended: index in master MBR of the extended partition this entry came from
 	struct libpartmbr_entry_t	entry;		// partition entry

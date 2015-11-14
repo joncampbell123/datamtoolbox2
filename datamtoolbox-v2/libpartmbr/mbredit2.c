@@ -58,6 +58,9 @@ static int do_list() {
 		if (ent->start_lba_overflow) printf("[START SECTOR OVERFLOW!] ");
 		printf("entry #%u: (index=%u)\n",(unsigned int)i,(unsigned int)ent->index);
 
+		if (ent->is_extended)
+			printf("        Extended MBR at sector (LBA): %lu\n",(unsigned long)ent->extended_mbr_sector);
+
 		if (!ent->is_empty) {
 			printf("        Type: 0x%02x %s\n",(unsigned int)ent->entry.partition_type,libpartmbr_partition_type_to_str(ent->entry.partition_type));
 			printf("        Bootable: 0x%02x\n",(unsigned int)ent->entry.bootable_flag);
