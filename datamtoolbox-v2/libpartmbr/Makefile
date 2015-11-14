@@ -1,5 +1,5 @@
 SUBDIR=
-TARGET_EXE=mbredit
+TARGET_EXE=mbredit mbredit2
 TARGET_LIB=libpartmbr.a
 
 AR := ar
@@ -15,7 +15,7 @@ CFLAGS := -D_FILE_OFFSET_BITS=64 -Wall -pedantic -std=gnu99 -I../../
 all: lib exe
 	for i in $(SUBDIR); do make -C "$$i" all || break; done
 
-exe: lib mbredit
+exe: lib mbredit mbredit2
 	for i in $(SUBDIR); do make -C "$$i" exe || break; done
 
 lib: $(LIBINT13CHS) libpartmbr.a
@@ -44,5 +44,12 @@ mbredit: mbredit.o libpartmbr.a $(LIBINT13CHS)
 	$(CC) -o $@ $< libpartmbr.a $(LIBINT13CHS) $(LDFLAGS)
 
 mbredit.o: mbredit.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+#--------------------------------------
+mbredit2: mbredit2.o libpartmbr.a $(LIBINT13CHS)
+	$(CC) -o $@ $< libpartmbr.a $(LIBINT13CHS) $(LDFLAGS)
+
+mbredit2.o: mbredit2.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
