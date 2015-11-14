@@ -28,15 +28,15 @@ clean:
 #--------------------------------------
 libint13chs.a: int13chs.o
 	rm -f $@
-	$(AR) r $@ $<
+	$(AR) r $@ $^
 
 int13chs.o: int13chs.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
 int13cnv: int13cnv.o libint13chs.a
-	$(CC) -o $@ $< libint13chs.a $(LDFLAGS)
+	$(CC) -o $@ $^ libint13chs.a $(LDFLAGS)
 
 int13cnv.o: int13cnv.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $^
 

@@ -1,4 +1,7 @@
 
+#ifndef DATAMTOOLBOXV2_LIBPARTMBR_PARTMBR_H
+#define DATAMTOOLBOXV2_LIBPARTMBR_PARTMBR_H
+
 #define LIBPARTMBR_SECTOR_SIZE	512
 
 enum {
@@ -76,4 +79,6 @@ int libpartmbr_create_partition_table(libpartmbr_sector_t sect,struct libpartmbr
 const char *libpartmbr_type_to_string(enum libpartmbr_type_t x);
 
 extern const char *libpartmbr_type_str[LIBPARTMBR_TYPE_MAX];
+
+#endif // DATAMTOOLBOXV2_LIBPARTMBR_PARTMBR_H
 

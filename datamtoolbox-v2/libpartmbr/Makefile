@@ -32,24 +32,27 @@ $(LIBINT13CHS):
 	make -C ../libint13chs lib
 
 #--------------------------------------
-libpartmbr.a: partmbr.o
+libpartmbr.a: partmbr.o mbrctx.o
 	rm -f $@
-	$(AR) r $@ $<
+	$(AR) r $@ $^
 
 partmbr.o: partmbr.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+mbrctx.o: mbrctx.c
+	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
 mbredit: mbredit.o libpartmbr.a $(LIBINT13CHS)
-	$(CC) -o $@ $< libpartmbr.a $(LIBINT13CHS) $(LDFLAGS)
+	$(CC) -o $@ $^ libpartmbr.a $(LIBINT13CHS) $(LDFLAGS)
 
 mbredit.o: mbredit.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
 mbredit2: mbredit2.o libpartmbr.a $(LIBINT13CHS)
-	$(CC) -o $@ $< libpartmbr.a $(LIBINT13CHS) $(LDFLAGS)
+	$(CC) -o $@ $^ libpartmbr.a $(LIBINT13CHS) $(LDFLAGS)
 
 mbredit2.o: mbredit2.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -c -o $@ $^
 
