@@ -78,12 +78,7 @@ int main(int argc,char **argv) {
 	const char *s_geometry = NULL;
 	const char *s_command = NULL;
 	const char *s_image = NULL;
-	const char *s_entry = NULL;
-	const char *s_start = NULL;
-	const char *s_type = NULL;
-	const char *s_num = NULL;
-	uint32_t start=0,num=0;
-	int i,ret=1,entry=-1,type=-1,fd=-1;
+	int i,ret=1,fd=-1;
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -97,20 +92,8 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"image")) {
 				s_image = argv[i++];
 			}
-			else if (!strcmp(a,"entry")) {
-				s_entry = argv[i++];
-			}
 			else if (!strcmp(a,"c")) {
 				s_command = argv[i++];
-			}
-			else if (!strcmp(a,"start")) {
-				s_start = argv[i++];
-			}
-			else if (!strcmp(a,"type")) {
-				s_type = argv[i++];
-			}
-			else if (!strcmp(a,"num")) {
-				s_num = argv[i++];
 			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
@@ -144,16 +127,6 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"No image provided\n");
 		return 1;
 	}
-
-	if (s_entry != NULL)
-		entry = atoi(s_entry);
-
-	if (s_start != NULL)
-		start = (uint32_t)strtoul(s_start,NULL,0);
-	if (s_num != NULL)
-		num = (uint32_t)strtoul(s_num,NULL,0);
-	if (s_type != NULL)
-		type = (int)strtol(s_type,NULL,0);
 
 	assert(libpartmbr_sanity_check());
 
