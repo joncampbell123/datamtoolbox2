@@ -263,7 +263,7 @@ int libpartmbr_context_assign_fd(struct libpartmbr_context_t *r,const int fd) {
 
 int libpartmbr_context_read_partition_table(struct libpartmbr_context_t *r) {
 	struct libpartmbr_entry_t mbrent;
-	unsigned int i;
+	unsigned int i,primary_count;
 
 	if (r == NULL) return -1;
 
@@ -300,17 +300,86 @@ int libpartmbr_context_read_partition_table(struct libpartmbr_context_t *r) {
 		ent->is_primary = 1;
 		ent->index = i;
 
-		if (libpartmbr_read_entry(&mbrent,&r->state,r->sector,i)) {
+		if (libpartmbr_read_entry(&mbrent,&r->state,r->sector,i) || mbrent.partition_type == 0) {
 			// failed/empty
 			ent->is_empty = 1;
-			continue;
 		}
-		if (mbrent.partition_type == 0) {
-			ent->is_empty = 1;
-			continue;
+		else {
+			ent->entry = mbrent;
 		}
+	}
 
-		ent->entry = mbrent;
+	/* if any partitions are extended in the list, and at the primary level, then
+	 * step into extended partitions now. we do not support extended partitions inside
+	 * extended partitions. we DO support multiple extended partitions even though
+	 * Linux fdisk complains about it and ignores all but the first */
+	primary_count = r->list_count;
+	for (i=0;i < primary_count;i++) {
+		struct libpartmbr_context_entry_t *ent = &r->list[i];
+		uint32_t scan_first_lba,scan_lba,new_lba;
+		struct libpartmbr_entry_t ex1,ex2;
+		struct libpartmbr_state_t exstate;
+		unsigned int ext_count = 0; // count the number of entries, in case of runaway extended partitions
+
+		// primary MBR entries ONLY
+		assert(i < r->list_count);
+		if (ent->is_empty || !ent->is_primary)
+			continue;
+
+		// extended partitions (CHS or LBA) only
+		if (!(ent->entry.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS ||
+			ent->entry.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA))
+			continue;
+
+		// NOTE: it is said that the starting sector number is considered, but most implementations
+		//       do not take into consideration the "number of sectors" count of the extended partition entry.
+		if (ent->entry.first_lba_sector == (uint32_t)0UL)
+			continue;
+
+		scan_lba = scan_first_lba = ent->entry.first_lba_sector;
+		ent = NULL; // !!! alloc_list() will reallocate if necessary, do not use *ent
+		do {
+			if (r->read_sector(r,r->sector,scan_lba) < 0)
+				break;
+			if (libpartmbr_state_probe(&exstate,r->sector) || r->state.entries == 0)
+				break;
+
+			// make an entry
+			if (libpartmbr_context_alloc_list(r,r->list_count + 8)) {
+				r->err_str = "Unable to extend list for master boot record";
+				return -1;
+			}
+			ent = &r->list[r->list_count++];
+			assert(r->list_count <= r->list_alloc);
+			memset(ent,0,sizeof(*ent));
+			ent->parent_entry = (int)i;
+			ent->is_extended = 1;
+			ent->index = ext_count;
+
+			if (libpartmbr_read_entry(&ex1,&r->state,r->sector,0) || ex1.partition_type == 0) {
+				// failed/empty
+				ent->is_empty = 1;
+			}
+			else {
+				ent->entry = ex1;
+			}
+
+			// read second entry, which points to the next partition in the list
+			if (libpartmbr_read_entry(&ex2,&exstate,r->sector,1))
+				break;
+			// second entry MUST be a pointer to the next entry
+			if (!(ex2.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS || ex2.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA))
+				break;
+			if (ex2.first_lba_sector == 0 || ex2.number_lba_sectors == 0)
+				break;
+
+			new_lba = ex2.first_lba_sector + scan_first_lba;
+			if (new_lba <= scan_lba) break; // advance or stop reading
+			scan_lba = new_lba;
+
+			// most systems do not allow the linked list to grow too long
+			if ((++ext_count) >= 256) break;
+		} while (1);
 	}
 
 	return 0;
@@ -338,7 +407,8 @@ static int do_list() {
 		if (ent->is_primary) printf("Primary ");
 		if (ent->is_extended) printf("Extended ");
 		if (ent->is_empty) printf("empty ");
-		printf("entry #%u:\n",(unsigned int)i);
+		if (ent->parent_entry >= 0) printf("[child of entry #%d] ",ent->parent_entry);
+		printf("entry #%u: (index=%u)\n",(unsigned int)i,(unsigned int)ent->index);
 
 		if (!ent->is_empty) {
 			printf("        Type: 0x%02x %s\n",(unsigned int)ent->entry.partition_type,libpartmbr_partition_type_to_str(ent->entry.partition_type));
