@@ -60,8 +60,8 @@ static int do_list() {
 		if (!ent->is_empty) {
 			printf("        Type: 0x%02x %s\n",(unsigned int)ent->entry.partition_type,libpartmbr_partition_type_to_str(ent->entry.partition_type));
 			printf("        Bootable: 0x%02x\n",(unsigned int)ent->entry.bootable_flag);
-			printf("        Start (LBA): %lx\n",(unsigned long)ent->entry.first_lba_sector);
-			printf("        Size (LBA): %lx\n",(unsigned long)ent->entry.number_lba_sectors);
+			printf("        Start (LBA): %lu\n",(unsigned long)ent->entry.first_lba_sector);
+			printf("        Size (LBA): %lu\n",(unsigned long)ent->entry.number_lba_sectors);
 
 			if (int13cnv_int13_to_chs(&chs,&ent->entry.first_chs_sector) == 0)
 				printf("        First sector (CHS): %u/%u/%u\n",(unsigned int)chs.cylinders,(unsigned int)chs.heads,(unsigned int)chs.sectors);
