@@ -16,7 +16,8 @@ struct libpartmbr_context_entry_t {
 	unsigned int			is_extended:1;	// parititon in the extended partition
 	unsigned int			is_primary:1;	// partition in the master boot record
 	unsigned int			is_empty:1;	// partition entry is empty
-	unsigned int			__reserved__:5;	// padding
+	unsigned int			start_lba_overflow:1; // extended partition start sector overflow
+	unsigned int			__reserved__:4;	// padding
 
 	unsigned int			index;		// index in the partition list. MBR: index in the table  Extended: counter from the start of linked list
 	int				parent_entry;	// MBR: -1  Extended: index in master MBR of the extended partition this entry came from

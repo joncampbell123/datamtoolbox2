@@ -55,6 +55,7 @@ static int do_list() {
 		if (ent->is_extended) printf("Extended ");
 		if (ent->is_empty) printf("empty ");
 		if (ent->parent_entry >= 0) printf("[child of entry #%d] ",ent->parent_entry);
+		if (ent->start_lba_overflow) printf("[START SECTOR OVERFLOW!] ");
 		printf("entry #%u: (index=%u)\n",(unsigned int)i,(unsigned int)ent->index);
 
 		if (!ent->is_empty) {

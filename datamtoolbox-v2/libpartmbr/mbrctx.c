@@ -319,7 +319,15 @@ int libpartmbr_context_read_partition_table(struct libpartmbr_context_t *r) {
 				ent->is_empty = 1;
 			}
 			else {
+				uint32_t sum;
+
+				// copy the entry. BUT: the starting sector is relative to this partition table entry
 				ent->entry = ex1;
+
+				// adjust start. if start+offset overflows, store overflowed value but note it
+				sum = ent->entry.first_lba_sector + scan_lba;
+				if (sum < ent->entry.first_lba_sector) ent->start_lba_overflow = 1;
+				ent->entry.first_lba_sector = sum;
 			}
 
 			// read second entry, which points to the next partition in the list
