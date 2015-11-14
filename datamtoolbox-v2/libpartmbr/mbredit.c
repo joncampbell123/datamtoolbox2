@@ -9,6 +9,8 @@
 # define close _close
 # define lseek _lseeki64
 # define lseek_off_t __int64
+#else
+# define lseek_off_t off_t
 #endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
