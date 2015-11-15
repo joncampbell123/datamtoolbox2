@@ -40,7 +40,7 @@ static struct libpartmbr_context_t*		diskimage_ctx = NULL;
 
 static int do_list() {
 	struct chs_geometry_t chs;
-	int i;
+	unsigned int i;
 
 	assert(diskimage_ctx != NULL);
 	assert(diskimage_ctx->list != NULL);

@@ -2,6 +2,10 @@
 #ifndef DATAMTOOLBOXV2_LIBINT13CHS_INT13CHS_H
 #define DATAMTOOLBOXV2_LIBINT13CHS_INT13CHS_H
 
+#if defined(WIN32)
+# include <Windows.h>
+#endif
+
 # include <stdint.h>
 
 # ifdef __cplusplus

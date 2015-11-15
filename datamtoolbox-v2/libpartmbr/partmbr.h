@@ -2,6 +2,10 @@
 #ifndef DATAMTOOLBOXV2_LIBPARTMBR_PARTMBR_H
 #define DATAMTOOLBOXV2_LIBPARTMBR_PARTMBR_H
 
+#if defined(WIN32)
+# include <Windows.h>
+#endif
+
 #define LIBPARTMBR_SECTOR_SIZE	512
 
 enum {

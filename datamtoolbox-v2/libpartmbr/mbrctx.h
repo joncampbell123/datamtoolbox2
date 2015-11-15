@@ -2,6 +2,10 @@
 #ifndef DATAMTOOLBOXV2_LIBPARTMBR_MBRCTX_H
 #define DATAMTOOLBOXV2_LIBPARTMBR_MBRCTX_H
 
+#if defined(WIN32)
+# include <Windows.h>
+#endif
+
 #include <stdint.h>
 #include <string.h>
 
