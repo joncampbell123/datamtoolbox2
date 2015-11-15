@@ -8,6 +8,7 @@
 # define write _write
 # define close _close
 # define lseek _lseeki64
+# define lseek_off_t __int64
 #endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
@@ -28,7 +29,7 @@
 #include <datamtoolbox-v2/libpartmbr/mbrctx.h>
 
 int libpartmbr_context_def_fd_read_sector(struct libpartmbr_context_t *r,uint8_t *buffer,uint32_t sector_number) {
-	off_t ofs,res;
+	lseek_off_t ofs,res;
 	int rd;
 
 	if (r == NULL || buffer == NULL) {
@@ -40,9 +41,9 @@ int libpartmbr_context_def_fd_read_sector(struct libpartmbr_context_t *r,uint8_t
 		return -1;
 	}
 
-	ofs = (off_t)sector_number * (off_t)LIBPARTMBR_SECTOR_SIZE;
+	ofs = (lseek_off_t)sector_number * (lseek_off_t)LIBPARTMBR_SECTOR_SIZE;
 	res = lseek(r->user_fd,ofs,SEEK_SET);
-	if (res < (off_t)0)
+	if (res < (lseek_off_t)0)
 		return -1; // lseek() also sets errno
 	else if (res != ofs) {
 		errno = ERANGE;
@@ -61,7 +62,7 @@ int libpartmbr_context_def_fd_read_sector(struct libpartmbr_context_t *r,uint8_t
 }
 
 int libpartmbr_context_def_fd_write_sector(struct libpartmbr_context_t *r,const uint8_t *buffer,uint32_t sector_number) {
-	off_t ofs,res;
+	lseek_off_t ofs,res;
 	int rd;
 
 	if (r == NULL || buffer == NULL) {
@@ -73,9 +74,9 @@ int libpartmbr_context_def_fd_write_sector(struct libpartmbr_context_t *r,const 
 		return -1;
 	}
 
-	ofs = (off_t)sector_number * (off_t)LIBPARTMBR_SECTOR_SIZE;
+	ofs = (lseek_off_t)sector_number * (lseek_off_t)LIBPARTMBR_SECTOR_SIZE;
 	res = lseek(r->user_fd,ofs,SEEK_SET);
-	if (res < (off_t)0)
+	if (res < (lseek_off_t)0)
 		return -1; // lseek() also sets errno
 	else if (res != ofs) {
 		errno = ERANGE;
@@ -217,7 +218,8 @@ int libpartmbr_context_assign_fd(struct libpartmbr_context_t *r,const int fd) {
 
 int libpartmbr_context_read_partition_table(struct libpartmbr_context_t *r) {
 	struct libpartmbr_entry_t mbrent;
-	unsigned int i,primary_count;
+	size_t primary_count;
+	unsigned int i;
 
 	if (r == NULL) return -1;
 

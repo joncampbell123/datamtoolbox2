@@ -8,6 +8,7 @@
 # define write _write
 # define close _close
 # define lseek _lseeki64
+# define lseek_off_t __int64
 #endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
@@ -198,12 +199,12 @@ static int do_ext_list(uint32_t first_lba) {
 	libpartmbr_sector_t sector;
 	struct chs_geometry_t chs;
 	uint32_t scan_lba,new_lba;
-	off_t seekofs;
+	lseek_off_t seekofs;
 
 	printf("-->MBR extended partitions:\n");
 	scan_lba = first_lba;
 	while (1) {
-		seekofs = (off_t)512ULL * (off_t)scan_lba;
+		seekofs = (lseek_off_t)512ULL * (lseek_off_t)scan_lba;
 		if (lseek(diskimage_fd,seekofs,SEEK_SET) != seekofs || read(diskimage_fd,sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE)
 			break;
 		if (libpartmbr_state_probe(&state,sector))
