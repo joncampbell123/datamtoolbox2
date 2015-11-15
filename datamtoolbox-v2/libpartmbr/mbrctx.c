@@ -354,6 +354,7 @@ int libpartmbr_context_read_partition_table(struct libpartmbr_context_t *r) {
 
 int libpartmbr_context_write_partition_table(struct libpartmbr_context_t *r) {
 	struct libpartmbr_entry_t mbrent;
+	struct chs_geometry_t chs;
 	unsigned int i,exti;
 
 	if (r == NULL) return -1;
@@ -490,6 +491,26 @@ int libpartmbr_context_write_partition_table(struct libpartmbr_context_t *r) {
 
 				mbrent = current->entry;
 				mbrent.first_lba_sector -= current->extended_mbr_sector;
+				if (int13cnv_lba_to_chs(&chs,&r->geometry,current->entry.first_lba_sector)) {
+					r->err_str = "Extended partition LBA->CHS fail";
+					return -1;
+				}
+				int13cnv_chs_int13_cliprange(&chs,&r->geometry);
+				if (int13cnv_chs_to_int13(&mbrent.first_chs_sector,&chs)) {
+					r->err_str = "Extended partition CHS->INT13 fail";
+					return 1;
+				}
+
+				if (int13cnv_lba_to_chs(&chs,&r->geometry,current->entry.first_lba_sector + current->entry.number_lba_sectors - (uint32_t)1UL)) {
+					r->err_str = "Extended partition LBA->CHS fail #2";
+					return -1;
+				}
+				int13cnv_chs_int13_cliprange(&chs,&r->geometry);
+				if (int13cnv_chs_to_int13(&mbrent.last_chs_sector,&chs)) {
+					r->err_str = "Extended partition CHS->INT13 fail #2";
+					return 1;
+				}
+
 				if (r->read_sector(r,r->sector,(uint32_t)current->extended_mbr_sector) < 0) {
 					r->err_str = "Unable to read sector, ext MBR";
 					return -1;
@@ -526,6 +547,26 @@ int libpartmbr_context_write_partition_table(struct libpartmbr_context_t *r) {
 					mbrent.first_lba_sector = next->extended_mbr_sector - ent->entry.first_lba_sector;
 					mbrent.partition_type = ent->entry.partition_type;
 					mbrent.number_lba_sectors = next->entry.number_lba_sectors + (next->entry.first_lba_sector - next->extended_mbr_sector);
+
+					if (int13cnv_lba_to_chs(&chs,&r->geometry,mbrent.first_lba_sector + ent->entry.first_lba_sector)) {
+						r->err_str = "Extended partition LBA->CHS fail #3";
+						return -1;
+					}
+					int13cnv_chs_int13_cliprange(&chs,&r->geometry);
+					if (int13cnv_chs_to_int13(&mbrent.first_chs_sector,&chs)) {
+						r->err_str = "Extended partition CHS->INT13 fail #3";
+						return 1;
+					}
+
+					if (int13cnv_lba_to_chs(&chs,&r->geometry,mbrent.first_lba_sector + ent->entry.first_lba_sector + mbrent.number_lba_sectors - (uint32_t)1UL)) {
+						r->err_str = "Extended partition LBA->CHS fail #4";
+						return -1;
+					}
+					int13cnv_chs_int13_cliprange(&chs,&r->geometry);
+					if (int13cnv_chs_to_int13(&mbrent.last_chs_sector,&chs)) {
+						r->err_str = "Extended partition CHS->INT13 fail #4";
+						return 1;
+					}
 				}
 				if (libpartmbr_write_entry(r->sector,&mbrent,&substate,1)) {
 					r->err_str = "Unable to write ext MBR #1";
