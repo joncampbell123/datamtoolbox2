@@ -16,6 +16,12 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mbredit", "mbredit.vcxproj"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libint13chs", "..\..\libint13chs\vs2015\libint13chs.vcxproj", "{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mbredit2", "mbredit2.vcxproj", "{CEB17395-8CFA-48E9-AD46-471957E7FF7E}"
+	ProjectSection(ProjectDependencies) = postProject
+		{81BA0D80-F8CE-410B-B664-8F77964941AB} = {81BA0D80-F8CE-410B-B664-8F77964941AB}
+		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8} = {DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -48,6 +54,14 @@ Global
 		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Release|x64.Build.0 = Release|x64
 		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Release|x86.ActiveCfg = Release|Win32
 		{DB822FAD-A7BC-4E17-9950-E5A7A4BDA3E8}.Release|x86.Build.0 = Release|Win32
+		{CEB17395-8CFA-48E9-AD46-471957E7FF7E}.Debug|x64.ActiveCfg = Debug|x64
+		{CEB17395-8CFA-48E9-AD46-471957E7FF7E}.Debug|x64.Build.0 = Debug|x64
+		{CEB17395-8CFA-48E9-AD46-471957E7FF7E}.Debug|x86.ActiveCfg = Debug|Win32
+		{CEB17395-8CFA-48E9-AD46-471957E7FF7E}.Debug|x86.Build.0 = Debug|Win32
+		{CEB17395-8CFA-48E9-AD46-471957E7FF7E}.Release|x64.ActiveCfg = Release|x64
+		{CEB17395-8CFA-48E9-AD46-471957E7FF7E}.Release|x64.Build.0 = Release|x64
+		{CEB17395-8CFA-48E9-AD46-471957E7FF7E}.Release|x86.ActiveCfg = Release|Win32
+		{CEB17395-8CFA-48E9-AD46-471957E7FF7E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
