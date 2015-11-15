@@ -352,3 +352,194 @@ int libpartmbr_context_read_partition_table(struct libpartmbr_context_t *r) {
 	return 0;
 }
 
+int libpartmbr_context_write_partition_table(struct libpartmbr_context_t *r) {
+	struct libpartmbr_entry_t mbrent;
+	unsigned int i,exti;
+
+	if (r == NULL) return -1;
+
+	r->err_str = NULL;
+	if (r->read_sector == NULL) {
+		r->err_str = "Read sector function not assigned";
+		return -1; /* read sector function must exist */
+	}
+	if (r->write_sector == NULL) {
+		r->err_str = "Write sector function not assigned";
+		return -1; /* write sector function must exist */
+	}
+
+	/* read sector 0 for rewrite */
+	if (r->read_sector(r,r->sector,(uint32_t)0UL) < 0) {
+		r->err_str = "Unable to read sector 0";
+		return -1;
+	}
+
+	if (libpartmbr_create_partition_table(r->sector,&r->state)) {
+		r->err_str = "Failed to create partition table sector";
+		return -1;
+	}
+
+	/* zero the MBR entries */
+	memset(&mbrent,0,sizeof(mbrent));
+	for (i=0;i < r->state.entries;i++) {
+		if (libpartmbr_write_entry(r->sector,&mbrent,&r->state,i)) {
+			r->err_str = "Unable to zero MBR entry [1]";
+			return -1;
+		}
+	}
+
+	/* write primary MBR entries */
+	if (r->list != NULL) {
+		for (i=0;i < r->list_count;i++) {
+			struct libpartmbr_context_entry_t *ent = &r->list[i];
+			if (!ent->is_primary) continue;
+			if (ent->is_extended) continue;
+
+			if (ent->is_empty)
+				ent->entry.partition_type = 0;
+
+			if (ent->index >= r->state.entries) {
+				r->err_str = "MBR primary list entry index is out of range";
+				return -1;
+			}
+
+			if (libpartmbr_write_entry(r->sector,&ent->entry,&r->state,ent->index)) {
+				r->err_str = "Unable to zero MBR entry [2]";
+				return -1;
+			}
+		}
+	}
+
+	/* write sector 0 */
+	if (r->write_sector(r,r->sector,(uint32_t)0UL) < 0) {
+		r->err_str = "Unable to write sector 0";
+		return -1;
+	}
+
+	/* write extended MBR entries */
+	if (r->list != NULL) {
+		struct libpartmbr_state_t substate;
+
+		libpartmbr_state_zero(&substate);
+		for (exti=0;exti < r->list_count;exti++) {
+			struct libpartmbr_context_entry_t *ent = &r->list[exti];
+			struct libpartmbr_context_entry_t *subent_first = NULL,*subent_last = NULL,*subent = NULL;
+			if (ent->is_empty || !ent->is_primary) continue;
+			if (ent->is_extended) continue;
+
+			if (!(ent->entry.partition_type == LIBPARTMBR_TYPE_EXTENDED_CHS ||
+				ent->entry.partition_type == LIBPARTMBR_TYPE_EXTENDED_LBA))
+				continue;
+
+			if (ent->entry.first_lba_sector == (uint32_t)0 || ent->entry.number_lba_sectors == (uint32_t)0)
+				continue;
+
+			for (i=0;i < r->list_count;i++) {
+				subent = &r->list[i];
+				if (subent->is_primary) continue;
+				if (!subent->is_extended) continue;
+				if ((unsigned int)(subent->parent_entry) != exti) continue;
+				if (subent->extended_mbr_sector == (uint32_t)0) continue;
+
+				if (subent->is_empty)
+					subent->entry.partition_type = 0;
+
+				subent_first = subent;
+				break;
+			}
+
+			if (subent_first == NULL)
+				continue;
+
+			i++;
+			assert(i <= r->list_count);
+			while (i < r->list_count) {
+				subent = &r->list[i];
+				if (subent->is_primary) break;
+				if (!subent->is_extended) break;
+				if ((unsigned int)(subent->parent_entry) != exti) break;
+				if (subent->extended_mbr_sector == (uint32_t)0) break;
+
+				if (subent->is_empty)
+					subent->entry.partition_type = 0;
+
+				i++;
+			}
+			assert(i != 0);
+			i--;
+			subent_last = &r->list[i];
+			assert(subent_first <= subent_last);
+
+			/* first entry must start at the start of the extended partition */
+			if (subent_first->extended_mbr_sector != ent->entry.first_lba_sector) {
+				r->err_str = "First extended partition must start on the first sector of the parent partition";
+				return -1;
+			}
+
+			/* write it! in this loop we look at the current & next entry */
+			for (subent=subent_first;subent <= subent_last;subent++) {
+				struct libpartmbr_context_entry_t *current = subent;
+				struct libpartmbr_context_entry_t *next = subent+1;
+
+				if (next > subent_last) next = NULL;
+
+				if (current->entry.first_lba_sector < current->extended_mbr_sector) {
+					r->err_str = "Extended partition must start at or after the extended MBR sector";
+					return -1;
+				}
+
+				mbrent = current->entry;
+				mbrent.first_lba_sector -= current->extended_mbr_sector;
+				if (r->read_sector(r,r->sector,(uint32_t)current->extended_mbr_sector) < 0) {
+					r->err_str = "Unable to read sector, ext MBR";
+					return -1;
+				}
+
+				if (libpartmbr_create_partition_table(r->sector,&substate)) {
+					r->err_str = "Failed to create partition table sector";
+					return -1;
+				}
+
+				if (libpartmbr_write_entry(r->sector,&mbrent,&substate,0)) {
+					r->err_str = "Unable to write ext MBR #0";
+					return -1;
+				}
+
+				memset(&mbrent,0,sizeof(mbrent));
+				if (next != NULL) {
+					/* we enforce the linked list must move forward.
+					 * we could support the linked list moving back & forward but that
+					 * would make reading the list harder and probably cause some systems problems, so we don't allow it */
+					if (next->extended_mbr_sector <= ent->entry.first_lba_sector) {
+						r->err_str = "Extended partition must start at or after the parent partition";
+						return -1;
+					}
+					if (next->extended_mbr_sector <= current->extended_mbr_sector) {
+						r->err_str = "Extended MBR sector must follow the previous MBR sector, not move backwards or stay the same";
+						return -1;
+					}
+					if (next->entry.first_lba_sector < next->extended_mbr_sector) {
+						r->err_str = "Next extended MBR sector first LBA must sit at or follow extended MBR sector";
+						return -1;
+					}
+
+					mbrent.first_lba_sector = next->extended_mbr_sector - ent->entry.first_lba_sector;
+					mbrent.partition_type = ent->entry.partition_type;
+					mbrent.number_lba_sectors = next->entry.number_lba_sectors + (next->entry.first_lba_sector - next->extended_mbr_sector);
+				}
+				if (libpartmbr_write_entry(r->sector,&mbrent,&substate,1)) {
+					r->err_str = "Unable to write ext MBR #1";
+					return -1;
+				}
+
+				if (r->write_sector(r,r->sector,(uint32_t)current->extended_mbr_sector) < 0) {
+					r->err_str = "Unable to write sector, ext MBR";
+					return -1;
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+

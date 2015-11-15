@@ -63,6 +63,7 @@ struct libpartmbr_context_t *libpartmbr_context_create();
 struct libpartmbr_context_t *libpartmbr_context_destroy(struct libpartmbr_context_t *r);
 int libpartmbr_context_assign_fd(struct libpartmbr_context_t *r,const int fd);
 int libpartmbr_context_read_partition_table(struct libpartmbr_context_t *r);
+int libpartmbr_context_write_partition_table(struct libpartmbr_context_t *r);
 
 #endif // DATAMTOOLBOXV2_LIBPARTMBR_MBRCTX_H
 

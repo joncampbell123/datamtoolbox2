@@ -78,6 +78,18 @@ static int do_list() {
 	return 0;
 }
 
+static int do_rewrite() {
+	assert(diskimage_ctx != NULL);
+	assert(diskimage_ctx->list != NULL);
+
+	if (libpartmbr_context_write_partition_table(diskimage_ctx)) {
+		fprintf(stderr,"Failed to write partition table. err=%s\n",diskimage_ctx->err_str);
+		return 1;
+	}
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	const char *s_geometry = NULL;
 	const char *s_command = NULL;
@@ -124,6 +136,9 @@ int main(int argc,char **argv) {
 
 		fprintf(stderr,"-c list                     Print the contents of the partition table\n");
 		fprintf(stderr,"\n");
+
+		fprintf(stderr,"-c rewrite                  Load and rewrite partition table\n");
+		fprintf(stderr,"\n");
 		return 1;
 	}
 
@@ -140,7 +155,11 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	fd = open(s_image,O_RDONLY|O_BINARY);
+	if (!strcmp(s_command,"rewrite"))
+		fd = open(s_image,O_RDWR|O_BINARY|O_CREAT,0644);
+	else
+		fd = open(s_image,O_RDONLY|O_BINARY);
+
 	if (fd < 0) {
 		fprintf(stderr,"Failed to open disk image, error=%s\n",strerror(errno));
 		return 1;
@@ -182,6 +201,8 @@ int main(int argc,char **argv) {
 
 	if (!strcmp(s_command,"list"))
 		ret = do_list();
+	else if (!strcmp(s_command,"rewrite"))
+		ret = do_rewrite();
 	else
 		fprintf(stderr,"Unknown command '%s'\n",s_command);
 
