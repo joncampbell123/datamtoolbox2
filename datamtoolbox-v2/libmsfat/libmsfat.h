@@ -9,6 +9,22 @@ struct libmsfat_BS_bootsector_header { /* Boot sector, starting at byte offset +
 	uint8_t				BS_OEMName[8];			/* struct  +3 + 0 -> boot secotr  +3 */
 };									/*=struct +11 + 0 -> boot sector +11 */
 #pragma pack(pop)
+/* Fields:
+ *
+ *      BS_jmpBoot
+ *
+ *      Jump instruction to boot code. This field has two allowed forms:
+ *      jmpBoot[0] = 0xEB, jmpBoot[1] = 0x??, jmpBoot[2] = 0x90 and
+ *      jmpBoot[0] = 0xE9, jmpBoot[1] = 0x??, jmpBoot[2] = 0x??
+ *      This code typically occupies the rest of sector 0 of the volume
+ *      following the BPB and possibly other sectors. Either of these forms
+ *      is acceptable. JmpBoot[0] = 0xEB is the more frequently used format.
+ *
+ *      BS_OEMName
+ *
+ *      "MSWIN4.1",  Microsoft operating systems don't pay any attention to
+ *      this field. Some FAT drivers do.
+ */
 
 #pragma pack(push,1)
 /* Microsoft FAT32 File System Specification v1.03 December 6, 2000 - Boot Sector and BPB Structure (common to FAT12/16/32) */
@@ -28,6 +44,38 @@ struct libmsfat_BPB_common_header { /* BPB structure, starting with BPB_BytsPerS
 	uint32_t			BPB_TotSec32;			/* struct +21 + 11 -> boot sector +32 */
 };									/*=struct +25 + 11 -> boot sector +36 */
 #pragma pack(pop)
+/* Fields:
+ *
+ *      BPB_BytsPerSec
+ *
+ *      Count of bytes per sector. This value may take on only the following values: 512, 1024, 2048 or 4096.
+ *      If maximum compatibility with old implementations is desired, only the value 512 should be used.
+ *      There is a lot of FAT code in the world that is basically “hard wired” to 512 bytes per sector and
+ *      doesn’t bother to check this field to make sure it is 512. Microsoft operating systems will properly
+ *      support 1024, 2048, and 4096. If the media being recorded has a physical sector size N, you must use
+ *      N and this must still be less than or equal to 4096.
+ *
+ *      BPB_SecPerClus
+ *
+ *      Number of sectors per allocation unit. This value must be a power of 2 that
+ *      is greater than 0. The legal values are 1, 2, 4, 8, 16, 32, 64, and 128.
+ *      Note however, that a value should never be used that results in a “bytes per
+ *      cluster” value (BPB_BytsPerSec * BPB_SecPerClus) greater than 32K (32 * 1024).
+ *      Values that cause a cluster size greater than 32K bytes do not work properly;
+ *      do not try to define one. Some versions of some systems allow 64K bytes per
+ *      cluster value. Many application setup programs will not work correctly on
+ *      such a FAT volume.
+ *
+ *      BPB_RsvdSecCnt
+ *
+ *      Number of reserved sectors in the Reserved region of the volume starting at the
+ *      first sector of the volume. This field must not be 0. For FAT12 and FAT16 volumes,
+ *      this value should never be anything other than 1. For FAT32 volumes, this value is
+ *      typically 32. Microsoft operating systems will properly support any non-zero value
+ *      in this field.
+ *
+ */
+
 
 #pragma pack(push,1)
 /* Microsoft FAT32 File System Specification v1.03 December 6, 2000 - Fat12 and Fat16 Structure Starting at Offset 36 */
