@@ -6,21 +6,19 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 
 int libmsfat_sanity_check() {
-	{
-		struct libmsfat_bootsector bs;
+	struct libmsfat_bootsector bs;
 
-		if (sizeof(bs) != 90) return -1;
-		if (sizeof(bs.BS_header) != 11) return -1;
-		if (sizeof(bs.BPB_common) != 25) return -1;
-		if (sizeof(bs.at36.BPB_FAT) != 26) return -1;
-		if (sizeof(bs.at36.BPB_FAT32) != 54) return -1;
-		if (sizeof(bs.at36) != 54) return -1;
-		if (offsetof(struct libmsfat_bootsector,BS_header) != 0) return -1;
-		if (offsetof(struct libmsfat_bootsector,BPB_common) != 11) return -1;
-		if (offsetof(struct libmsfat_bootsector,at36) != 36) return -1;
-		if (offsetof(struct libmsfat_bootsector,at36.BPB_FAT) != 36) return -1;
-		if (offsetof(struct libmsfat_bootsector,at36.BPB_FAT32) != 36) return -1;
-	}
+	if (sizeof(bs) != 90) return -1;
+	if (sizeof(bs.BS_header) != 11) return -1;
+	if (sizeof(bs.BPB_common) != 25) return -1;
+	if (sizeof(bs.at36.BPB_FAT) != 26) return -1;
+	if (sizeof(bs.at36.BPB_FAT32) != 54) return -1;
+	if (sizeof(bs.at36) != 54) return -1;
+	if (offsetof(struct libmsfat_bootsector,BS_header) != 0) return -1;
+	if (offsetof(struct libmsfat_bootsector,BPB_common) != 11) return -1;
+	if (offsetof(struct libmsfat_bootsector,at36) != 36) return -1;
+	if (offsetof(struct libmsfat_bootsector,at36.BPB_FAT) != 36) return -1;
+	if (offsetof(struct libmsfat_bootsector,at36.BPB_FAT32) != 36) return -1;
 
 	return 0;
 }
