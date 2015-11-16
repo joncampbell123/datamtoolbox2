@@ -72,6 +72,15 @@ struct libmsfat_bootsector { /* boot sector, from byte offset +0 */
 };									/*=boot sector +90 */
 #pragma pack(pop)
 
+/* sanity check: self-test structures and functions to ensure everything compiled OK */
 int libmsfat_sanity_check();
+
+/* take bootsector struct and determine whether to read the BPB using FAT32 or FAT12/16 structure definition (at36 union).
+ *
+ * WARNING: This tells you which BPB struct to use, it does *not* mean the filesystem itself is FAT32.
+ * To determine that, you must take the disk/partition size into account and compute the number of clusters
+ * on the disk, then use the cluster count to determine FAT12/FAT16/FAT32.
+ *
+ * [Microsoft FAT32 File System Specification v1.03 December 6, 2000, Page 14-15, "FAT Type Determination"] */
 int libmsfat_bs_is_fat32(struct libmsfat_bootsector *p_bs);
 
