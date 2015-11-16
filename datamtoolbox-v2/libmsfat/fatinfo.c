@@ -218,7 +218,7 @@ int main(int argc,char **argv) {
 		assert(sizeof(*p_bs) <= 512);
 
 		printf("Boot sector contents:\n");
-		printf("    BS_jmpBoot:      0x%02x 0x%02x %02x\n",
+		printf("    BS_jmpBoot:      0x%02x 0x%02x 0x%02x\n",
 			p_bs->BS_header.BS_jmpBoot[0],
 			p_bs->BS_header.BS_jmpBoot[1],
 			p_bs->BS_header.BS_jmpBoot[2]);
