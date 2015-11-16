@@ -21,6 +21,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -138,7 +139,34 @@ int libmsfat_sanity_check() {
 
 	return 0;
 }
+
+int libmsfat_bs_is_fat32(struct libmsfat_bootsector *p_bs) {
+	if (p_bs == NULL) return 0;
+
+	/* NTS: No byte swapping is needed to compare against zero.
+	 * We're checking for values that, if zero, would render FAT12/FAT16 unreadable to systems that do not understand FAT32.
+	 * Especially important is the FATSz16 field. */
+	if (p_bs->BPB_common.BPB_RootEntCnt == 0U && p_bs->BPB_common.BPB_TotSec16 == 0U && p_bs->BPB_common.BPB_FATSz16 == 0U)
+		return 1;
+
+	return 0;
+}
 //////////////////////////////////////////////////////////////////////////
+
+static unsigned char			sectorbuf[512];
+static char				tmpstr[512];
+
+static void field2str(char *dst,size_t dstlen,const uint8_t *src,const size_t srclen) {
+	size_t cpy;
+
+	if (dstlen == (size_t)0) return;
+	dstlen--; // dst including NUL
+
+	cpy = srclen;
+	if (cpy > dstlen) cpy = dstlen;
+	if (cpy != (size_t)0) memcpy(dst,src,cpy);
+	dst[cpy] = 0;
+}
 
 int main(int argc,char **argv) {
 	uint32_t first_lba=0,size_lba=0;
@@ -198,6 +226,7 @@ int main(int argc,char **argv) {
 	if (s_partition != NULL) {
 		struct libpartmbr_context_t *ctx = NULL;
 		int index = atoi(s_partition);
+		int dfd = -1;
 
 		if (index < 0) {
 			fprintf(stderr,"Invalid index\n");
@@ -211,10 +240,13 @@ int main(int argc,char **argv) {
 		}
 
 		/* good! hand it off to the context. use dup() because it takes ownership */
-		if (libpartmbr_context_assign_fd(ctx,dup(fd))) {
+		dfd = dup(fd);
+		if (libpartmbr_context_assign_fd(ctx,dfd)) {
 			fprintf(stderr,"libpartmbr did not accept file descriptor %d\n",fd);
+			close(dfd); // dispose of it
 			return 1;
 		}
+		dfd = -1;
 		ctx->geometry.cylinders = 16384;
 		ctx->geometry.sectors = 63;
 		ctx->geometry.heads = 255;
@@ -283,6 +315,84 @@ int main(int argc,char **argv) {
 		(unsigned long)first_lba,
 		(unsigned long)first_lba+(unsigned long)size_lba-(unsigned long)1UL,
 		(unsigned long)size_lba);
+
+	{
+		lseek_off_t x = (lseek_off_t)first_lba * (lseek_off_t)512UL;
+
+		if (lseek(fd,x,SEEK_SET) != x || read(fd,sectorbuf,512) != 512) {
+			fprintf(stderr,"Unable to read boot sector\n");
+			return 1;
+		}
+	}
+
+	{
+		struct libmsfat_bootsector *p_bs = (struct libmsfat_bootsector*)sectorbuf;
+		unsigned int i;
+
+		assert(sizeof(*p_bs) <= 512);
+
+		printf("Boot sector contents:\n");
+		printf("    BS_jmpBoot:      0x%02x 0x%02x %02x\n",
+			p_bs->BS_header.BS_jmpBoot[0],
+			p_bs->BS_header.BS_jmpBoot[1],
+			p_bs->BS_header.BS_jmpBoot[2]);
+
+		field2str(tmpstr,sizeof(tmpstr),p_bs->BS_header.BS_OEMName,sizeof(p_bs->BS_header.BS_OEMName));
+		printf("    BS_OEMName:      '%s'\n",tmpstr);
+
+		printf("    BPB_BytsPerSec:  %u\n",(unsigned int)le16toh(p_bs->BPB_common.BPB_BytsPerSec));
+		printf("    BPB_SecPerClus:  %u\n",(unsigned int)p_bs->BPB_common.BPB_SecPerClus);
+		printf("    BPB_RsvdSecCnt:  %u\n",(unsigned int)le16toh(p_bs->BPB_common.BPB_RsvdSecCnt));
+		printf("    BPB_NumFATs:     %u\n",(unsigned int)p_bs->BPB_common.BPB_NumFATs);
+		printf("    BPB_RootEntCnt:  %u\n",(unsigned int)le16toh(p_bs->BPB_common.BPB_RootEntCnt));
+		printf("    BPB_TotSec16:    %u\n",(unsigned int)le16toh(p_bs->BPB_common.BPB_TotSec16));
+		printf("    BPB_Media:       0x%02x\n",(unsigned int)p_bs->BPB_common.BPB_Media);
+		printf("    BPB_FATSz16:     %u\n",(unsigned int)le16toh(p_bs->BPB_common.BPB_FATSz16));
+		printf("    BPB_SecPerTrk:   %u\n",(unsigned int)le16toh(p_bs->BPB_common.BPB_SecPerTrk));
+		printf("    BPB_NumHeads:    %u\n",(unsigned int)le16toh(p_bs->BPB_common.BPB_NumHeads));
+		printf("    BPB_HiddSec:     %lu\n",(unsigned long)le32toh(p_bs->BPB_common.BPB_HiddSec));
+		printf("    BPB_TotSec32:    %lu\n",(unsigned long)le32toh(p_bs->BPB_common.BPB_TotSec32));
+
+		if (libmsfat_bs_is_fat32(p_bs)) {
+			printf("    ---[FAT32 BPB continues]\n");
+
+			printf("    BPB_FATSz32:     %lu\n",(unsigned long)le32toh(p_bs->at36.BPB_FAT32.BPB_FATSz32));
+			printf("    BPB_ExtFlags:    %u\n",(unsigned int)le16toh(p_bs->at36.BPB_FAT32.BPB_ExtFlags));
+			printf("    BPB_FSVer:       0x%04x\n",(unsigned int)le16toh(p_bs->at36.BPB_FAT32.BPB_FSVer));
+			printf("    BPB_RootClus:    %lu\n",(unsigned long)le32toh(p_bs->at36.BPB_FAT32.BPB_RootClus));
+			printf("    BPB_FSInfo:      0x%04x\n",(unsigned int)le16toh(p_bs->at36.BPB_FAT32.BPB_FSInfo));
+			printf("    BPB_BkBootSec:   %u\n",(unsigned int)le16toh(p_bs->at36.BPB_FAT32.BPB_BkBootSec));
+
+			printf("    BPB_Reserved:    ");
+			for (i=0;i < 12;i++) printf("0x%02x ",p_bs->at36.BPB_FAT32.BPB_Reserved[i]);
+			printf("\n");
+
+			printf("    BS_DrvNum:       0x%02x\n",p_bs->at36.BPB_FAT32.BS_DrvNum);
+			printf("    BS_Reserved1:    0x%02x\n",p_bs->at36.BPB_FAT32.BS_Reserved1);
+			printf("    BS_BootSig:      0x%02x\n",p_bs->at36.BPB_FAT32.BS_BootSig);
+			printf("    BS_VolID:        0x%08lx\n",(unsigned long)le32toh(p_bs->at36.BPB_FAT32.BS_VolID));
+
+			field2str(tmpstr,sizeof(tmpstr),p_bs->at36.BPB_FAT32.BS_VolLab,sizeof(p_bs->at36.BPB_FAT32.BS_VolLab));
+			printf("    BS_VolLab:       '%s'\n",tmpstr);
+
+			field2str(tmpstr,sizeof(tmpstr),p_bs->at36.BPB_FAT32.BS_FilSysType,sizeof(p_bs->at36.BPB_FAT32.BS_FilSysType));
+			printf("    BS_FilSysType:   '%s'\n",tmpstr);
+		}
+		else {
+			printf("    ---[FAT12/16 BPB continues]\n");
+
+			printf("    BS_DrvNum:       0x%02x\n",(unsigned int)p_bs->at36.BPB_FAT.BS_DrvNum);
+			printf("    BS_Reserved1:    0x%02x\n",(unsigned int)p_bs->at36.BPB_FAT.BS_Reserved1);
+			printf("    BS_BootSig:      0x%02x\n",(unsigned int)p_bs->at36.BPB_FAT.BS_BootSig);
+			printf("    BS_VolID:        0x%08lx\n",(unsigned long)le32toh(p_bs->at36.BPB_FAT.BS_VolID));
+
+			field2str(tmpstr,sizeof(tmpstr),p_bs->at36.BPB_FAT.BS_VolLab,sizeof(p_bs->at36.BPB_FAT.BS_VolLab));
+			printf("    BS_VolLab:       '%s'\n",tmpstr);
+
+			field2str(tmpstr,sizeof(tmpstr),p_bs->at36.BPB_FAT.BS_FilSysType,sizeof(p_bs->at36.BPB_FAT.BS_FilSysType));
+			printf("    BS_FilSysType:   '%s'\n",tmpstr);
+		}
+	}
 
 	close(fd);
 	fd = -1;
