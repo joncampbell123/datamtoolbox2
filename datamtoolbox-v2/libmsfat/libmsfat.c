@@ -24,7 +24,13 @@ int libmsfat_sanity_check() {
 }
 
 int libmsfat_bs_is_fat32(const struct libmsfat_bootsector *p_bs) {
+	int sz;
+
 	if (p_bs == NULL) return 0;
+
+	/* check the size of the JMP instruction. it can't be FAT32 if it implies that the struct is less than 90 bytes. */
+	sz = libmsfat_bs_struct_length(p_bs);
+	if (sz < 90) return 0;
 
 	/* NTS: No byte swapping is needed to compare against zero.
 	 * We're checking for values that, if zero, would render FAT12/FAT16 unreadable to systems that do not understand FAT32.
