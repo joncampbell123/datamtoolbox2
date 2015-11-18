@@ -130,5 +130,8 @@ int libmsfat_sanity_check();
  * on the disk, then use the cluster count to determine FAT12/FAT16/FAT32.
  *
  * [Microsoft FAT32 File System Specification v1.03 December 6, 2000, Page 14-15, "FAT Type Determination"] */
-int libmsfat_bs_is_fat32(struct libmsfat_bootsector *p_bs);
+int libmsfat_bs_is_fat32(const struct libmsfat_bootsector *p_bs);
+
+int libmsfat_bs_is_valid(const struct libmsfat_bootsector *p_bs,const char **err_str);
+int libmsfat_boot_sector_is_valid(const unsigned char *sector/*512 bytes*/,const char **err_str);
 

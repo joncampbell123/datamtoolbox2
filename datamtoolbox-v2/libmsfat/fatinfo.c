@@ -280,6 +280,15 @@ int main(int argc,char **argv) {
 		}
 	}
 
+	{
+		const char *err_str = NULL;
+
+		if (!libmsfat_boot_sector_is_valid(sectorbuf,&err_str)) {
+			printf("Boot sector is not valid: reason=%s\n",err_str);
+			return 1;
+		}
+	}
+
 	close(fd);
 	fd = -1;
 	return 0;
