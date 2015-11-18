@@ -45,6 +45,7 @@ int libmsfat_bs_is_valid(const struct libmsfat_bootsector *p_bs,const char **err
 	uint32_t tmp32;
 	uint16_t tmp16;
 	uint8_t tmp8;
+	int sz;
 
 #define WARN(x) do {\
 	fprintf(stderr,"libmsfat warning: %s\n",(x)); \
@@ -63,6 +64,13 @@ int libmsfat_bs_is_valid(const struct libmsfat_bootsector *p_bs,const char **err
 		{ /* ok */ }
 	else
 		FAIL("Boot sector must start with recognizeable JMP opcode");
+
+	/* does it jump out of range? */
+	/* NOTE: MS-DOS 1.x has a JMP between 41 and 49 but the boot sector is defined differently.
+	 *       This code doesn't attempt to read those disks, because more heuristics are needed to
+	 *       detect and support that revision of FAT. */
+	sz = libmsfat_bs_struct_length(p_bs);
+	if (sz > 192 || sz < 46) FAIL("JMP instruction implies structure is too large or too small");
 
 	/* Count of bytes per sector. This value may take on only the following values: 512, 1024, 2048, 4096 */
 	tmp16 = le16toh(p_bs->BPB_common.BPB_BytsPerSec);

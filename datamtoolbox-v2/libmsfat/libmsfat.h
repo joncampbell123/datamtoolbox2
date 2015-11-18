@@ -139,4 +139,19 @@ int libmsfat_boot_sector_is_valid(const unsigned char *sector/*512 bytes*/,const
  * length of the structure, and therefore, which fields are valid. This is *VITAL* if we
  * are to successfully parse older MS-DOS formats (anything prior to MS-DOS 3.3). */
 int libmsfat_bs_struct_length(const struct libmsfat_bootsector *p_bs);
+/* Common structure lengths:
+
+   MS-DOS 7.1 / Windows 98 FAT32: 90 bytes
+   MS-DOS 6.22:                   62 bytes
+   MS-DOS 5.0:                    62 bytes
+   MS-DOS 3.31 (Compaq):          42 bytes
+   MS-DOS 3.3:                    54 bytes
+   MS-DOS 3.21:                   54 bytes
+   MS-DOS 2.1:                    46 bytes (fields past "hidden sectors" appear to be code, not data)
+   MS-DOS 1.01:                   41 bytes (and all the fields are zero) Boot signature is not present.
+   MS-DOS 1.0:                    49 bytes (and all fields are zero, except for ASCII date where BPB would start). Boot signature is not present.
+
+   Also consistent is the opcode 0xFA where the CPU would jump to in MS-DOS boot sectors.
+
+ */
 
