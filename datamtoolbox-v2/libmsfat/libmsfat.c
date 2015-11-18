@@ -162,3 +162,33 @@ int libmsfat_boot_sector_is_valid(const unsigned char *sector/*512 bytes*/,const
 #undef FAIL
 }
 
+int libmsfat_bs_struct_length(const struct libmsfat_bootsector *p_bs) {
+	if (p_bs->BS_header.BS_jmpBoot[0] == 0xEB && p_bs->BS_header.BS_jmpBoot[2] == 0x90) {
+		// 0xEB <rel> 0x90
+		// aka
+		// JMP short <offset>
+		// NOP
+		// Microsoft documentation officially says the JMP instruction is followed by a NOP.
+		//
+		// JMP short encoding:
+		// 0xEB <offset>
+		//
+		// The offset becomes boot sector + 2 because JMP short in Intel instruction encoding
+		// is relative to the end of the JMP instruction.
+		return (int)((unsigned int)p_bs->BS_header.BS_jmpBoot[1] + 2);
+	}
+	else if (p_bs->BS_header.BS_jmpBoot[0] == 0xE9) {
+		// 0xE9 <two byte offset>
+		// aka
+		// JMP near <offset>
+		//
+		// JMP near encoding
+		// 0xE9 <16-bit relative offset>
+		//
+		// The offset becomes boot sector + 3 because JMP short is relative to end of JMP isntruction
+		return (int)((unsigned int)le16toh(*((uint16_t*)(p_bs->BS_header.BS_jmpBoot+1))) + 2);
+	}
+
+	return -1;
+}
+

@@ -135,3 +135,8 @@ int libmsfat_bs_is_fat32(const struct libmsfat_bootsector *p_bs);
 int libmsfat_bs_is_valid(const struct libmsfat_bootsector *p_bs,const char **err_str);
 int libmsfat_boot_sector_is_valid(const unsigned char *sector/*512 bytes*/,const char **err_str);
 
+/* take boot sector struct, analyze beginning JMP instruction and use it to determine the
+ * length of the structure, and therefore, which fields are valid. This is *VITAL* if we
+ * are to successfully parse older MS-DOS formats (anything prior to MS-DOS 3.3). */
+int libmsfat_bs_struct_length(const struct libmsfat_bootsector *p_bs);
+

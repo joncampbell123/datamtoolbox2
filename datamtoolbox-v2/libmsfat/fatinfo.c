@@ -213,15 +213,23 @@ int main(int argc,char **argv) {
 
 	{
 		struct libmsfat_bootsector *p_bs = (struct libmsfat_bootsector*)sectorbuf;
+		int bs_struct_size;
 		unsigned int i;
 
 		assert(sizeof(*p_bs) <= 512);
+
+		/* we can tell how much structure is there by the JMP instruction at the beginning of the boot sector.
+		 * This is vital as earlier MS-DOS versions used shorter structures followed by data. Not taking length
+		 * into account means misinterpreting code as data */
+		bs_struct_size = libmsfat_bs_struct_length(p_bs);
 
 		printf("Boot sector contents:\n");
 		printf("    BS_jmpBoot:      0x%02x 0x%02x 0x%02x\n",
 			p_bs->BS_header.BS_jmpBoot[0],
 			p_bs->BS_header.BS_jmpBoot[1],
 			p_bs->BS_header.BS_jmpBoot[2]);
+		printf("    (structure size): %d bytes\n",
+			bs_struct_size);
 
 		field2str(tmpstr,sizeof(tmpstr),p_bs->BS_header.BS_OEMName,sizeof(p_bs->BS_header.BS_OEMName));
 		printf("    BS_OEMName:      '%s'\n",tmpstr);
