@@ -1,5 +1,5 @@
 SUBDIR=
-TARGET_EXE=fatinfo
+TARGET_EXE=fatinfo fatinfo2
 TARGET_LIB=libmsfat.a
 
 AR := ar
@@ -15,7 +15,7 @@ CFLAGS := -Wall -pedantic -std=gnu99 -I../../
 all: lib exe
 	for i in $(SUBDIR); do make -C "$$i" all || break; done
 
-exe: lib fatinfo
+exe: lib fatinfo fatinfo2
 	for i in $(SUBDIR); do make -C "$$i" exe || break; done
 
 lib: $(LIBINT13CHS) $(LIBPARTMBR) libmsfat.a
@@ -50,5 +50,12 @@ fatinfo: fatinfo.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
 	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
 
 fatinfo.o: fatinfo.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+#--------------------------------------
+fatinfo2: fatinfo2.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
+	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
+
+fatinfo2.o: fatinfo2.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
