@@ -401,6 +401,19 @@ int main(int argc,char **argv) {
 		// FAT12: MS-DOS/Win9x does not implement dirty flags
 		else if (locinfo.FAT_size == 12 && (fatent & (libmsfat_FAT_entry_t)0xFFFUL) != (libmsfat_FAT_entry_t)0xFFFUL) // all bits should be 1's
 			fprintf(stderr,"WARNING: entry #1 has 0 bits where all should be 1's\n");
+
+		if (locinfo.FAT_size == 32) {
+			if (!(fatent & libmsfat_FAT32_DIRTYFLAG_CLEAN))
+				printf("        * Volume is marked as dirty. Run CHKDSK/SCANDISK on the volume to repair\n");
+			if (!(fatent & libmsfat_FAT32_DIRTYFLAG_NOIOERROR))
+				printf("        * Volume is marked as having had an I/O error. Run CHKDSK/SCANDISK on the volume to repair\n");
+		}
+		else if (locinfo.FAT_size == 16) {
+			if (!(fatent & libmsfat_FAT16_DIRTYFLAG_CLEAN))
+				printf("        * Volume is marked as dirty. Run CHKDSK/SCANDISK on the volume to repair\n");
+			if (!(fatent & libmsfat_FAT16_DIRTYFLAG_NOIOERROR))
+				printf("        * Volume is marked as having had an I/O error. Run CHKDSK/SCANDISK on the volume to repair\n");
+		}
 	}
 
 	msfatctx = libmsfat_context_destroy(msfatctx);
