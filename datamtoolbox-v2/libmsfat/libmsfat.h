@@ -127,9 +127,9 @@ struct libmsfat_disk_locations_and_info {
 	uint16_t			BytesPerSector;		// BPB_BytsPerSec
 	uint32_t			FAT_table_size;		// size of FAT table in sectors
 	uint32_t			FAT_offset;		// offset of first FAT table (sectors)
-	uint32_t			RootDirectory_offset;	// offset of root directory (FAT12/FAT16 only), zero for FAT32
+	uint32_t			RootDirectory_offset;	// offset of root directory (FAT12/FAT16 only), zero for FAT32 (sectors)
 	uint32_t			RootDirectory_size;	// size of the root directory in sectors (FAT12/FAT16)
-	uint32_t			Data_offset;		// offset of first data cluster (cluster #2)
+	uint32_t			Data_offset;		// offset of first data cluster (cluster #2) (sectors)
 	uint32_t			Data_size;		// size of the data area
 	uint32_t			Total_clusters;		// total cluster count
 	uint32_t			TotalSectors;		// total sector count
