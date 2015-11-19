@@ -1,6 +1,11 @@
 
 #include <stdint.h>
 
+#include <datamtoolbox-v2/libint13chs/int13chs.h>
+
+typedef uint32_t libmsfat_cluster_t;
+typedef uint32_t libmsfat_FAT_entry_t;
+
 #pragma pack(push,1)
 /* Microsoft FAT32 File System Specification v1.03 December 6, 2000 - Boot Sector and BPB Structure (common to FAT12/16/32) */
 /* "NOTE: Fields that start with BS_ are part of the boot sector, BPB_ is part of the BPB" */
@@ -76,7 +81,6 @@ struct libmsfat_BPB_common_header { /* BPB structure, starting with BPB_BytsPerS
  *
  */
 
-
 #pragma pack(push,1)
 /* Microsoft FAT32 File System Specification v1.03 December 6, 2000 - Fat12 and Fat16 Structure Starting at Offset 36 */
 struct libmsfat_BPBat36_FAT1216 { /* BPB structure, starting with BPB_DrvNum at byte offset +36 of the sector immediately after BPB_TotSec32. All fields little endian. */
@@ -139,6 +143,51 @@ struct libmsfat_disk_locations_and_info {
 		uint32_t		RootDirectory_cluster;	// first cluster of root directory
 	} fat32;
 };
+
+// context structure for FAT I/O
+struct libmsfat_context_t {
+	struct chs_geometry_t				geometry;
+	union {
+		uint16_t				val16;
+		uint32_t				val32;
+		uint64_t				val64;
+		int					intval;
+		long					longval;
+	} user;
+	void						(*user_free_cb)(struct libmsfat_context_t *r);	// callback to free/deallocate user_ptr/user_id
+	void*						user_ptr;
+	uint64_t					user_id;
+	int						user_fd;
+#if defined(WIN32)
+	HANDLE						user_win32_handle;
+#endif
+	struct libmsfat_disk_locations_and_info		fatinfo;
+	const char*					err_str;	// error string
+	unsigned char					chs_mode;	// if set, use C/H/S addressing (geometry must be set)
+	unsigned char					fatinfo_set;
+	uint64_t					partition_byte_offset; // if within a partition table scheme, the BYTE offset of the partition, added to all read/write I/O
+	int						(*read)(struct libmsfat_context_t *r,uint8_t *buffer,uint64_t offset,size_t len); // 0=success   -1=error (see errno)
+	int						(*write)(struct libmsfat_context_t *r,const uint8_t *buffer,uint64_t offset,size_t len);
+};
+
+/* cluster zero does not represent data, but instead, holds the media type ID in the lowest 8 bits */
+#define libmsfat_CLUSTER_0_MEDIA_TYPE			((libmsfat_cluster_t)0UL)
+
+/* cluster one is generally 0xFFF/0xFFFF/0xxFFFFFFF but MS-DOS 6.22/Win9x/ME uses the upper 2 bits for volume health status */
+#define libmsfat_CLUSTER_1_DIRTY_FLAGS			((libmsfat_cluster_t)1UL)
+
+/* these are the bits used by MS-DOS/Win9x/ME for volume health */
+/* FAT16 versions */
+/*   _CLEAN: if set, the volume is clean. if not set, volume is "dirty", meaning the filesystem driver did not dismount the volume properly, check the filesystem */
+#define libmsfat_FAT16_DIRTYFLAG_CLEAN			((libmsfat_FAT_entry_t)0x8000UL)
+/*   _NOIOERROR: if set, no disk i/o errors were encountered. if not set, the filesystem driver encountered a disk I/O error and you should check the filesystem */
+#define libmsfat_FAT16_DIRTYFLAG_NOIOERROR		((libmsfat_FAT_entry_t)0x4000UL)
+
+/* FAT32 versions (remember bits 28-31 are undefined) */
+/*   _CLEAN: if set, the volume is clean. if not set, volume is "dirty", meaning the filesystem driver did not dismount the volume properly, check the filesystem */
+#define libmsfat_FAT32_DIRTYFLAG_CLEAN			((libmsfat_FAT_entry_t)0x08000000UL)
+/*   _NOIOERROR: if set, no disk i/o errors were encountered. if not set, the filesystem driver encountered a disk I/O error and you should check the filesystem */
+#define libmsfat_FAT32_DIRTYFLAG_NOIOERROR		((libmsfat_FAT_entry_t)0x04000000UL)
 
 /* sanity check: self-test structures and functions to ensure everything compiled OK */
 int libmsfat_sanity_check();

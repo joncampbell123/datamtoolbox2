@@ -39,32 +39,62 @@
 # define O_BINARY 0
 #endif
 
-/////////////////////////////////////////////////////////
+// NTS: "cluster" is not range-checked from fatinfo Total Clusters value, in case you want to peep at the extra entries.
+//      But this code does range-limit against the FAT table size.
+// NTS: For FAT32, it is the caller's responsibility to strip off bits 28-31 before using as cluster number.
+int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t *entry,const libmsfat_cluster_t cluster) {
+	uint64_t offset;
+	uint8_t rdsize;
+	uint8_t buf[4];
 
-struct libmsfat_context_t {
-	struct chs_geometry_t				geometry;
-	union {
-		uint16_t				val16;
-		uint32_t				val32;
-		uint64_t				val64;
-		int					intval;
-		long					longval;
-	} user;
-	void						(*user_free_cb)(struct libmsfat_context_t *r);	// callback to free/deallocate user_ptr/user_id
-	void*						user_ptr;
-	uint64_t					user_id;
-	int						user_fd;
-#if defined(WIN32)
-	HANDLE						user_win32_handle;
-#endif
-	struct libmsfat_disk_locations_and_info		fatinfo;
-	const char*					err_str;	// error string
-	unsigned char					chs_mode;	// if set, use C/H/S addressing (geometry must be set)
-	unsigned char					fatinfo_set;
-	uint64_t					partition_byte_offset; // if within a partition table scheme, the BYTE offset of the partition, added to all read/write I/O
-	int						(*read)(struct libmsfat_context_t *r,uint8_t *buffer,uint64_t offset,size_t len); // 0=success   -1=error (see errno)
-	int						(*write)(struct libmsfat_context_t *r,const uint8_t *buffer,uint64_t offset,size_t len);
-};
+	if (r == NULL || entry == NULL) return -1;
+	if (!r->fatinfo_set) return -1;
+	if (r->read == NULL) return -1;
+	// fatinfo_set means the FAT offset has been validated
+
+	if (r->fatinfo.FAT_size == 12) {
+		offset = (uint64_t)cluster + (uint64_t)(cluster / 2U); /* 1.5 bytes per entry -> 0,1,3,4,6,7,9,10... */ 
+		rdsize = 2;
+	}
+	else {
+		rdsize = (uint8_t)(r->fatinfo.FAT_size / 8U); /* FAT16/FAT32 -> 2/4 */
+		offset = (uint64_t)cluster * (uint64_t)rdsize;
+	}
+
+	{//range check against the sector max
+		uint64_t max = (uint64_t)r->fatinfo.FAT_table_size * (uint64_t)r->fatinfo.BytesPerSector;
+		if ((offset+((uint64_t)rdsize)) > max) return -1;
+	}
+
+	// add the offset of the FAT table
+	offset += (uint64_t)r->fatinfo.FAT_offset * (uint64_t)r->fatinfo.BytesPerSector;
+	// and the partition offset
+	offset += r->partition_byte_offset;
+
+	if (r->read(r,buf,offset,(size_t)rdsize) != 0) return -1;
+
+	if (r->fatinfo.FAT_size == 12) {
+		uint16_t raw = *((uint16_t*)buf);
+		uint16_t tmp = le16toh(raw);
+
+		// if (cluster & 1)
+		//   val = tmp >> 4
+		// else
+		//   val = tmp & 0xFFF;
+
+		*entry = (libmsfat_FAT_entry_t)((tmp >> (((uint8_t)cluster & 1U) * 4U)) & 0xFFF);
+	}
+	else if (r->fatinfo.FAT_size == 16) {
+		uint16_t raw = *((uint16_t*)buf);
+		*entry = (libmsfat_FAT_entry_t)le16toh(raw);
+	}
+	else { // FAT_size == 32
+		uint32_t raw = *((uint32_t*)buf);
+		*entry = (libmsfat_FAT_entry_t)le32toh(raw);
+	}
+
+	return 0;
+}
 
 int libmsfat_context_set_fat_info(struct libmsfat_context_t *r,const struct libmsfat_disk_locations_and_info *nfo) {
 	if (r == NULL || nfo == NULL) return -1;
@@ -497,6 +527,7 @@ int main(int argc,char **argv) {
 
 	{
 		struct libmsfat_bootsector *p_bs = (struct libmsfat_bootsector*)sectorbuf;
+		libmsfat_FAT_entry_t fatent;
 		int dfd;
 
 		if (libmsfat_bs_compute_disk_locations(&locinfo,p_bs)) {
@@ -549,10 +580,44 @@ int main(int argc,char **argv) {
 		}
 		dfd = -1; /* takes ownership, drop it */
 
+		msfatctx->partition_byte_offset = (uint64_t)first_lba * (uint64_t)512UL;
 		if (libmsfat_context_set_fat_info(msfatctx,&locinfo)) {
 			fprintf(stderr,"msfat library rejected disk location info\n");
 			return -1;
 		}
+
+		// the first two entries in the FAT filesystem table are the media byte (with extended 1s set) and another end of chain with upper bits used by Win9x for FAT sanity flags
+		if (libmsfat_context_read_FAT(msfatctx,&fatent,libmsfat_CLUSTER_0_MEDIA_TYPE)) {
+			fprintf(stderr,"Failed to read FAT entry #0\n");
+			return -1;
+		}
+		printf("    FAT entry #0:      0x%08lx\n",
+			(unsigned long)fatent);
+
+		if (locinfo.FAT_size == 32 && (fatent & (libmsfat_FAT_entry_t)0x0FFFFF00UL) != (libmsfat_FAT_entry_t)0x0FFFFF00UL)
+			fprintf(stderr,"WARNING: upper bits of entry #0 are not all 1's\n");
+		else if (locinfo.FAT_size == 16 && (fatent & (libmsfat_FAT_entry_t)0xFF00UL) != (libmsfat_FAT_entry_t)0xFF00UL)
+			fprintf(stderr,"WARNING: upper bits of entry #0 are not all 1's\n");
+		else if (locinfo.FAT_size == 12 && (fatent & (libmsfat_FAT_entry_t)0xF00UL) != (libmsfat_FAT_entry_t)0xF00UL)
+			fprintf(stderr,"WARNING: upper bits of entry #0 are not all 1's\n");
+		if (((uint8_t)(fatent&0xFFUL)) != p_bs->BPB_common.BPB_Media)
+			fprintf(stderr,"WARNING: media byte in entry #0 does not match media byte type in BPB\n");
+
+		if (libmsfat_context_read_FAT(msfatctx,&fatent,libmsfat_CLUSTER_1_DIRTY_FLAGS)) {
+			fprintf(stderr,"Failed to read FAT entry #1\n");
+			return -1;
+		}
+		printf("    FAT entry #1:      0x%08lx\n",
+			(unsigned long)fatent);
+
+		// FAT32 and FAT16: check most of the bits are 1, except for ones used by MS-DOS/Win9x for dirty flags
+		if (locinfo.FAT_size == 32 && (fatent & (libmsfat_FAT_entry_t)0x03FFFFFFUL) != (libmsfat_FAT_entry_t)0x03FFFFFFUL) // bits 0-25 should be 1's
+			fprintf(stderr,"WARNING: entry #1 has 0 bits where all should be 1's\n");
+		else if (locinfo.FAT_size == 16 && (fatent & (libmsfat_FAT_entry_t)0x3FFFUL) != (libmsfat_FAT_entry_t)0x3FFFUL) // bits 0-13 should be 1's
+			fprintf(stderr,"WARNING: entry #1 has 0 bits where all should be 1's\n");
+		// FAT12: MS-DOS/Win9x does not implement dirty flags
+		else if (locinfo.FAT_size == 12 && (fatent & (libmsfat_FAT_entry_t)0xFFFUL) != (libmsfat_FAT_entry_t)0xFFFUL) // all bits should be 1's
+			fprintf(stderr,"WARNING: entry #1 has 0 bits where all should be 1's\n");
 	}
 
 	msfatctx = libmsfat_context_destroy(msfatctx);
