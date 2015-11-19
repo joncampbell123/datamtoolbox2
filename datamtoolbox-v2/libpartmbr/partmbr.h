@@ -3,7 +3,7 @@
 #define DATAMTOOLBOXV2_LIBPARTMBR_PARTMBR_H
 
 #if defined(WIN32)
-# include <Windows.h>
+# include <windows.h>
 #endif
 
 #define LIBPARTMBR_SECTOR_SIZE	512

@@ -3,7 +3,7 @@
 #define DATAMTOOLBOXV2_LIBINT13CHS_INT13CHS_H
 
 #if defined(WIN32)
-# include <Windows.h>
+# include <windows.h>
 #endif
 
 # include <stdint.h>

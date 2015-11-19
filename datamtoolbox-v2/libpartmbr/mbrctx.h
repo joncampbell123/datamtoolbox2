@@ -3,7 +3,7 @@
 #define DATAMTOOLBOXV2_LIBPARTMBR_MBRCTX_H
 
 #if defined(WIN32)
-# include <Windows.h>
+# include <windows.h>
 #endif
 
 #include <stdint.h>
