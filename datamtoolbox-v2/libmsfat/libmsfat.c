@@ -68,9 +68,9 @@ int libmsfat_bs_is_valid(const struct libmsfat_bootsector *p_bs,const char **err
 	/* does it jump out of range? */
 	/* NOTE: MS-DOS 1.x has a JMP between 41 and 49 but the boot sector is defined differently.
 	 *       This code doesn't attempt to read those disks, because more heuristics are needed to
-	 *       detect and support that revision of FAT. */
+	 *       detect and support that revision of FAT. MS-DOS 3.31 seems to have a 42-byte BPB. */
 	sz = libmsfat_bs_struct_length(p_bs);
-	if (sz > 192 || sz < 46) FAIL("JMP instruction implies structure is too large or too small");
+	if (sz > 192 || sz < 42) FAIL("JMP instruction implies structure is too large or too small");
 
 	/* Count of bytes per sector. This value may take on only the following values: 512, 1024, 2048, 4096 */
 	tmp16 = le16toh(p_bs->BPB_common.BPB_BytsPerSec);
@@ -133,8 +133,11 @@ int libmsfat_bs_is_valid(const struct libmsfat_bootsector *p_bs,const char **err
 		if (tmp16 == 0) FAIL("BPB_RootEntCnt == 0 [FAT12/16]");
 
 		/* total sector count */
+		/* NTS: the BPB is 54 bytes starting with MS-DOS 3.x. MS-DOS 2.x has executable code
+		 *      at the same location and a 45 byte BPB, therefore TotSec32 does not exist. */
 		tmp16 = le16toh(p_bs->BPB_common.BPB_TotSec16);
-		tmp32 = le32toh(p_bs->BPB_common.BPB_TotSec32);
+		if (sz >= 54) tmp32 = le32toh(p_bs->BPB_common.BPB_TotSec32);
+		else tmp32 = 0;
 		if (tmp32 != 0) {
 			// expected: BPB_TotSec32 != 0 and BPB_TotSec16 == 0
 			// also:     BPB_TotSec32 != 0, BPB_TotSec32 < 65536, BPB_TotSec16 == BPB_TotSec32

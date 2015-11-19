@@ -245,7 +245,8 @@ int main(int argc,char **argv) {
 		printf("    BPB_SecPerTrk:   %u\n",(unsigned int)le16toh(p_bs->BPB_common.BPB_SecPerTrk));
 		printf("    BPB_NumHeads:    %u\n",(unsigned int)le16toh(p_bs->BPB_common.BPB_NumHeads));
 		printf("    BPB_HiddSec:     %lu\n",(unsigned long)le32toh(p_bs->BPB_common.BPB_HiddSec));
-		printf("    BPB_TotSec32:    %lu\n",(unsigned long)le32toh(p_bs->BPB_common.BPB_TotSec32));
+		if (bs_struct_size >= 54) /* MS-DOS 3.x */
+			printf("    BPB_TotSec32:    %lu\n",(unsigned long)le32toh(p_bs->BPB_common.BPB_TotSec32));
 
 		if (libmsfat_bs_is_fat32(p_bs)) {
 			printf("    ---[FAT32 BPB continues]\n");
