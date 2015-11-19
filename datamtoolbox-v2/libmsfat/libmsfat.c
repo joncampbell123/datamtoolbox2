@@ -1,8 +1,32 @@
-
-#include <stddef.h>
+#if defined(_MSC_VER)
+/* shut up Microsoft. how the fuck is strerror() unsafe? */
+# define _CRT_SECURE_NO_WARNINGS
+# include <io.h>
+/* shut up Microsoft. what the hell is your problem with POSIX functions? */
+# define open _open
+# define read _read
+# define write _write
+# define close _close
+# define lseek _lseeki64
+# define lseek_off_t __int64
+#else
+# define lseek_off_t off_t
+#endif
+#include <stdlib.h>
+#if !defined(_MSC_VER)
+# include <unistd.h>
+#endif
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 
@@ -330,6 +354,221 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 		nfo->fat32.RootDirectory_cluster = le32toh(p_bs->at36.BPB_FAT32.BPB_RootClus);
 		nfo->fat32.BPB_FSInfo = le32toh(p_bs->at36.BPB_FAT32.BPB_FSInfo);
 	}
+
+	return 0;
+}
+
+// NTS: "cluster" is not range-checked from fatinfo Total Clusters value, in case you want to peep at the extra entries.
+//      But this code does range-limit against the FAT table size.
+// NTS: For FAT32, it is the caller's responsibility to strip off bits 28-31 before using as cluster number.
+int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t *entry,const libmsfat_cluster_t cluster) {
+	uint64_t offset;
+	uint8_t rdsize;
+	uint8_t buf[4];
+
+	if (r == NULL || entry == NULL) return -1;
+	if (!r->fatinfo_set) return -1;
+	if (r->read == NULL) return -1;
+	// fatinfo_set means the FAT offset has been validated
+
+	if (r->fatinfo.FAT_size == 12) {
+		offset = (uint64_t)cluster + (uint64_t)(cluster / 2U); /* 1.5 bytes per entry -> 0,1,3,4,6,7,9,10... */ 
+		rdsize = 2;
+	}
+	else {
+		rdsize = (uint8_t)(r->fatinfo.FAT_size / 8U); /* FAT16/FAT32 -> 2/4 */
+		offset = (uint64_t)cluster * (uint64_t)rdsize;
+	}
+
+	{//range check against the sector max
+		uint64_t max = (uint64_t)r->fatinfo.FAT_table_size * (uint64_t)r->fatinfo.BytesPerSector;
+		if ((offset+((uint64_t)rdsize)) > max) return -1;
+	}
+
+	// add the offset of the FAT table
+	offset += (uint64_t)r->fatinfo.FAT_offset * (uint64_t)r->fatinfo.BytesPerSector;
+	// and the partition offset
+	offset += r->partition_byte_offset;
+
+	if (r->read(r,buf,offset,(size_t)rdsize) != 0) return -1;
+
+	if (r->fatinfo.FAT_size == 12) {
+		uint16_t raw = *((uint16_t*)buf);
+		uint16_t tmp = le16toh(raw);
+
+		// if (cluster & 1)
+		//   val = tmp >> 4
+		// else
+		//   val = tmp & 0xFFF;
+
+		*entry = (libmsfat_FAT_entry_t)((tmp >> (((uint8_t)cluster & 1U) * 4U)) & 0xFFF);
+	}
+	else if (r->fatinfo.FAT_size == 16) {
+		uint16_t raw = *((uint16_t*)buf);
+		*entry = (libmsfat_FAT_entry_t)le16toh(raw);
+	}
+	else { // FAT_size == 32
+		uint32_t raw = *((uint32_t*)buf);
+		*entry = (libmsfat_FAT_entry_t)le32toh(raw);
+	}
+
+	return 0;
+}
+
+int libmsfat_context_set_fat_info(struct libmsfat_context_t *r,const struct libmsfat_disk_locations_and_info *nfo) {
+	if (r == NULL || nfo == NULL) return -1;
+	r->fatinfo_set = 0;
+
+	if (!(nfo->FAT_size == 12 || nfo->FAT_size == 16 || nfo->FAT_size == 32)) return -1;
+	if (nfo->FAT_tables == 0) return -1;
+	if (nfo->BytesPerSector < 128) return -1;
+	if (nfo->FAT_table_size == (uint32_t)0)  return -1;
+	if (nfo->FAT_offset == (uint32_t)0) return -1;
+	if (nfo->Data_offset == (uint32_t)0) return -1;
+	if (nfo->Data_size == (uint32_t)0) return -1;
+	if (nfo->Total_clusters == (uint32_t)0) return -1;
+	if (nfo->TotalSectors == (uint32_t)0) return -1;
+	if (nfo->Sectors_Per_Cluster == (uint32_t)0) return -1;
+	r->fatinfo_set = 1;
+	r->fatinfo = *nfo;
+	return 0;
+}
+
+int libmsfat_context_def_fd_read(struct libmsfat_context_t *r,uint8_t *buffer,uint64_t offset,size_t len) {
+	lseek_off_t ofs,res;
+	int rd;
+
+	if (r == NULL || buffer == NULL) {
+		errno = EFAULT;
+		return -1;
+	}
+	if (r->user_fd < 0) {
+		errno = EBADF;
+		return -1;
+	}
+	if (len == (size_t)0) {
+		return 0;
+	}
+
+	ofs = (lseek_off_t)offset;
+	res = lseek(r->user_fd,ofs,SEEK_SET);
+	if (res < (lseek_off_t)0)
+		return -1; // lseek() also sets errno
+	else if (res != ofs) {
+		errno = ERANGE;
+		return -1;
+	}
+
+	rd = read(r->user_fd,buffer,len);
+	if (rd < 0)
+		return -1; // read() also set errno
+	else if ((size_t)rd != len) {
+		errno = EIO;
+		return -1;
+	}
+
+	return 0; // success
+}
+
+int libmsfat_context_def_fd_write(struct libmsfat_context_t *r,const uint8_t *buffer,uint64_t offset,size_t len) {
+	lseek_off_t ofs,res;
+	int rd;
+
+	if (r == NULL || buffer == NULL) {
+		errno = EFAULT;
+		return -1;
+	}
+	if (r->user_fd < 0) {
+		errno = EBADF;
+		return -1;
+	}
+	if (len == (size_t)0) {
+		return 0;
+	}
+
+	ofs = (lseek_off_t)offset;
+	res = lseek(r->user_fd,ofs,SEEK_SET);
+	if (res < (lseek_off_t)0)
+		return -1; // lseek() also sets errno
+	else if (res != ofs) {
+		errno = ERANGE;
+		return -1;
+	}
+
+	rd = write(r->user_fd,buffer,len);
+	if (rd < 0)
+		return -1; // read() also set errno
+	else if ((size_t)rd != len) {
+		errno = EIO;
+		return -1;
+	}
+
+	return 0; // success
+}
+
+int libmsfat_context_init(struct libmsfat_context_t *r) {
+	if (r == NULL) return -1;
+	memset(r,0,sizeof(*r));
+	r->user_fd = -1;
+#if defined(WIN32)
+	r->user_win32_handle = INVALID_HANDLE_VALUE;
+#endif
+	return 0;
+}
+
+void libmsfat_context_close_file(struct libmsfat_context_t *r) {
+	if (r->user_free_cb != NULL) r->user_free_cb(r);
+	r->user_ptr = NULL;
+	if (r->user_fd >= 0) {
+		close(r->user_fd);
+		r->user_fd = -1;
+	}
+#if defined(WIN32)
+	if (r->user_win32_handle != INVALID_HANDLE_VALUE) {
+		CloseHandle(r->user_win32_handle);
+		r->user_win32_handle = INVALID_HANDLE_VALUE;
+	}
+#endif
+}
+
+void libmsfat_context_free(struct libmsfat_context_t *r) {
+	if (r == NULL) return;
+	libmsfat_context_close_file(r);
+}
+
+struct libmsfat_context_t *libmsfat_context_create() {
+	struct libmsfat_context_t *r;
+
+	r = malloc(sizeof(struct libmsfat_context_t));
+	if (r != NULL && libmsfat_context_init(r)) {
+		free(r);
+		r = NULL;
+	}
+
+	return r;
+}
+
+struct libmsfat_context_t *libmsfat_context_destroy(struct libmsfat_context_t *r) {
+	if (r != NULL) {
+		libmsfat_context_free(r);
+		free(r);
+	}
+
+	return NULL;
+}
+
+int libmsfat_context_assign_fd(struct libmsfat_context_t *r,const int fd) {
+	if (fd < 0) return -1;
+	if (r == NULL) return -1;
+
+	libmsfat_context_close_file(r);
+	r->user_fd = fd;
+
+	/* if the user has not assigned read/write callbacks, then assign now */
+	if (r->read == NULL)
+		r->read = libmsfat_context_def_fd_read;
+	if (r->write == NULL)
+		r->write = libmsfat_context_def_fd_write;
 
 	return 0;
 }

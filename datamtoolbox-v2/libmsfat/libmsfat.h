@@ -232,4 +232,14 @@ int libmsfat_bs_fat1216_BS_FilSysType_exists(const struct libmsfat_bootsector *p
 int libmsfat_bs_fat1216_BS_BootSig_present(const struct libmsfat_bootsector *p_bs);
 int libmsfat_bs_fat1216_BPB_TotSec32_present(const struct libmsfat_bootsector *p_bs);
 int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *nfo,const struct libmsfat_bootsector *p_bs);
+int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t *entry,const libmsfat_cluster_t cluster);
+int libmsfat_context_set_fat_info(struct libmsfat_context_t *r,const struct libmsfat_disk_locations_and_info *nfo);
+int libmsfat_context_def_fd_read(struct libmsfat_context_t *r,uint8_t *buffer,uint64_t offset,size_t len);
+int libmsfat_context_def_fd_write(struct libmsfat_context_t *r,const uint8_t *buffer,uint64_t offset,size_t len);
+int libmsfat_context_init(struct libmsfat_context_t *r);
+void libmsfat_context_close_file(struct libmsfat_context_t *r);
+void libmsfat_context_free(struct libmsfat_context_t *r);
+struct libmsfat_context_t *libmsfat_context_create();
+struct libmsfat_context_t *libmsfat_context_destroy(struct libmsfat_context_t *r);
+int libmsfat_context_assign_fd(struct libmsfat_context_t *r,const int fd);
 
