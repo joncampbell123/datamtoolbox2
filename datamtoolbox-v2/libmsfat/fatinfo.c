@@ -55,6 +55,7 @@ static void field2str(char *dst,size_t dstlen,const uint8_t *src,const size_t sr
 }
 
 int main(int argc,char **argv) {
+	struct libmsfat_disk_locations_and_info locinfo;
 	uint32_t first_lba=0,size_lba=0;
 	const char *s_partition = NULL;
 	const char *s_image = NULL;
@@ -303,6 +304,45 @@ int main(int argc,char **argv) {
 		if (!libmsfat_boot_sector_is_valid(sectorbuf,&err_str)) {
 			printf("Boot sector is not valid: reason=%s\n",err_str);
 			return 1;
+		}
+	}
+
+	{
+		struct libmsfat_bootsector *p_bs = (struct libmsfat_bootsector*)sectorbuf;
+
+		if (libmsfat_bs_compute_disk_locations(&locinfo,p_bs)) {
+			printf("Unable to locate disk locations.\n");
+			return 1;
+		}
+
+		printf("Disk location and FAT info:\n");
+		printf("    FAT format:        FAT%u\n",
+			locinfo.FAT_size);
+		printf("    FAT tables:        %u\n",
+			locinfo.FAT_tables);
+		printf("    FAT table size:    %lu sectors\n",
+			(unsigned long)locinfo.FAT_table_size);
+		printf("    FAT offset:        %lu sectors\n",
+			(unsigned long)locinfo.FAT_offset);
+		printf("    Root directory:    %lu sectors\n",
+			(unsigned long)locinfo.RootDirectory_offset);
+		printf("    Root dir size:     %lu sectors\n",
+			(unsigned long)locinfo.RootDirectory_size);
+		printf("    Data offset:       %lu sectors\n",
+			(unsigned long)locinfo.Data_offset);
+		printf("    Data size:         %lu sectors\n",
+			(unsigned long)locinfo.Data_size);
+		printf("    Sectors/cluster:   %u\n",
+			(unsigned int)locinfo.Sectors_Per_Cluster);
+		printf("    Total clusters:    %lu\n",
+			(unsigned long)locinfo.Total_clusters);
+		printf("    Total sectors:     %lu sectors\n",
+			(unsigned long)locinfo.TotalSectors);
+		if (locinfo.FAT_size >= 32) {
+			printf("    FAT32 FSInfo:      %lu sector\n",
+				(unsigned long)locinfo.fat32.BPB_FSInfo);
+			printf("    Root dir cluster:  %lu\n",
+				(unsigned long)locinfo.fat32.RootDirectory_cluster);
 		}
 	}
 

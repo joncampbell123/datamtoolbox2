@@ -120,6 +120,26 @@ struct libmsfat_bootsector { /* boot sector, from byte offset +0 */
 };									/*=boot sector +90 */
 #pragma pack(pop)
 
+/* struct to hold computed disk locations */
+struct libmsfat_disk_locations_and_info {
+	uint8_t				FAT_size;		// 12, 16, or 32
+	uint8_t				FAT_tables;		// copy of BPB_NumFATs
+	uint16_t			BytesPerSector;		// BPB_BytsPerSec
+	uint32_t			FAT_table_size;		// size of FAT table in sectors
+	uint32_t			FAT_offset;		// offset of first FAT table (sectors)
+	uint32_t			RootDirectory_offset;	// offset of root directory (FAT12/FAT16 only), zero for FAT32
+	uint32_t			RootDirectory_size;	// size of the root directory in sectors (FAT12/FAT16)
+	uint32_t			Data_offset;		// offset of first data cluster (cluster #2)
+	uint32_t			Data_size;		// size of the data area
+	uint32_t			Total_clusters;		// total cluster count
+	uint32_t			TotalSectors;		// total sector count
+	uint8_t				Sectors_Per_Cluster;	// sectors per cluster
+	struct {
+		uint32_t		BPB_FSInfo;		// copy of BPB FSInfo, sector of this structure
+		uint32_t		RootDirectory_cluster;	// first cluster of root directory
+	} fat32;
+};
+
 /* sanity check: self-test structures and functions to ensure everything compiled OK */
 int libmsfat_sanity_check();
 
@@ -162,4 +182,5 @@ int libmsfat_bs_fat1216_BS_VolLab_exists(const struct libmsfat_bootsector *p_bs)
 int libmsfat_bs_fat1216_BS_FilSysType_exists(const struct libmsfat_bootsector *p_bs);
 int libmsfat_bs_fat1216_BS_BootSig_present(const struct libmsfat_bootsector *p_bs);
 int libmsfat_bs_fat1216_BPB_TotSec32_present(const struct libmsfat_bootsector *p_bs);
+int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *nfo,const struct libmsfat_bootsector *p_bs);
 

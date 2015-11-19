@@ -1,6 +1,7 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
@@ -262,5 +263,74 @@ int libmsfat_bs_fat1216_BPB_TotSec32_present(const struct libmsfat_bootsector *p
 	if (p_bs == NULL) return 0;
 	sz = libmsfat_bs_struct_length(p_bs);
 	return (sz >= 54)?1:0; /* MS-DOS 3.x or higher */
+}
+
+// NTS: This function assumes you have already validates the boot sector is valid!
+int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *nfo,const struct libmsfat_bootsector *p_bs) {
+	if (nfo == NULL || p_bs == NULL) return -1;
+	memset(nfo,0,sizeof(*nfo));
+
+	nfo->BytesPerSector = le16toh(p_bs->BPB_common.BPB_BytsPerSec);
+	if (nfo->BytesPerSector == 0 || nfo->BytesPerSector > 4096) return -1;
+
+	// NTS: Despite Microsoft docs, this code *could* support non-power-of-2 sector/cluster values
+	nfo->Sectors_Per_Cluster = p_bs->BPB_common.BPB_SecPerClus;
+	if (nfo->Sectors_Per_Cluster == 0) return -1;
+
+	if (p_bs->BPB_common.BPB_RsvdSecCnt == 0) return -1;
+
+	/* Microsoft official docs: If TotSec16 != 0, then use 16-bit value, else use TotSec32 */
+	if (p_bs->BPB_common.BPB_TotSec16 != 0)
+		nfo->TotalSectors = le16toh(p_bs->BPB_common.BPB_TotSec16);
+	else if (libmsfat_bs_fat1216_BPB_TotSec32_present(p_bs))
+		nfo->TotalSectors = le32toh(p_bs->BPB_common.BPB_TotSec32);
+	else
+		nfo->TotalSectors = (uint32_t)0;
+	if (nfo->TotalSectors == 0)
+		return -1;
+
+	/* Microsoft official docs: If FATSz16 != 0, then use 16-bit value, else use FATSz32 */
+	if (p_bs->BPB_common.BPB_FATSz16 != 0)
+		nfo->FAT_table_size = le16toh(p_bs->BPB_common.BPB_FATSz16);
+	else if (libmsfat_bs_is_fat32(p_bs))
+		nfo->FAT_table_size = le32toh(p_bs->at36.BPB_FAT32.BPB_FATSz32);
+	else
+		nfo->FAT_table_size = 0;
+	if (nfo->FAT_table_size == 0)
+		return -1;
+
+	nfo->FAT_offset = le16toh(p_bs->BPB_common.BPB_RsvdSecCnt);
+	nfo->FAT_tables = p_bs->BPB_common.BPB_NumFATs;
+	// NTS: root dir size calculation is valid for FAT32 as well
+	nfo->RootDirectory_size = (((uint32_t)le16toh(p_bs->BPB_common.BPB_RootEntCnt) * (uint32_t)32) + (uint32_t)nfo->BytesPerSector - (uint32_t)1) / (uint32_t)nfo->BytesPerSector;
+	// NTS: We will clear the Root Directory offset/size fields if FAT32 later on
+	nfo->RootDirectory_offset = nfo->FAT_offset + ((uint32_t)nfo->FAT_tables * (uint32_t)nfo->FAT_table_size) + nfo->RootDirectory_size; 
+	nfo->Data_offset = nfo->RootDirectory_offset + nfo->RootDirectory_size;
+
+	// how big is the data area?
+	nfo->Data_size = nfo->TotalSectors;
+	if (nfo->Data_size <= nfo->Data_offset) return -1; // at least one sector!
+	nfo->Data_size -= nfo->Data_offset;
+
+	// how many clusters? this is vital to determining FAT type.
+	nfo->Total_clusters = nfo->Data_size / nfo->Sectors_Per_Cluster;
+	if (nfo->Total_clusters == (uint32_t)0) return -1;
+
+	// So, what's the FAT type? (based on official Microsoft docs)
+	if (nfo->Total_clusters < 4085)
+		nfo->FAT_size = 12;
+	else if (nfo->Total_clusters < 65525)
+		nfo->FAT_size = 16;
+	else
+		nfo->FAT_size = 32;
+
+	if (nfo->FAT_size == 32) {
+		if (nfo->RootDirectory_size != (uint32_t)0) return -1; // Hey!
+		nfo->RootDirectory_offset = (uint32_t)0;
+		nfo->fat32.RootDirectory_cluster = le32toh(p_bs->at36.BPB_FAT32.BPB_RootClus);
+		nfo->fat32.BPB_FSInfo = le32toh(p_bs->at36.BPB_FAT32.BPB_FSInfo);
+	}
+
+	return 0;
 }
 
