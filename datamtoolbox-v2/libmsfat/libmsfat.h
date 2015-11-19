@@ -155,3 +155,9 @@ int libmsfat_bs_struct_length(const struct libmsfat_bootsector *p_bs);
 
  */
 
+/* report whether the Boot Signature is present. If so, the fields BS_VolID, BS_VolLab, and BS_FilSysType are valid */
+int libmsfat_bs_fat1216_bootsig_present(const struct libmsfat_bootsector *p_bs);
+int libmsfat_bs_fat1216_BS_VolID_exists(const struct libmsfat_bootsector *p_bs);
+int libmsfat_bs_fat1216_BS_VolLab_exists(const struct libmsfat_bootsector *p_bs);
+int libmsfat_bs_fat1216_BS_FilSysType_exists(const struct libmsfat_bootsector *p_bs);
+

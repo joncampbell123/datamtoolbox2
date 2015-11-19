@@ -209,3 +209,40 @@ int libmsfat_bs_struct_length(const struct libmsfat_bootsector *p_bs) {
 	return -1;
 }
 
+/* NTS: this function assumes you have already checked the BPB is FAT12/FAT16 */
+int libmsfat_bs_fat1216_bootsig_present(const struct libmsfat_bootsector *p_bs) {
+	int sz;
+
+	if (p_bs == NULL) return 0;
+	sz = libmsfat_bs_struct_length(p_bs);
+	if (sz < 54) return 0;
+	return (p_bs->at36.BPB_FAT.BS_BootSig == 0x29)?1:0;
+}
+
+/* NTS: function assumes you have already checked if bootsig is present and BPB is FAT12/FAT16! */
+int libmsfat_bs_fat1216_BS_VolID_exists(const struct libmsfat_bootsector *p_bs) {
+	int sz;
+
+	if (p_bs == NULL) return 0;
+	sz = libmsfat_bs_struct_length(p_bs);
+	return (sz >= (39+4))?1:0;
+}
+
+/* NTS: function assumes you have already checked if bootsig is present and BPB is FAT12/FAT16! */
+int libmsfat_bs_fat1216_BS_VolLab_exists(const struct libmsfat_bootsector *p_bs) {
+	int sz;
+
+	if (p_bs == NULL) return 0;
+	sz = libmsfat_bs_struct_length(p_bs);
+	return (sz >= (43+11))?1:0;
+}
+
+/* NTS: function assumes you have already checked if bootsig is present and BPB is FAT12/FAT16! */
+int libmsfat_bs_fat1216_BS_FilSysType_exists(const struct libmsfat_bootsector *p_bs) {
+	int sz;
+
+	if (p_bs == NULL) return 0;
+	sz = libmsfat_bs_struct_length(p_bs);
+	return (sz >= (54+8))?1:0;
+}
+

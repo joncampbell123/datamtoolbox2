@@ -279,13 +279,21 @@ int main(int argc,char **argv) {
 			printf("    BS_DrvNum:       0x%02x\n",(unsigned int)p_bs->at36.BPB_FAT.BS_DrvNum);
 			printf("    BS_Reserved1:    0x%02x\n",(unsigned int)p_bs->at36.BPB_FAT.BS_Reserved1);
 			printf("    BS_BootSig:      0x%02x\n",(unsigned int)p_bs->at36.BPB_FAT.BS_BootSig);
-			printf("    BS_VolID:        0x%08lx\n",(unsigned long)le32toh(p_bs->at36.BPB_FAT.BS_VolID));
 
-			field2str(tmpstr,sizeof(tmpstr),p_bs->at36.BPB_FAT.BS_VolLab,sizeof(p_bs->at36.BPB_FAT.BS_VolLab));
-			printf("    BS_VolLab:       '%s'\n",tmpstr);
+			if (libmsfat_bs_fat1216_bootsig_present(p_bs)) {
+				if (libmsfat_bs_fat1216_BS_VolID_exists(p_bs))
+					printf("    BS_VolID:        0x%08lx\n",(unsigned long)le32toh(p_bs->at36.BPB_FAT.BS_VolID));
 
-			field2str(tmpstr,sizeof(tmpstr),p_bs->at36.BPB_FAT.BS_FilSysType,sizeof(p_bs->at36.BPB_FAT.BS_FilSysType));
-			printf("    BS_FilSysType:   '%s'\n",tmpstr);
+				if (libmsfat_bs_fat1216_BS_VolLab_exists(p_bs)) {
+					field2str(tmpstr,sizeof(tmpstr),p_bs->at36.BPB_FAT.BS_VolLab,sizeof(p_bs->at36.BPB_FAT.BS_VolLab));
+					printf("    BS_VolLab:       '%s'\n",tmpstr);
+				}
+
+				if (libmsfat_bs_fat1216_BS_FilSysType_exists(p_bs)) {
+					field2str(tmpstr,sizeof(tmpstr),p_bs->at36.BPB_FAT.BS_FilSysType,sizeof(p_bs->at36.BPB_FAT.BS_FilSysType));
+					printf("    BS_FilSysType:   '%s'\n",tmpstr);
+				}
+			}
 		}
 	}
 
