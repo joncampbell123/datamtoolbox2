@@ -136,6 +136,7 @@ struct libmsfat_disk_locations_and_info {
 	uint32_t			Data_offset;		// offset of first data cluster (cluster #2) (sectors)
 	uint32_t			Data_size;		// size of the data area
 	uint32_t			Total_clusters;		// total cluster count
+	uint32_t			Max_possible_clusters;	// highest possible cluster count, considering sector boundaries
 	uint32_t			TotalSectors;		// total sector count
 	uint8_t				Sectors_Per_Cluster;	// sectors per cluster
 	struct {

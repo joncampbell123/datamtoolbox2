@@ -355,6 +355,15 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 		nfo->fat32.BPB_FSInfo = le32toh(p_bs->at36.BPB_FAT32.BPB_FSInfo);
 	}
 
+	nfo->Max_possible_clusters = nfo->FAT_table_size * (uint32_t)nfo->BytesPerSector;
+	if (nfo->FAT_size == 12) {
+		nfo->Max_possible_clusters /= 3UL;
+		nfo->Max_possible_clusters *= 2UL;
+	}
+	else {
+		nfo->Max_possible_clusters /= (nfo->FAT_size / (uint32_t)8UL);
+	}
+
 	return 0;
 }
 
