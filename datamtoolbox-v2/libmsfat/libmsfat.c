@@ -246,3 +246,21 @@ int libmsfat_bs_fat1216_BS_FilSysType_exists(const struct libmsfat_bootsector *p
 	return (sz >= (54+8))?1:0;
 }
 
+/* NTS: this function assumes you have already checked the BPB is FAT12/FAT16 */
+int libmsfat_bs_fat1216_BS_BootSig_present(const struct libmsfat_bootsector *p_bs) {
+	int sz;
+
+	if (p_bs == NULL) return 0;
+	sz = libmsfat_bs_struct_length(p_bs);
+	return (sz >= 54)?1:0; /* MS-DOS 3.x or higher */
+}
+
+/* NTS: this function assumes you have already checked the BPB is FAT12/FAT16 */
+int libmsfat_bs_fat1216_BPB_TotSec32_present(const struct libmsfat_bootsector *p_bs) {
+	int sz;
+
+	if (p_bs == NULL) return 0;
+	sz = libmsfat_bs_struct_length(p_bs);
+	return (sz >= 54)?1:0; /* MS-DOS 3.x or higher */
+}
+

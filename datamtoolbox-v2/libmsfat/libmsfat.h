@@ -160,4 +160,6 @@ int libmsfat_bs_fat1216_bootsig_present(const struct libmsfat_bootsector *p_bs);
 int libmsfat_bs_fat1216_BS_VolID_exists(const struct libmsfat_bootsector *p_bs);
 int libmsfat_bs_fat1216_BS_VolLab_exists(const struct libmsfat_bootsector *p_bs);
 int libmsfat_bs_fat1216_BS_FilSysType_exists(const struct libmsfat_bootsector *p_bs);
+int libmsfat_bs_fat1216_BS_BootSig_present(const struct libmsfat_bootsector *p_bs);
+int libmsfat_bs_fat1216_BPB_TotSec32_present(const struct libmsfat_bootsector *p_bs);
 
