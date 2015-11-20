@@ -551,6 +551,19 @@ int main(int argc,char **argv) {
 						}
 					}
 				}
+				else {
+					for (scan=0;scan < rdsz;scan++) {
+						cnt++;
+						if ((++col) >= 32) {
+							if ((unsigned int)scan >= (unsigned int)31) {
+								unsigned char *p = sectorbuf + scan - 31;
+								assert((scan % 32) == 31);
+								print_dirent(msfatctx,(struct libmsfat_dirent_t*)p);
+							}
+							col = 0;
+						}
+					}
+				}
 
 				offset += (uint64_t)rdsz;
 				rd -= rdsz;
@@ -627,6 +640,19 @@ int main(int argc,char **argv) {
 					cnt++;
 					if ((++col) >= 32) {
 						printf("\n");
+						if ((unsigned int)scan >= (unsigned int)31) {
+							unsigned char *p = sectorbuf + scan - 31;
+							assert((scan % 32) == 31);
+							print_dirent(msfatctx,(struct libmsfat_dirent_t*)p);
+						}
+						col = 0;
+					}
+				}
+			}
+			else {
+				for (scan=0;scan < rdsz;scan++) {
+					cnt++;
+					if ((++col) >= 32) {
 						if ((unsigned int)scan >= (unsigned int)31) {
 							unsigned char *p = sectorbuf + scan - 31;
 							assert((scan % 32) == 31);
