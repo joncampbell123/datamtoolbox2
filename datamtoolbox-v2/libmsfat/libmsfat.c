@@ -348,9 +348,9 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 	if (nfo->Total_clusters == (uint32_t)0) return -1;
 
 	// So, what's the FAT type? (based on official Microsoft docs)
-	if (nfo->Total_clusters < 4085)
+	if (nfo->Total_clusters < (uint32_t)4085UL)
 		nfo->FAT_size = 12;
-	else if (nfo->Total_clusters < 65525)
+	else if (nfo->Total_clusters < (uint32_t)65525UL)
 		nfo->FAT_size = 16;
 	else
 		nfo->FAT_size = 32;
@@ -371,6 +371,9 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 		nfo->Max_possible_clusters /= (nfo->FAT_size / (uint32_t)8UL);
 	}
 
+	// remember that clusters with data start at cluster #2
+	nfo->Total_clusters += (uint32_t)2UL;
+	nfo->Max_possible_clusters += (uint32_t)2UL;
 	return 0;
 }
 
