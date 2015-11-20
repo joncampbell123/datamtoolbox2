@@ -176,6 +176,99 @@ struct libmsfat_context_t {
 	int						(*write)(struct libmsfat_context_t *r,const uint8_t *buffer,uint64_t offset,size_t len);
 };
 
+#pragma pack(push,1)
+struct libmsfat_msdos_time_t {
+	union {
+		uint16_t				raw;
+		struct {
+			unsigned int			seconds2:5;		/* [4:0] seconds, in units of 2 seconds, 0-29 inclusive */
+			unsigned int			minutes:6;		/* [10:5] minutes, 0-59 inclusive */
+			unsigned int			hours:5;		/* [15:11] hours, 0-23 inclusive */
+		} f;
+	} a;
+};
+#pragma pack(pop)
+
+#pragma pack(push,1)
+struct libmsfat_msdos_date_t {
+	union {
+		uint16_t				raw;
+		struct {
+			unsigned int			day_of_month:5;		/* [4:0] day of month, 1-31 inclusive */
+			unsigned int			month_of_year:4;	/* [8:5] month of year, 1-12 inclusive */
+			unsigned int			years_since_1980:7;	/* [15:9] years since 1980 */
+		} f;
+	} a;
+};
+#pragma pack(pop)
+
+#pragma pack(push,1)
+/* directory entry */
+struct libmsfat_dirent_t {
+	union {
+		struct { /* normal dirent */
+			char				DIR_Name[8];	/* offset +0 */
+									/* 8.3 file name (not extension). if less than 8 chars, ascii space ' ' is used to fill out 8 chars */
+									/* NTS: we break from Microsoft specification by separating name from extension */
+			char				DIR_Ext[3];	/* offset +8 */
+									/* 8.3 file extension. if less than 3 chars, ascii space ' ' is used to fill out 3 chars */
+			uint8_t				DIR_Attr;	/* offset +11 */
+									/* file attributes */
+			uint8_t				DIR_NTRes;	/* offset +12 */
+									/* Windows NT reserved */
+			uint8_t				DIR_CrtTimeTenth; /* offset +13 */
+									/* NTS: Microsoft... did you make a mistake? Did you mean 100ths of a second? */
+			struct libmsfat_msdos_date_t	DIR_CrtTime;	/* offset +14 */
+									/* Packed structure, time file was created */
+			struct libmsfat_msdos_time_t	DIR_CrtDate;	/* offset +16 */
+									/* Packed structure, date file was created */
+			struct libmsfat_msdos_date_t	DIR_LstAccDate;	/* offset +18 */
+									/* Last accessed date (no time field) */
+			uint16_t			DIR_FstClusHI;	/* offset +20 */
+									/* hi 16 bits of cluster field (FAT32 only) */
+			struct libmsfat_msdos_time_t	DIR_WrtTime;	/* offset +22 */
+									/* time of last write */
+			struct libmsfat_msdos_date_t	DIR_WrtDate;	/* offset +24 */
+									/* date of last write */
+			uint16_t			DIR_FstClusLO;	/* offset +26 */
+									/* low 16 bits of cluster field */
+			uint32_t			DIR_FileSize;	/* offset +28 */
+									/* file size in bytes */
+		} n;							/*=offset +32 */
+		struct { /* long filename dirent */
+			uint8_t				LDIR_Ord;	/* offset +0 */
+									/* order of the entry in the sequence of long dir names.
+									 * may be masked with LAST_LONG_ENTRY (0x40) to signal that it's the last entry */
+			uint16_t			LDIR_Name1[5];	/* offset +1 */
+									/* Characters 1-5 of the long filename (UCS-16 unicode) */
+			uint8_t				LDIR_Attr;	/* offset +11 */
+									/* Attributes. must be ATTR_LONG_NAME */
+			uint8_t				LDIR_Type;	/* offset +12 */
+									/* set to 0 to signify a long file name component. may be nonzero for other types. */
+			uint8_t				LDIR_Chksum;	/* offset +13 */
+									/* Checksum of name in the short dir entry that follows the LFN entries */
+			uint16_t			LDIR_Name2[6];	/* offset +14 */
+									/* Characters 6-11 of the long filename (UCS-16 unicode) */
+			uint16_t			LDIR_FstClusLO;	/* offset +26 */
+									/* upper 16 bits of cluster field. must be zero. */
+			uint32_t			LDIR_Name3[2];	/* offset +28 */
+									/* Characters 12-13 of the long filename (UCS-16 unicode) */
+		} lfn;							/*=offset +32 */
+	} a;
+};									/*=offset +32 */
+#pragma pack(pop)
+
+#define libmsfat_DIR_ATTR_READ_ONLY			(1U << 0U)
+#define libmsfat_DIR_ATTR_HIDDEN			(1U << 1U)
+#define libmsfat_DIR_ATTR_SYSTEM			(1U << 2U)
+#define libmsfat_DIR_ATTR_VOLUME_ID			(1U << 3U)
+#define libmsfat_DIR_ATTR_DIRECTORY			(1U << 4U)
+#define libmsfat_DIR_ATTR_ARCHIVE			(1U << 5U)
+
+#define libmsfat_DIR_ATTR_LONG_NAME			(0x0F)
+
+#define libmsfat_DIR_ATTR_MASK				(0x3F)
+
 /* cluster zero does not represent data, but instead, holds the media type ID in the lowest 8 bits */
 #define libmsfat_CLUSTER_0_MEDIA_TYPE			((libmsfat_cluster_t)0UL)
 
@@ -258,4 +351,6 @@ int libmsfat_context_get_cluster_sector(struct libmsfat_context_t *ctx,uint64_t 
 int libmsfat_context_get_cluster_offset(struct libmsfat_context_t *ctx,uint64_t *offset,const libmsfat_cluster_t cluster);
 uint32_t libmsfat_context_get_cluster_size(struct libmsfat_context_t *ctx);
 int libmsfat_context_read_disk(struct libmsfat_context_t *r,uint8_t *buf,const uint64_t offset,const size_t rdsz);
+
+int libmsfat_context_fat_is_end_of_chain(const struct libmsfat_context_t *r,const libmsfat_cluster_t c);
 

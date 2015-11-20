@@ -639,3 +639,22 @@ int libmsfat_context_read_disk(struct libmsfat_context_t *r,uint8_t *buf,const u
 	return r->read(r,buf,offset,rdsz);
 }
 
+int libmsfat_context_fat_is_end_of_chain(const struct libmsfat_context_t *r,const libmsfat_cluster_t c) {
+	if (c < (libmsfat_cluster_t)2UL) return 1;
+
+	if (r->fatinfo.FAT_size == 12) {
+		if (c >= (libmsfat_cluster_t)0xFF8UL)
+			return 1;
+	}
+	else if (r->fatinfo.FAT_size == 16) {
+		if (c >= (libmsfat_cluster_t)0xFFF8UL)
+			return 1;
+	}
+	else if (r->fatinfo.FAT_size == 32) {
+		if (libmsfat_FAT32_CLUSTER(c) >= (libmsfat_cluster_t)0x0FFFFFF8UL)
+			return 1;
+	}
+
+	return 0;
+}
+
