@@ -362,22 +362,27 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 		nfo->fat32.BPB_FSInfo = le32toh(p_bs->at36.BPB_FAT32.BPB_FSInfo);
 	}
 
-	nfo->Max_possible_data_clusters = nfo->FAT_table_size * (uint32_t)nfo->BytesPerSector;
+	nfo->Max_possible_clusters = nfo->FAT_table_size * (uint32_t)nfo->BytesPerSector;
 	if (nfo->FAT_size == 12) {
-		nfo->Max_possible_data_clusters /= 3UL;
-		nfo->Max_possible_data_clusters *= 2UL;
+		nfo->Max_possible_clusters /= 3UL;
+		nfo->Max_possible_clusters *= 2UL;
 	}
 	else {
-		nfo->Max_possible_data_clusters /= (nfo->FAT_size / (uint32_t)8UL);
+		nfo->Max_possible_clusters /= (nfo->FAT_size / (uint32_t)8UL);
 	}
 
 	// remember that clusters with data start at cluster #2. that means
 	// the total clusters is +2 the number we computed, because that's the
 	// number of FAT entries needed to represent the total data clusters.
 	nfo->Total_clusters = nfo->Total_data_clusters + (uint32_t)2UL;
-	// the max amount we computed from the FAT size however caps the cluster
-	// count absolutely, there is no +2.
-	nfo->Max_possible_clusters = nfo->Max_possible_data_clusters;
+
+	// what we computed from the FAT table is the maximum possible cluster.
+	// not counting clusters 0 and 1, the max possible data cluster is max cluster - 2.
+	if (nfo->Max_possible_clusters >= 2UL)
+		nfo->Max_possible_data_clusters = nfo->Max_possible_clusters - (uint32_t)2UL;
+	else
+		nfo->Max_possible_data_clusters = (uint32_t)0UL;
+
 	return 0;
 }
 
