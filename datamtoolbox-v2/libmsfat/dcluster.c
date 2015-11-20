@@ -51,6 +51,7 @@ int main(int argc,char **argv) {
 	libmsfat_cluster_t cluster=0;
 	const char *s_image = NULL;
 	const char *s_out = NULL;
+	unsigned char nohex = 0;
 	int i,fd,out_fd=-1;
 
 	for (i=1;i < argc;) {
@@ -67,6 +68,9 @@ int main(int argc,char **argv) {
 			}
 			else if (!strcmp(a,"cluster")) {
 				s_cluster = argv[i++];
+			}
+			else if (!strcmp(a,"nohex")) {
+				nohex = 1;
 			}
 			else if (!strcmp(a,"o") || !strcmp(a,"out")) {
 				s_out = argv[i++];
@@ -93,6 +97,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--partition <n>          Hard disk image, use partition N from the MBR\n");
 		fprintf(stderr,"--cluster <n>            Which cluster to dump\n");
 		fprintf(stderr,"-o <file>                Dump cluster to file\n");
+		fprintf(stderr,"--nohex                  Don't hex dump to STDOUT\n");
 		return 1;
 	}
 	if (s_cluster == NULL) {
@@ -364,15 +369,17 @@ int main(int argc,char **argv) {
 				}
 			}
 
-			for (scan=0;scan < rdsz;scan++) {
-				if (col == 0) printf("    0x%08lx: ",(unsigned long)cnt);
+			if (!nohex) {
+				for (scan=0;scan < rdsz;scan++) {
+					if (col == 0) printf("    0x%08lx: ",(unsigned long)cnt);
 
-				printf("%02x ",sectorbuf[scan]);
+					printf("%02x ",sectorbuf[scan]);
 
-				cnt++;
-				if ((++col) >= 16) {
-					printf("\n");
-					col = 0;
+					cnt++;
+					if ((++col) >= 16) {
+						printf("\n");
+						col = 0;
+					}
 				}
 			}
 
@@ -380,7 +387,7 @@ int main(int argc,char **argv) {
 			rd -= rdsz;
 		}
 
-		if (col != 0) printf("\n");
+		if (col != 0 && !nohex) printf("\n");
 	}
 
 	if (out_fd >= 0) close(out_fd);
