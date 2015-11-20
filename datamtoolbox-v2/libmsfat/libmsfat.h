@@ -254,4 +254,5 @@ int libmsfat_context_assign_fd(struct libmsfat_context_t *r,const int fd);
 int libmsfat_context_get_cluster_sector(struct libmsfat_context_t *ctx,uint64_t *sector,const libmsfat_cluster_t cluster);
 int libmsfat_context_get_cluster_offset(struct libmsfat_context_t *ctx,uint64_t *offset,const libmsfat_cluster_t cluster);
 uint32_t libmsfat_context_get_cluster_size(struct libmsfat_context_t *ctx);
+int libmsfat_context_read_disk(struct libmsfat_context_t *r,uint8_t *buf,const uint64_t offset,const size_t rdsz);
 

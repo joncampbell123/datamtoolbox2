@@ -628,3 +628,9 @@ uint32_t libmsfat_context_get_cluster_size(struct libmsfat_context_t *ctx) {
 	return (uint32_t)ctx->fatinfo.BytesPerSector * (uint32_t)ctx->fatinfo.Sectors_Per_Cluster;
 }
 
+int libmsfat_context_read_disk(struct libmsfat_context_t *r,uint8_t *buf,const uint64_t offset,const size_t rdsz) {
+	if (r == NULL || buf == NULL) return -1;
+	if (r->read == NULL) return -1;
+	return r->read(r,buf,offset,rdsz);
+}
+

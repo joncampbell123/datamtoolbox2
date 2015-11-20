@@ -50,6 +50,7 @@ int main(int argc,char **argv) {
 	const char *s_cluster = NULL;
 	libmsfat_cluster_t cluster=0;
 	const char *s_image = NULL;
+	const char *s_out = NULL;
 	int i,fd;
 
 	for (i=1;i < argc;) {
@@ -66,6 +67,9 @@ int main(int argc,char **argv) {
 			}
 			else if (!strcmp(a,"cluster")) {
 				s_cluster = argv[i++];
+			}
+			else if (!strcmp(a,"o") || !strcmp(a,"out")) {
+				s_out = argv[i++];
 			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
@@ -88,6 +92,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"\n");
 		fprintf(stderr,"--partition <n>          Hard disk image, use partition N from the MBR\n");
 		fprintf(stderr,"--cluster <n>            Which cluster to dump\n");
+		fprintf(stderr,"-o <file>                Dump cluster to file\n");
 		return 1;
 	}
 	if (s_cluster == NULL) {
@@ -301,8 +306,11 @@ int main(int argc,char **argv) {
 			(unsigned long)cluster);
 
 	{
+		uint32_t rd,cnt,scan;
 		uint64_t offset;
 		uint64_t sector;
+		uint32_t clsz;
+		uint8_t col;
 
 		if (libmsfat_context_get_cluster_sector(msfatctx,&sector,cluster)) {
 			fprintf(stderr,"Failed to map sector from cluster number %lu\n",(unsigned long)cluster);
@@ -317,6 +325,47 @@ int main(int argc,char **argv) {
 			(unsigned long)cluster,
 			(unsigned long long)sector,
 			(unsigned long long)offset);
+
+		clsz = libmsfat_context_get_cluster_size(msfatctx);
+		if (clsz == (uint32_t)0) {
+			fprintf(stderr,"Unable to get cluster size\n");
+			return 1;
+		}
+		printf("    Cluster size:      %lu bytes\n",
+			(unsigned long)clsz);
+		printf("\n");
+
+		col = 0;
+		cnt = 0;
+		rd = clsz;
+		while (rd != 0) {
+			uint32_t rdsz;
+
+			rdsz = rd;
+			if (rdsz > (uint32_t)sizeof(sectorbuf)) rdsz = (uint32_t)sizeof(sectorbuf);
+
+			if (libmsfat_context_read_disk(msfatctx,sectorbuf,offset,rdsz)) {
+				fprintf(stderr,"Failed to read from disk offset %llu\n",(unsigned long long)offset);
+				break;
+			}
+
+			for (scan=0;scan < rdsz;scan++) {
+				if (col == 0) printf("    0x%08lx: ",(unsigned long)cnt);
+
+				printf("%02x ",sectorbuf[scan]);
+
+				cnt++;
+				if ((++col) >= 16) {
+					printf("\n");
+					col = 0;
+				}
+			}
+
+			offset += (uint64_t)rdsz;
+			rd -= rdsz;
+		}
+
+		if (col != 0) printf("\n");
 	}
 
 	msfatctx = libmsfat_context_destroy(msfatctx);
