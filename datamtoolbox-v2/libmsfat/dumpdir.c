@@ -42,16 +42,68 @@
 
 static unsigned char			sectorbuf[512];
 
-static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct libmsfat_dirent_t *dir) {
+static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct libmsfat_dirent_t *dir,const uint8_t nohex) {
 	if (dir->a.n.DIR_Name[0] == 0) {
-		printf("    <EMPTY, end of dir>\n");
+		if (!nohex)
+			printf("    <EMPTY, end of dir>\n");
 	}
 	else if (dir->a.n.DIR_Name[0] == 0xE5) {
-		printf("    <DELETED>\n");
+		if (!nohex)
+			printf("    <DELETED>\n");
 	}
 	else if ((dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_MASK) == libmsfat_DIR_ATTR_LONG_NAME) {
-		/* LFN TODO */
-		printf("    <LFN>\n");
+		printf("    <LFN> type %u entry %u ",(unsigned int)dir->a.lfn.LDIR_Type,(unsigned int)dir->a.lfn.LDIR_Ord & 0x3F);
+		if (dir->a.lfn.LDIR_Ord & 0x40) printf(" LAST ENTRY");
+
+		if (dir->a.lfn.LDIR_Type == 0x00) {
+			const uint16_t *s;
+			char name[5+6+2+1+1];
+			char *d = name;
+			char *df = name + sizeof(name);
+			unsigned int i,end=0;
+
+			s = dir->a.lfn.LDIR_Name1;
+			for (i=0;i < 5 && !end;i++) {
+				uint16_t uc = s[i];
+				if (uc == 0) {
+					end = 1;
+					break;
+				}
+
+				if (uc >= 0x80) *d++ = '?';
+				else *d++ = (char)(uc & 0xFF);
+			}
+			assert(d < df);
+
+			s = dir->a.lfn.LDIR_Name2;
+			for (i=0;i < 6 && !end;i++) {
+				uint16_t uc = s[i];
+				if (uc == 0) {
+					end = 1;
+					break;
+				}
+
+				if (uc >= 0x80) *d++ = '?';
+				else *d++ = (char)(uc & 0xFF);
+			}
+			assert(d < df);
+
+			s = dir->a.lfn.LDIR_Name3;
+			for (i=0;i < 2 && !end;i++) {
+				uint16_t uc = s[i];
+				if (uc == 0) {
+					end = 1;
+					break;
+				}
+
+				if (uc >= 0x80) *d++ = '?';
+				else *d++ = (char)(uc & 0xFF);
+			}
+			assert(d < df);
+			*d = 0;
+
+			printf(" fragment: '%s'\n",name);
+		}
 	}
 	else if (dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID) {
 		const char *s = dir->a.n.DIR_Name,*se;
@@ -547,7 +599,7 @@ int main(int argc,char **argv) {
 							if ((unsigned int)scan >= (unsigned int)31) {
 								unsigned char *p = sectorbuf + scan - 31;
 								assert((scan % 32) == 31);
-								print_dirent(msfatctx,(struct libmsfat_dirent_t*)p);
+								print_dirent(msfatctx,(struct libmsfat_dirent_t*)p,nohex);
 							}
 							col = 0;
 						}
@@ -560,7 +612,7 @@ int main(int argc,char **argv) {
 							if ((unsigned int)scan >= (unsigned int)31) {
 								unsigned char *p = sectorbuf + scan - 31;
 								assert((scan % 32) == 31);
-								print_dirent(msfatctx,(struct libmsfat_dirent_t*)p);
+								print_dirent(msfatctx,(struct libmsfat_dirent_t*)p,nohex);
 							}
 							col = 0;
 						}
@@ -645,7 +697,7 @@ int main(int argc,char **argv) {
 						if ((unsigned int)scan >= (unsigned int)31) {
 							unsigned char *p = sectorbuf + scan - 31;
 							assert((scan % 32) == 31);
-							print_dirent(msfatctx,(struct libmsfat_dirent_t*)p);
+							print_dirent(msfatctx,(struct libmsfat_dirent_t*)p,nohex);
 						}
 						col = 0;
 					}
@@ -658,7 +710,7 @@ int main(int argc,char **argv) {
 						if ((unsigned int)scan >= (unsigned int)31) {
 							unsigned char *p = sectorbuf + scan - 31;
 							assert((scan % 32) == 31);
-							print_dirent(msfatctx,(struct libmsfat_dirent_t*)p);
+							print_dirent(msfatctx,(struct libmsfat_dirent_t*)p,nohex);
 						}
 						col = 0;
 					}

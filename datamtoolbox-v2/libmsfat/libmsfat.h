@@ -251,7 +251,7 @@ struct libmsfat_dirent_t {
 									/* Characters 6-11 of the long filename (UCS-16 unicode) */
 			uint16_t			LDIR_FstClusLO;	/* offset +26 */
 									/* upper 16 bits of cluster field. must be zero. */
-			uint32_t			LDIR_Name3[2];	/* offset +28 */
+			uint16_t			LDIR_Name3[2];	/* offset +28 */
 									/* Characters 12-13 of the long filename (UCS-16 unicode) */
 		} lfn;							/*=offset +32 */
 	} a;
