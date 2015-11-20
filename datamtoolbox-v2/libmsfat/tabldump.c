@@ -3,6 +3,7 @@
 # define _CRT_SECURE_NO_WARNINGS
 # include <io.h>
 /* shut up Microsoft. what the hell is your problem with POSIX functions? */
+# define dup _dup
 # define open _open
 # define read _read
 # define write _write
