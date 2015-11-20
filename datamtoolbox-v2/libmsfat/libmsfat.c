@@ -622,3 +622,9 @@ int libmsfat_context_get_cluster_offset(struct libmsfat_context_t *ctx,uint64_t 
 	return 0;
 }
 
+uint32_t libmsfat_context_get_cluster_size(struct libmsfat_context_t *ctx) {
+	if (ctx == NULL) return (uint32_t)0;
+	if (!ctx->fatinfo_set) return (uint32_t)0;
+	return (uint32_t)ctx->fatinfo.BytesPerSector * (uint32_t)ctx->fatinfo.Sectors_Per_Cluster;
+}
+
