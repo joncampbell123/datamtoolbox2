@@ -506,11 +506,13 @@ int main(int argc,char **argv) {
 			if (msfatctx->fatinfo.FAT_size == 32)
 				next_cluster &= libmsfat_FAT32_CLUSTER_MASK;
 
-			printf("    Cluster:           #%lu starts at sector %llu (%llu bytes) -> next cluster is 0x%08lx\n",
+			printf("    Cluster:           #%lu starts at sector %llu (%llu bytes)",
 				(unsigned long)cluster,
 				(unsigned long long)sector,
-				(unsigned long long)offset,
-				(unsigned long)next_cluster);
+				(unsigned long long)offset);
+			if (!libmsfat_context_fat_is_end_of_chain(msfatctx,next_cluster))
+				printf(" -> next cluster is %lu",(unsigned long)next_cluster);
+			printf("\n");
 
 			col = 0;
 			cnt = 0;
