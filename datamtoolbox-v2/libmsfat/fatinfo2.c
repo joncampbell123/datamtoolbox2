@@ -1,8 +1,16 @@
 #if defined(_MSC_VER)
+/*hack: Microsoft C++ does not have le32toh() and friends, but Windows is Little Endian anyway*/
+# define le16toh(x) (x)
+# define le32toh(x) (x)
+# define htole32(x) (x)
+# define htole16(x) (x)
+#endif
+#if defined(_MSC_VER)
 /* shut up Microsoft. how the fuck is strerror() unsafe? */
 # define _CRT_SECURE_NO_WARNINGS
 # include <io.h>
 /* shut up Microsoft. what the hell is your problem with POSIX functions? */
+# define dup _dup
 # define open _open
 # define read _read
 # define write _write
