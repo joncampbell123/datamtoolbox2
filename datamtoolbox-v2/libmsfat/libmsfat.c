@@ -61,6 +61,8 @@ int libmsfat_sanity_check() {
 	if (sizeof(time_e) != 2) return -1;
 	if (sizeof(date_e) != 2) return -1;
 
+	/* TODO: take host endian and use it to make sure the date/time bitfields line up properly as needed to parse MS-DOS date/time */
+
 	return 0;
 }
 
