@@ -371,9 +371,13 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 		nfo->Max_possible_data_clusters /= (nfo->FAT_size / (uint32_t)8UL);
 	}
 
-	// remember that clusters with data start at cluster #2
+	// remember that clusters with data start at cluster #2. that means
+	// the total clusters is +2 the number we computed, because that's the
+	// number of FAT entries needed to represent the total data clusters.
 	nfo->Total_clusters = nfo->Total_data_clusters + (uint32_t)2UL;
-	nfo->Max_possible_clusters = nfo->Max_possible_data_clusters + (uint32_t)2UL;
+	// the max amount we computed from the FAT size however caps the cluster
+	// count absolutely, there is no +2.
+	nfo->Max_possible_clusters = nfo->Max_possible_data_clusters;
 	return 0;
 }
 
