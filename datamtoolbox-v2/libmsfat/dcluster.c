@@ -49,9 +49,9 @@ int libmsfat_context_get_cluster_sector(struct libmsfat_context_t *ctx,uint64_t 
 	// clusters 0 and 1 do not have corresponding data storage
 	if (cluster < (libmsfat_cluster_t)2UL) return -1;
 
-	sct  = (uint64_t)ctx->fatinfo.Data_offset;
-	sct += (uint64_t)(cluster - (libmsfat_cluster_t)2UL) * (uint64_t)ctx->fatinfo.Sectors_Per_Cluster;
+	sct = (uint64_t)(cluster - (libmsfat_cluster_t)2UL) * (uint64_t)ctx->fatinfo.Sectors_Per_Cluster;
 	if (sct >= ctx->fatinfo.Data_size) return -1;
+	sct += (uint64_t)ctx->fatinfo.Data_offset;
 
 	*sector = sct;
 	return 0;
