@@ -135,10 +135,13 @@ struct libmsfat_disk_locations_and_info {
 	uint32_t			RootDirectory_size;	// size of the root directory in sectors (FAT12/FAT16)
 	uint32_t			Data_offset;		// offset of first data cluster (cluster #2) (sectors)
 	uint32_t			Data_size;		// size of the data area
-	uint32_t			Total_clusters;		// total cluster count
+	uint32_t			Total_clusters;		// total cluster count, including non-data clusters 0 and 1.
+								// this is also the size of the FAT table related to the disk, not including the extra entries in the FAT table.
 	uint32_t			Total_data_clusters;	// total data cluster count (clusters 0 and 1 do not have data storage, counted as if 0-1 did not exist)
-	uint32_t			Max_possible_clusters;	// highest possible cluster count given the size of the FAT table (compared to the portion actually used for the clusters on disk)
-	uint32_t			Max_possible_data_clusters;// highest possible data cluster count (clusters 0 and 1 do not have data storage, counted as if 0-1 did not exist)
+	uint32_t			Max_possible_clusters;	// highest possible total cluster count given the size of the FAT table (compared to the portion actually used for the clusters on disk)
+								// this is the number of clusters that would exist if the entire FAT table (including extra space) were used.
+	uint32_t			Max_possible_data_clusters;// highest possible total data cluster count, excluding clusters 0 and 1.
+								// this is the number of clusters that would exist if the entire FAT table (including extra space) were used.
 	uint32_t			TotalSectors;		// total sector count
 	uint8_t				Sectors_Per_Cluster;	// sectors per cluster
 	struct {
