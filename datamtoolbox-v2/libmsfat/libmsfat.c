@@ -335,7 +335,7 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 	// NTS: root dir size calculation is valid for FAT32 as well
 	nfo->RootDirectory_size = (((uint32_t)le16toh(p_bs->BPB_common.BPB_RootEntCnt) * (uint32_t)32) + (uint32_t)nfo->BytesPerSector - (uint32_t)1) / (uint32_t)nfo->BytesPerSector;
 	// NTS: We will clear the Root Directory offset/size fields if FAT32 later on
-	nfo->RootDirectory_offset = nfo->FAT_offset + ((uint32_t)nfo->FAT_tables * (uint32_t)nfo->FAT_table_size) + nfo->RootDirectory_size; 
+	nfo->RootDirectory_offset = nfo->FAT_offset + ((uint32_t)nfo->FAT_tables * (uint32_t)nfo->FAT_table_size);
 	nfo->Data_offset = nfo->RootDirectory_offset + nfo->RootDirectory_size;
 
 	// how big is the data area?
