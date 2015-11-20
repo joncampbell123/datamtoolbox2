@@ -40,32 +40,6 @@
 # define O_BINARY 0
 #endif
 
-int libmsfat_context_get_cluster_sector(struct libmsfat_context_t *ctx,uint64_t *sector,const libmsfat_cluster_t cluster) {
-	uint64_t sct;
-
-	if (ctx == NULL || sector == NULL) return -1;
-	if (!ctx->fatinfo_set) return -1;
-
-	// clusters 0 and 1 do not have corresponding data storage
-	if (cluster < (libmsfat_cluster_t)2UL) return -1;
-
-	sct = (uint64_t)(cluster - (libmsfat_cluster_t)2UL) * (uint64_t)ctx->fatinfo.Sectors_Per_Cluster;
-	if (sct >= ctx->fatinfo.Data_size) return -1;
-	sct += (uint64_t)ctx->fatinfo.Data_offset;
-
-	*sector = sct;
-	return 0;
-}
-
-int libmsfat_context_get_cluster_offset(struct libmsfat_context_t *ctx,uint64_t *offset,const libmsfat_cluster_t cluster) {
-	uint64_t tmp;
-
-	if (libmsfat_context_get_cluster_sector(ctx,&tmp,cluster)) return -1;
-	*offset = ((uint64_t)tmp * (uint64_t)ctx->fatinfo.BytesPerSector) +
-		(uint64_t)ctx->partition_byte_offset;
-	return 0;
-}
-
 static unsigned char			sectorbuf[512];
 
 int main(int argc,char **argv) {

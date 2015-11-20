@@ -249,4 +249,6 @@ void libmsfat_context_free(struct libmsfat_context_t *r);
 struct libmsfat_context_t *libmsfat_context_create();
 struct libmsfat_context_t *libmsfat_context_destroy(struct libmsfat_context_t *r);
 int libmsfat_context_assign_fd(struct libmsfat_context_t *r,const int fd);
+int libmsfat_context_get_cluster_sector(struct libmsfat_context_t *ctx,uint64_t *sector,const libmsfat_cluster_t cluster);
+int libmsfat_context_get_cluster_offset(struct libmsfat_context_t *ctx,uint64_t *offset,const libmsfat_cluster_t cluster);
 
