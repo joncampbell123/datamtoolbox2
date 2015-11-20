@@ -190,6 +190,12 @@ struct libmsfat_context_t {
 /*   _NOIOERROR: if set, no disk i/o errors were encountered. if not set, the filesystem driver encountered a disk I/O error and you should check the filesystem */
 #define libmsfat_FAT32_DIRTYFLAG_NOIOERROR		((libmsfat_FAT_entry_t)0x04000000UL)
 
+/* use this macro for separating out FAT32 cluster number vs reserved bits */
+#define libmsfat_FAT32_CLUSTER_MASK			((uint32_t)0x0FFFFFFFUL)
+#define libmsfat_FAT32_RESERVED_MASK			((uint32_t)0xF0000000UL)
+#define libmsfat_FAT32_CLUSTER(x)			(((uint32_t)(x)) & libmsfat_FAT32_CLUSTER_MASK)
+#define libmsfat_FAT32_RESERVED(x)			(((uint32_t)(x)) & libmsfat_FAT32_RESERVED_MASK)
+
 /* sanity check: self-test structures and functions to ensure everything compiled OK */
 int libmsfat_sanity_check();
 
