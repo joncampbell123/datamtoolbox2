@@ -344,13 +344,13 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 	nfo->Data_size -= nfo->Data_offset;
 
 	// how many clusters? this is vital to determining FAT type.
-	nfo->Total_clusters = nfo->Data_size / nfo->Sectors_Per_Cluster;
-	if (nfo->Total_clusters == (uint32_t)0) return -1;
+	nfo->Total_data_clusters = nfo->Data_size / nfo->Sectors_Per_Cluster;
+	if (nfo->Total_data_clusters == (uint32_t)0) return -1;
 
 	// So, what's the FAT type? (based on official Microsoft docs)
-	if (nfo->Total_clusters < (uint32_t)4085UL)
+	if (nfo->Total_data_clusters < (uint32_t)4085UL)
 		nfo->FAT_size = 12;
-	else if (nfo->Total_clusters < (uint32_t)65525UL)
+	else if (nfo->Total_data_clusters < (uint32_t)65525UL)
 		nfo->FAT_size = 16;
 	else
 		nfo->FAT_size = 32;
@@ -362,18 +362,18 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 		nfo->fat32.BPB_FSInfo = le32toh(p_bs->at36.BPB_FAT32.BPB_FSInfo);
 	}
 
-	nfo->Max_possible_clusters = nfo->FAT_table_size * (uint32_t)nfo->BytesPerSector;
+	nfo->Max_possible_data_clusters = nfo->FAT_table_size * (uint32_t)nfo->BytesPerSector;
 	if (nfo->FAT_size == 12) {
-		nfo->Max_possible_clusters /= 3UL;
-		nfo->Max_possible_clusters *= 2UL;
+		nfo->Max_possible_data_clusters /= 3UL;
+		nfo->Max_possible_data_clusters *= 2UL;
 	}
 	else {
-		nfo->Max_possible_clusters /= (nfo->FAT_size / (uint32_t)8UL);
+		nfo->Max_possible_data_clusters /= (nfo->FAT_size / (uint32_t)8UL);
 	}
 
 	// remember that clusters with data start at cluster #2
-	nfo->Total_clusters += (uint32_t)2UL;
-	nfo->Max_possible_clusters += (uint32_t)2UL;
+	nfo->Total_clusters = nfo->Total_data_clusters + (uint32_t)2UL;
+	nfo->Max_possible_clusters = nfo->Max_possible_data_clusters + (uint32_t)2UL;
 	return 0;
 }
 
