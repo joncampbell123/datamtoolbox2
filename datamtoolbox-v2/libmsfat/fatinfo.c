@@ -344,6 +344,12 @@ int main(int argc,char **argv) {
 			(unsigned int)locinfo.Sectors_Per_Cluster);
 		printf("    Total clusters:    %lu\n",
 			(unsigned long)locinfo.Total_clusters);
+		printf("    Total data clusts: %lu\n",
+			(unsigned long)locinfo.Total_data_clusters);
+		printf("    Max clusters psbl: %lu\n",
+			(unsigned long)locinfo.Max_possible_clusters);
+		printf("    Max data clus psbl:%lu\n",
+			(unsigned long)locinfo.Max_possible_data_clusters);
 		printf("    Total sectors:     %lu sectors\n",
 			(unsigned long)locinfo.TotalSectors);
 		if (locinfo.FAT_size >= 32) {
