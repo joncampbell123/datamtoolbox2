@@ -51,7 +51,7 @@ int main(int argc,char **argv) {
 	libmsfat_cluster_t cluster=0;
 	const char *s_image = NULL;
 	const char *s_out = NULL;
-	int i,fd;
+	int i,fd,out_fd=-1;
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -305,6 +305,14 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"WARNING: cluster %lu is known not to have corresponding data storage on disk\n",
 			(unsigned long)cluster);
 
+	if (s_out != NULL) {
+		out_fd = open(s_out,O_CREAT|O_TRUNC|O_BINARY|O_WRONLY,0644);
+		if (out_fd < 0) {
+			fprintf(stderr,"Failed to create dump file\n");
+			return 1;
+		}
+	}
+
 	{
 		uint32_t rd,cnt,scan;
 		uint64_t offset;
@@ -349,6 +357,13 @@ int main(int argc,char **argv) {
 				break;
 			}
 
+			if (out_fd >= 0) {
+				if (write(out_fd,sectorbuf,(size_t)rdsz) != (int)rdsz) {
+					fprintf(stderr,"Failed to write to dump file\n");
+					break;
+				}
+			}
+
 			for (scan=0;scan < rdsz;scan++) {
 				if (col == 0) printf("    0x%08lx: ",(unsigned long)cnt);
 
@@ -367,6 +382,9 @@ int main(int argc,char **argv) {
 
 		if (col != 0) printf("\n");
 	}
+
+	if (out_fd >= 0) close(out_fd);
+	out_fd = -1;
 
 	msfatctx = libmsfat_context_destroy(msfatctx);
 	close(fd);
