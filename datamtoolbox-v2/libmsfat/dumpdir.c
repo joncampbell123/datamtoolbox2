@@ -40,26 +40,139 @@
 # define O_BINARY 0
 #endif
 
-int libmsfat_context_fat_is_end_of_chain(const struct libmsfat_context_t *r,const libmsfat_cluster_t c) {
-	if (c < (libmsfat_cluster_t)2UL) return 1;
-
-	if (r->fatinfo.FAT_size == 12) {
-		if (c >= (libmsfat_cluster_t)0xFF8UL)
-			return 1;
-	}
-	else if (r->fatinfo.FAT_size == 16) {
-		if (c >= (libmsfat_cluster_t)0xFFF8UL)
-			return 1;
-	}
-	else if (r->fatinfo.FAT_size == 32) {
-		if (libmsfat_FAT32_CLUSTER(c) >= (libmsfat_cluster_t)0x0FFFFFF8UL)
-			return 1;
-	}
-
-	return 0;
-}
-
 static unsigned char			sectorbuf[512];
+
+static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct libmsfat_dirent_t *dir) {
+	if (dir->a.n.DIR_Name[0] == 0) {
+		printf("    <EMPTY, end of dir>\n");
+	}
+	else if (dir->a.n.DIR_Name[0] == 0xE5) {
+		printf("    <DELETED>\n");
+	}
+	else if ((dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_MASK) == libmsfat_DIR_ATTR_LONG_NAME) {
+		/* LFN TODO */
+		printf("    <LFN>\n");
+	}
+	else if (dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID) {
+		const char *s = dir->a.n.DIR_Name,*se;
+		char name[12];
+		char *df = name + sizeof(name);
+		char *d = name;
+
+		se = dir->a.n.DIR_Ext+2;
+		while (se >= s && (*se == ' ' || *se == 0)) se--; /* scan backwards past trailing spaces */
+		se++;
+		while (s < se) *d++ = *s++;
+		assert(d < df);
+		*d = 0;
+
+		printf("    <VOLUME LABEL>   '%s'\n",name);
+	}
+	else {
+		const char *s = dir->a.n.DIR_Name,*se;
+		char name[8+1+3+1+1]; /* <NAME>.<EXT><NUL> */
+		char *df = name + sizeof(name);
+		char *d = name;
+
+		/* if the first byte is 0x05, the actual char is 0xE5. Japanese SHIFT-JIS hack, apparently */
+		if (*s == 0x05) {
+			*d++ = (char)0xE5;
+			s++;
+		}
+		se = dir->a.n.DIR_Name+7;
+		while (se >= s && (*se == ' ' || *se == 0)) se--; /* scan backwards past trailing spaces */
+		se++;
+		while (s < se) *d++ = *s++;
+		assert(d < df);
+
+		s = dir->a.n.DIR_Ext;
+		if (!(*s == ' ' || *s == 0)) {
+			*d++ = '.';
+			se = dir->a.n.DIR_Ext+2;
+			while (se >= s && (*se == ' ' || *se == 0)) se--; /* scan backwards past trailing spaces */
+			se++;
+			while (s < se) *d++ = *s++;
+			assert(d < df);
+		}
+		*d = 0;
+		assert(d < df);
+
+		if (dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
+			printf("    <DIR>   ");
+		else
+			printf("    <FILE>  ");
+
+		printf("%c",(dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_READ_ONLY)?'R':'-');
+		printf("%c",(dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_HIDDEN)?'H':'-');
+		printf("%c",(dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_SYSTEM)?'S':'-');
+		printf("%c",(dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_ARCHIVE)?'A':'-');
+
+		printf("  '%s'\n",name);
+
+		printf("            File size:            %lu bytes\n",(unsigned long)le32toh(dir->a.n.DIR_FileSize));
+
+		if (msfatctx->fatinfo.FAT_size == 32) {
+			libmsfat_cluster_t c;
+
+			c = (libmsfat_cluster_t)le16toh(dir->a.n.DIR_FstClusLO);
+			c += (libmsfat_cluster_t)le16toh(dir->a.n.DIR_FstClusHI) << (libmsfat_cluster_t)16UL;
+			printf("            Starting cluster:     %lu\n",(unsigned long)c);
+		}
+		else {
+			printf("            Starting cluster:     %lu\n",(unsigned long)le16toh(dir->a.n.DIR_FstClusLO));
+		}
+
+		{
+			struct libmsfat_msdos_date_t d;
+			struct libmsfat_msdos_time_t t;
+
+			d.a.raw = le16toh(dir->a.n.DIR_CrtDate.a.raw);
+			t.a.raw = le16toh(dir->a.n.DIR_CrtTime.a.raw);
+
+			if (d.a.raw != 0 || t.a.raw != 0) {
+				printf("            File creation:        %04u-%02u-%02u %02u:%02u:%02u.%02u\n",
+					1980 + d.a.f.years_since_1980,
+					d.a.f.month_of_year,
+					d.a.f.day_of_month,
+					t.a.f.hours,
+					t.a.f.minutes,
+					(t.a.f.seconds2 * 2U) + (dir->a.n.DIR_CrtTimeTenth / 100),
+					dir->a.n.DIR_CrtTimeTenth % 100);
+			}
+		}
+
+		{
+			struct libmsfat_msdos_date_t d;
+			struct libmsfat_msdos_time_t t;
+
+			d.a.raw = le16toh(dir->a.n.DIR_WrtDate.a.raw);
+			t.a.raw = le16toh(dir->a.n.DIR_WrtTime.a.raw);
+
+			if (d.a.raw != 0 || t.a.raw != 0) {
+				printf("            File last modified:   %04u-%02u-%02u %02u:%02u:%02u\n",
+					1980 + d.a.f.years_since_1980,
+					d.a.f.month_of_year,
+					d.a.f.day_of_month,
+					t.a.f.hours,
+					t.a.f.minutes,
+					t.a.f.seconds2 * 2U);
+			}
+		}
+
+		{
+			struct libmsfat_msdos_date_t d;
+
+			d.a.raw = le16toh(dir->a.n.DIR_LstAccDate.a.raw);
+
+			if (d.a.raw != 0) {
+				printf("            File last accessed:   %04u-%02u-%02u\n",
+					1980 + d.a.f.years_since_1980,
+					d.a.f.month_of_year,
+					d.a.f.day_of_month);
+			}
+		}
+	}
+}
 
 int main(int argc,char **argv) {
 	struct libmsfat_disk_locations_and_info locinfo;
@@ -429,6 +542,11 @@ int main(int argc,char **argv) {
 						cnt++;
 						if ((++col) >= 32) {
 							printf("\n");
+							if ((unsigned int)scan >= (unsigned int)31) {
+								unsigned char *p = sectorbuf + scan - 31;
+								assert((scan % 32) == 31);
+								print_dirent(msfatctx,(struct libmsfat_dirent_t*)p);
+							}
 							col = 0;
 						}
 					}
@@ -509,6 +627,11 @@ int main(int argc,char **argv) {
 					cnt++;
 					if ((++col) >= 32) {
 						printf("\n");
+						if ((unsigned int)scan >= (unsigned int)31) {
+							unsigned char *p = sectorbuf + scan - 31;
+							assert((scan % 32) == 31);
+							print_dirent(msfatctx,(struct libmsfat_dirent_t*)p);
+						}
 						col = 0;
 					}
 				}
