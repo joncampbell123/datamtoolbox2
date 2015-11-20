@@ -137,7 +137,7 @@ struct libmsfat_disk_locations_and_info {
 	uint32_t			Data_size;		// size of the data area
 	uint32_t			Total_clusters;		// total cluster count
 	uint32_t			Total_data_clusters;	// total data cluster count (clusters 0 and 1 do not have data storage, counted as if 0-1 did not exist)
-	uint32_t			Max_possible_clusters;	// highest possible cluster count, considering sector boundaries
+	uint32_t			Max_possible_clusters;	// highest possible cluster count given the size of the FAT table (compared to the portion actually used for the clusters on disk)
 	uint32_t			Max_possible_data_clusters;// highest possible data cluster count (clusters 0 and 1 do not have data storage, counted as if 0-1 did not exist)
 	uint32_t			TotalSectors;		// total sector count
 	uint8_t				Sectors_Per_Cluster;	// sectors per cluster
