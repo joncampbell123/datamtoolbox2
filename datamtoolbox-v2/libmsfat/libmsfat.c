@@ -38,7 +38,10 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 
 int libmsfat_sanity_check() {
+	struct libmsfat_msdos_time_t time_e;
+	struct libmsfat_msdos_date_t date_e;
 	struct libmsfat_bootsector bs;
+	struct libmsfat_dirent_t de;
 
 	if (sizeof(bs) != 90) return -1;
 	if (sizeof(bs.BS_header) != 11) return -1;
@@ -51,6 +54,12 @@ int libmsfat_sanity_check() {
 	if (offsetof(struct libmsfat_bootsector,at36) != 36) return -1;
 	if (offsetof(struct libmsfat_bootsector,at36.BPB_FAT) != 36) return -1;
 	if (offsetof(struct libmsfat_bootsector,at36.BPB_FAT32) != 36) return -1;
+	if (sizeof(de) != 32) return -1;
+	if (sizeof(de.a) != 32) return -1;
+	if (sizeof(de.a.n) != 32) return -1;
+	if (sizeof(de.a.lfn) != 32) return -1;
+	if (sizeof(time_e) != 2) return -1;
+	if (sizeof(date_e) != 2) return -1;
 
 	return 0;
 }
