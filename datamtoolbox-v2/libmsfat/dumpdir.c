@@ -52,7 +52,10 @@ static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct 
 			printf("    <DELETED>\n");
 	}
 	else if ((dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_MASK) == libmsfat_DIR_ATTR_LONG_NAME) {
-		printf("    <LFN> type %u entry %u ",(unsigned int)dir->a.lfn.LDIR_Type,(unsigned int)dir->a.lfn.LDIR_Ord & 0x3F);
+		printf("    <LFN> checksum 0x%02x type %u entry %u ",
+			(unsigned int)dir->a.lfn.LDIR_Chksum,
+			(unsigned int)dir->a.lfn.LDIR_Type,
+			(unsigned int)dir->a.lfn.LDIR_Ord & 0x3F);
 		if (dir->a.lfn.LDIR_Ord & 0x40) printf(" LAST ENTRY");
 
 		if (dir->a.lfn.LDIR_Type == 0x00) {
