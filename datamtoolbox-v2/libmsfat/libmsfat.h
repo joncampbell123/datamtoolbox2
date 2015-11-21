@@ -177,29 +177,41 @@ struct libmsfat_context_t {
 };
 
 #pragma pack(push,1)
+# if defined(_MSC_VER) /* Microsoft C++ treats unsigned int bitfields properly except the struct becomes 32-bit wide, which is WRONG */
+#  define bitfield_t					unsigned short int
+# else /* GCC will bitch about anything other than "unsigned int" used in bitfield definitions, but will make the struct 16 bits wide total */
+#  define bitfield_t					unsigned int
+# endif
 struct libmsfat_msdos_time_t {
 	union {
 		uint16_t				raw;
 		struct {
-			unsigned short int		seconds2:5;		/* [4:0] seconds, in units of 2 seconds, 0-29 inclusive */
-			unsigned short int		minutes:6;		/* [10:5] minutes, 0-59 inclusive */
-			unsigned short int		hours:5;		/* [15:11] hours, 0-23 inclusive */
+			bitfield_t			seconds2:5;		/* [4:0] seconds, in units of 2 seconds, 0-29 inclusive */
+			bitfield_t			minutes:6;		/* [10:5] minutes, 0-59 inclusive */
+			bitfield_t			hours:5;		/* [15:11] hours, 0-23 inclusive */
 		} f;
 	} a;
 };
+# undef bitfield_t
 #pragma pack(pop)
 
 #pragma pack(push,1)
+# if defined(_MSC_VER) /* Microsoft C++ treats unsigned int bitfields properly except the struct becomes 32-bit wide, which is WRONG */
+#  define bitfield_t					unsigned short int
+# else /* GCC will bitch about anything other than "unsigned int" used in bitfield definitions, but will make the struct 16 bits wide total */
+#  define bitfield_t					unsigned int
+# endif
 struct libmsfat_msdos_date_t {
 	union {
 		uint16_t				raw;
 		struct {
-			unsigned short int		day_of_month:5;		/* [4:0] day of month, 1-31 inclusive */
-			unsigned short int		month_of_year:4;	/* [8:5] month of year, 1-12 inclusive */
-			unsigned short int		years_since_1980:7;	/* [15:9] years since 1980 */
+			bitfield_t			day_of_month:5;		/* [4:0] day of month, 1-31 inclusive */
+			bitfield_t			month_of_year:4;	/* [8:5] month of year, 1-12 inclusive */
+			bitfield_t			years_since_1980:7;	/* [15:9] years since 1980 */
 		} f;
 	} a;
 };
+# undef bitfield_t
 #pragma pack(pop)
 
 #pragma pack(push,1)
