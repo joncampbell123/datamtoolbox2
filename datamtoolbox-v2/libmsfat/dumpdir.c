@@ -42,6 +42,140 @@
 
 static unsigned char			sectorbuf[512];
 
+static uint16_t				lfn_name_assembly[(5+6+2)*32];
+static uint8_t				lfn_name_present[32];
+static uint8_t				lfn_name_chksum[32];
+static uint8_t				lfn_name_max = 0;
+
+static void lfn_discontinuity() {
+	if (lfn_name_max == 0) return;
+	printf("LFN error: failed to assemble name\n");
+	lfn_name_max = 0;
+}
+
+static void lfn_complete(const struct libmsfat_dirent_t *dir) { // non LFN entry
+	uint8_t cksumerr=0,missing=0;
+	uint8_t chksum;
+	unsigned int i;
+	uint16_t uc;
+
+	if (lfn_name_max == 0) return;
+	chksum = libmsfat_lfn_83_checksum_dirent(dir);
+
+	for (i=0;i < lfn_name_max;i++) {
+		if (lfn_name_present[i]) {
+			if (lfn_name_chksum[i] != chksum) {
+				fprintf(stderr,"LFN checksum mismatch: 0x%02x != 0x%02x\n",
+					(unsigned int)lfn_name_chksum[i],
+					(unsigned int)chksum);
+				cksumerr=1;
+			}
+		}
+		else {
+			missing=1;
+		}
+	}
+
+	if (missing)
+		fprintf(stderr,"LFN error: One or more segments are missing\n");
+	else if (cksumerr)
+		fprintf(stderr,"LFN error: Assembled LFN checksum mismatch against 8.3 name\n");
+	else {
+		uint8_t tmp[((5+6+2)*32)+1];
+
+		for (i=0;i < ((5+6+2)*lfn_name_max);i++) {
+			uc = lfn_name_assembly[i];
+			if (uc == 0) break;
+
+			if (uc >= 0x80U) tmp[i] = '?';
+			else tmp[i] = (char)uc;
+		}
+		assert(i < sizeof(tmp));
+		tmp[i] = 0;
+
+		printf("            >> LFN name: '%s'\n",tmp);
+	}
+
+	lfn_name_max = 0;
+}
+
+static void lfn_assemble(const struct libmsfat_dirent_t *dir) {
+	uint8_t ord;
+
+	if (lfn_name_max == 0) {
+		if (!(dir->a.lfn.LDIR_Ord & 0x40)) { // must be marked as first
+			fprintf(stderr,"LFN error: unexpected LFN entry #%u that is not the start\n",
+				(unsigned int)(dir->a.lfn.LDIR_Ord & 0x3F));
+			return;
+		}
+
+		lfn_name_max = dir->a.lfn.LDIR_Ord & 0x3F;
+		if (lfn_name_max == 0 || lfn_name_max > 32) {
+			fprintf(stderr,"LFN error: first LFN entry has very large ordinal\n");
+			lfn_name_max = 0;
+			return;
+		}
+
+		memset(lfn_name_present,0,lfn_name_max);
+		memset(lfn_name_chksum,0,lfn_name_max);
+		memset(lfn_name_assembly,0,sizeof(uint16_t)*lfn_name_max);
+	}
+	else {
+		if (dir->a.lfn.LDIR_Ord & 0x40) { // another first entry??
+			fprintf(stderr,"LFN error: unexpected LFN first entry #%u while assembling an LFN\n",
+				(unsigned int)(dir->a.lfn.LDIR_Ord & 0x3F));
+			lfn_name_max = 0;
+			return;
+		}
+		else if (dir->a.lfn.LDIR_Ord == 0 || dir->a.lfn.LDIR_Ord > lfn_name_max) {
+			fprintf(stderr,"LFN error: LFN entry #%u out of range\n",
+				(unsigned int)(dir->a.lfn.LDIR_Ord & 0x3F));
+			lfn_name_max = 0;
+			return;
+		}
+	}
+
+	ord = dir->a.lfn.LDIR_Ord & 0x3F;
+	assert(ord > 0);
+	ord--;
+	assert(ord < lfn_name_max);
+
+	if (lfn_name_present[ord]) {
+		fprintf(stderr,"LFN error: duplicate entry #%u\n",
+			(unsigned int)ord);
+		lfn_name_max = 0;
+		return;
+	}
+
+	{
+		uint16_t *d = lfn_name_assembly + (ord * (5+6+2));
+		unsigned int i;
+
+		assert(((uint8_t*)(d+(5+6+2))) <= ((uint8_t*)lfn_name_assembly + sizeof(lfn_name_assembly)));
+
+		for (i=0;i < 5;i++)
+			d[i+0] = dir->a.lfn.LDIR_Name1[i];
+		for (i=0;i < 6;i++)
+			d[i+5] = dir->a.lfn.LDIR_Name2[i];
+		for (i=0;i < 2;i++)
+			d[i+11] = dir->a.lfn.LDIR_Name3[i];
+	}
+
+	lfn_name_chksum[ord] = dir->a.lfn.LDIR_Chksum;
+	lfn_name_present[ord] = 1;
+}
+
+static void dirent_assemble_lfn(const struct libmsfat_context_t *msfatctx,const struct libmsfat_dirent_t *dir) {
+	if (dir->a.n.DIR_Name[0] == 0x00 || dir->a.n.DIR_Name[0] == 0xE5)
+		lfn_discontinuity();
+	else if ((dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_MASK) == libmsfat_DIR_ATTR_LONG_NAME)
+		lfn_assemble(dir);
+	else if ((dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID) != 0)
+		lfn_discontinuity();
+	else
+		lfn_complete(dir);
+}
+
 static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct libmsfat_dirent_t *dir,const uint8_t nohex) {
 	if (dir->a.n.DIR_Name[0] == 0) {
 		if (!nohex)
@@ -73,7 +207,7 @@ static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct 
 					break;
 				}
 
-				if (uc >= 0x80) *d++ = '?';
+				if (uc >= 0x80U) *d++ = '?';
 				else *d++ = (char)(uc & 0xFF);
 			}
 			assert(d < df);
@@ -86,7 +220,7 @@ static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct 
 					break;
 				}
 
-				if (uc >= 0x80) *d++ = '?';
+				if (uc >= 0x80U) *d++ = '?';
 				else *d++ = (char)(uc & 0xFF);
 			}
 			assert(d < df);
@@ -99,7 +233,7 @@ static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct 
 					break;
 				}
 
-				if (uc >= 0x80) *d++ = '?';
+				if (uc >= 0x80U) *d++ = '?';
 				else *d++ = (char)(uc & 0xFF);
 			}
 			assert(d < df);
@@ -603,6 +737,7 @@ int main(int argc,char **argv) {
 								unsigned char *p = sectorbuf + scan - 31;
 								assert((scan % 32) == 31);
 								print_dirent(msfatctx,(struct libmsfat_dirent_t*)p,nohex);
+								dirent_assemble_lfn(msfatctx,(struct libmsfat_dirent_t*)p);
 							}
 							col = 0;
 						}
@@ -616,6 +751,7 @@ int main(int argc,char **argv) {
 								unsigned char *p = sectorbuf + scan - 31;
 								assert((scan % 32) == 31);
 								print_dirent(msfatctx,(struct libmsfat_dirent_t*)p,nohex);
+								dirent_assemble_lfn(msfatctx,(struct libmsfat_dirent_t*)p);
 							}
 							col = 0;
 						}
@@ -701,6 +837,7 @@ int main(int argc,char **argv) {
 							unsigned char *p = sectorbuf + scan - 31;
 							assert((scan % 32) == 31);
 							print_dirent(msfatctx,(struct libmsfat_dirent_t*)p,nohex);
+							dirent_assemble_lfn(msfatctx,(struct libmsfat_dirent_t*)p);
 						}
 						col = 0;
 					}
@@ -714,6 +851,7 @@ int main(int argc,char **argv) {
 							unsigned char *p = sectorbuf + scan - 31;
 							assert((scan % 32) == 31);
 							print_dirent(msfatctx,(struct libmsfat_dirent_t*)p,nohex);
+							dirent_assemble_lfn(msfatctx,(struct libmsfat_dirent_t*)p);
 						}
 						col = 0;
 					}

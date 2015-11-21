@@ -351,6 +351,7 @@ int libmsfat_context_get_cluster_sector(struct libmsfat_context_t *ctx,uint64_t 
 int libmsfat_context_get_cluster_offset(struct libmsfat_context_t *ctx,uint64_t *offset,const libmsfat_cluster_t cluster);
 uint32_t libmsfat_context_get_cluster_size(struct libmsfat_context_t *ctx);
 int libmsfat_context_read_disk(struct libmsfat_context_t *r,uint8_t *buf,const uint64_t offset,const size_t rdsz);
+uint8_t libmsfat_lfn_83_checksum_dirent(const struct libmsfat_dirent_t *dir);
 
 int libmsfat_context_fat_is_end_of_chain(const struct libmsfat_context_t *r,const libmsfat_cluster_t c);
 

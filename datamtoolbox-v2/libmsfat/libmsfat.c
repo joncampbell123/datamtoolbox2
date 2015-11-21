@@ -669,3 +669,15 @@ int libmsfat_context_fat_is_end_of_chain(const struct libmsfat_context_t *r,cons
 	return 0;
 }
 
+uint8_t libmsfat_lfn_83_checksum_dirent(const struct libmsfat_dirent_t *dir) {
+	uint8_t sum = 0;
+	unsigned int i;
+
+	for (i=0;i < 8;i++)
+		sum = ((sum & 1) ? 0x80 : 0x00) + (sum >> 1) + dir->a.n.DIR_Name[i];
+	for (i=0;i < 3;i++)
+		sum = ((sum & 1) ? 0x80 : 0x00) + (sum >> 1) + dir->a.n.DIR_Ext[i];
+
+	return sum;
+}
+
