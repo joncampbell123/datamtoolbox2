@@ -21,6 +21,7 @@
 # include <datamtoolbox-v2/polyfill/ms_cpp.h>
 #endif
 #include <datamtoolbox-v2/polyfill/lseek.h>
+#include <datamtoolbox-v2/polyfill/unix.h>
 
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 

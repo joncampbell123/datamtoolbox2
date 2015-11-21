@@ -1,16 +1,9 @@
 #if defined(_MSC_VER)
-/* shut up Microsoft. how the fuck is strerror() unsafe? */
-# define _CRT_SECURE_NO_WARNINGS
-# include <io.h>
-/* shut up Microsoft. what the hell is your problem with POSIX functions? */
-# define open _open
-# define read _read
-# define write _write
-# define close _close
-# define lseek _lseeki64
+# include <datamtoolbox-v2/polyfill/ms_posix_stfu.h>
 #endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
+# include <endian.h>
 #endif
 #include <stdlib.h>
 #include <sys/types.h>
@@ -22,19 +15,15 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
-
-/* oh come on Microsoft ... */
-#if defined(_MSC_VER) && !defined(S_ISREG)
-# define S_ISREG(x) (x & _S_IFREG)
+#if defined(_MSC_VER)
+# include <datamtoolbox-v2/polyfill/ms_cpp.h>
 #endif
+#include <datamtoolbox-v2/polyfill/lseek.h>
+#include <datamtoolbox-v2/polyfill/unix.h>
 
 #include <datamtoolbox-v2/libint13chs/int13chs.h>
 #include <datamtoolbox-v2/libpartmbr/partmbr.h>
 #include <datamtoolbox-v2/libpartmbr/mbrctx.h>
-
-#ifndef O_BINARY
-# define O_BINARY 0
-#endif
 
 static struct libpartmbr_context_t*		diskimage_ctx = NULL;
 

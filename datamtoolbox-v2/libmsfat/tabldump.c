@@ -20,18 +20,10 @@
 # include <datamtoolbox-v2/polyfill/ms_cpp.h>
 #endif
 #include <datamtoolbox-v2/polyfill/lseek.h>
+#include <datamtoolbox-v2/polyfill/unix.h>
 
 #include <datamtoolbox-v2/libpartmbr/mbrctx.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
-
-/* oh come on Microsoft ... */
-#if defined(_MSC_VER) && !defined(S_ISREG)
-# define S_ISREG(x) (x & _S_IFREG)
-#endif
-
-#ifndef O_BINARY
-# define O_BINARY 0
-#endif
 
 static unsigned char			sectorbuf[512];
 
