@@ -721,3 +721,121 @@ libmsfat_cluster_t libmsfat_dirent_get_starting_cluster(const struct libmsfat_co
 	return c;
 }
 
+void libmsfat_lfn_assembly_init(struct libmsfat_lfn_assembly_t *l) {
+	memset(l,0,sizeof(*l));
+}
+
+int libmsfat_lfn_dirent_complete(struct libmsfat_lfn_assembly_t *lfna,const struct libmsfat_dirent_t *dir) {
+	uint8_t chksum;
+	unsigned int i;
+
+	if (lfna == NULL || dir == NULL) return -1;
+	lfna->name_avail = 0;
+	if (lfna->max == 0) return 0;
+	lfna->err_missing = 0;
+	lfna->err_checksum = 0;
+
+	chksum = libmsfat_lfn_83_checksum_dirent(dir);
+
+	for (i=0;i < lfna->max;i++) {
+		if (lfna->present[i]) {
+			if (lfna->chksum[i] != chksum)
+				lfna->err_checksum = 1;
+		}
+		else {
+			lfna->err_missing = 1;
+		}
+	}
+
+	if (lfna->err_missing)
+		lfna->err_str = "One or more segments are missing";
+	else if (lfna->err_checksum)
+		lfna->err_str = "Assembled LFN checksum mismatch against 8.3 name";
+
+	lfna->name_avail = lfna->max;
+	lfna->max = 0;
+	return 0;
+}
+
+int libmsfat_lfn_dirent_assemble(struct libmsfat_lfn_assembly_t *lfna,const struct libmsfat_dirent_t *dir) {
+	uint8_t ord;
+
+	if (lfna == NULL || dir == NULL)
+		return -1;
+
+	if (lfna->max == 0) {
+		if (!(dir->a.lfn.LDIR_Ord & 0x40)) { // must be marked as first
+			lfna->err_str = "unexpected LFN entry that is not the start";
+			lfna->max = 0;
+			return -1;
+		}
+
+		lfna->err_missing = 0;
+		lfna->err_checksum = 0;
+		lfna->max = dir->a.lfn.LDIR_Ord & 0x3F;
+		if (lfna->max == 0 || lfna->max > 32) {
+			lfna->err_str = "first LFN entry has very large ordinal";
+			lfna->max = 0;
+			return -1;
+		}
+
+		assert(lfna->max <= sizeof(lfna->present));
+
+		memset(lfna->present,0,lfna->max);
+		memset(lfna->chksum,0,lfna->max);
+		memset(lfna->assembly,0,sizeof(uint16_t)*lfna->max);
+	}
+	else {
+		if (dir->a.lfn.LDIR_Ord & 0x40) { // another first entry??
+			lfna->err_str = "unexpected LFN first entry while assembling an LFN";
+			lfna->max = 0;
+			return -1;
+		}
+		else if (dir->a.lfn.LDIR_Ord == 0 || dir->a.lfn.LDIR_Ord > lfna->max) {
+			lfna->err_str = "LFN entry out of range";
+			lfna->max = 0;
+			return -1;
+		}
+	}
+
+	ord = dir->a.lfn.LDIR_Ord & 0x3F;
+	assert(ord > 0);
+	ord--;
+	assert(ord < lfna->max);
+
+	if (lfna->present[ord]) {
+		lfna->err_str = "duplicate entry";
+		lfna->max = 0;
+		return -1;
+	}
+
+	{
+		uint16_t *d = lfna->assembly + (ord * (5+6+2));
+		unsigned int i;
+
+		assert(((uint8_t*)(d+(5+6+2))) <= ((uint8_t*)lfna->assembly + sizeof(lfna->assembly)));
+
+		for (i=0;i < 5;i++)
+			d[i+0] = dir->a.lfn.LDIR_Name1[i];
+		for (i=0;i < 6;i++)
+			d[i+5] = dir->a.lfn.LDIR_Name2[i];
+		for (i=0;i < 2;i++)
+			d[i+11] = dir->a.lfn.LDIR_Name3[i];
+	}
+
+	lfna->chksum[ord] = dir->a.lfn.LDIR_Chksum;
+	lfna->present[ord] = 1;
+	return 0;
+}
+
+int libmsfat_lfn_dirent_is_lfn(const struct libmsfat_dirent_t *dir) {
+	if (dir == NULL) return 0;
+
+	if (dir->a.n.DIR_Name[0] == 0x00 || dir->a.n.DIR_Name[0] == 0xE5)
+		return 0;
+	if ((dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_MASK) == libmsfat_DIR_ATTR_LONG_NAME)
+		return 1;
+
+	return 0;
+}
+

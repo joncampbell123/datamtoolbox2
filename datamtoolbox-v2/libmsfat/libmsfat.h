@@ -176,6 +176,18 @@ struct libmsfat_context_t {
 	int						(*write)(struct libmsfat_context_t *r,const uint8_t *buffer,uint64_t offset,size_t len);
 };
 
+// context for assembling long filenames while reading directories
+struct libmsfat_lfn_assembly_t {
+	uint16_t			assembly[(5+6+2)*32];
+	uint8_t				present[32];
+	uint8_t				chksum[32];
+	uint8_t				name_avail;
+	uint8_t				err_missing;
+	uint8_t				err_checksum;
+	uint8_t				max;
+	const char*			err_str;
+};
+
 #pragma pack(push,1)
 # if defined(_MSC_VER) /* Microsoft C++ treats unsigned int bitfields properly except the struct becomes 32-bit wide, which is WRONG */
 #  define bitfield_t					unsigned short int
@@ -367,4 +379,9 @@ uint8_t libmsfat_lfn_83_checksum_dirent(const struct libmsfat_dirent_t *dir);
 libmsfat_cluster_t libmsfat_dirent_get_starting_cluster(const struct libmsfat_context_t *msfatctx,const struct libmsfat_dirent_t *dir);
 
 int libmsfat_context_fat_is_end_of_chain(const struct libmsfat_context_t *r,const libmsfat_cluster_t c);
+
+void libmsfat_lfn_assembly_init(struct libmsfat_lfn_assembly_t *l);
+int libmsfat_lfn_dirent_complete(struct libmsfat_lfn_assembly_t *lfna,const struct libmsfat_dirent_t *dir);
+int libmsfat_lfn_dirent_assemble(struct libmsfat_lfn_assembly_t *lfna,const struct libmsfat_dirent_t *dir);
+int libmsfat_lfn_dirent_is_lfn(const struct libmsfat_dirent_t *dir);
 
