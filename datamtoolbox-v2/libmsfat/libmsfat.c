@@ -61,7 +61,33 @@ int libmsfat_sanity_check() {
 	if (sizeof(time_e) != 2) return -1;
 	if (sizeof(date_e) != 2) return -1;
 
-	/* TODO: take host endian and use it to make sure the date/time bitfields line up properly as needed to parse MS-DOS date/time */
+	/* bitfield tests */
+	time_e.a.raw = 0x01 << 0;
+	if (time_e.a.f.seconds2 != 0x01 || time_e.a.f.minutes != 0 || time_e.a.f.hours != 0) return -1;
+	time_e.a.raw = 0x1F << 0;
+	if (time_e.a.f.seconds2 != 0x1F || time_e.a.f.minutes != 0 || time_e.a.f.hours != 0) return -1;
+	time_e.a.raw = 0x01 << 5;
+	if (time_e.a.f.seconds2 != 0 || time_e.a.f.minutes != 0x01 || time_e.a.f.hours != 0) return -1;
+	time_e.a.raw = 0x3F << 5;
+	if (time_e.a.f.seconds2 != 0 || time_e.a.f.minutes != 0x3F || time_e.a.f.hours != 0) return -1;
+	time_e.a.raw = 0x01 << 11;
+	if (time_e.a.f.seconds2 != 0 || time_e.a.f.minutes != 0 || time_e.a.f.hours != 0x01) return -1;
+	time_e.a.raw = 0x1F << 11;
+	if (time_e.a.f.seconds2 != 0 || time_e.a.f.minutes != 0 || time_e.a.f.hours != 0x1F) return -1;
+
+	/* bitfield tests */
+	date_e.a.raw = 0x01 << 0;
+	if (date_e.a.f.day_of_month != 0x01 || date_e.a.f.month_of_year != 0 || date_e.a.f.years_since_1980 != 0) return -1;
+	date_e.a.raw = 0x1F << 0;
+	if (date_e.a.f.day_of_month != 0x1F || date_e.a.f.month_of_year != 0 || date_e.a.f.years_since_1980 != 0) return -1;
+	date_e.a.raw = 0x01 << 5;
+	if (date_e.a.f.day_of_month != 0 || date_e.a.f.month_of_year != 0x01 || date_e.a.f.years_since_1980 != 0) return -1;
+	date_e.a.raw = 0x0F << 5;
+	if (date_e.a.f.day_of_month != 0 || date_e.a.f.month_of_year != 0x0F || date_e.a.f.years_since_1980 != 0) return -1;
+	date_e.a.raw = 0x01 << 9;
+	if (date_e.a.f.day_of_month != 0 || date_e.a.f.month_of_year != 0 || date_e.a.f.years_since_1980 != 0x01) return -1;
+	date_e.a.raw = 0x7F << 9;
+	if (date_e.a.f.day_of_month != 0 || date_e.a.f.month_of_year != 0 || date_e.a.f.years_since_1980 != 0x7F) return -1;
 
 	return 0;
 }
