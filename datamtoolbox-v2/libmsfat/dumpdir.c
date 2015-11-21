@@ -306,17 +306,7 @@ static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct 
 		printf("  '%s'\n",name);
 
 		printf("            File size:            %lu bytes\n",(unsigned long)le32toh(dir->a.n.DIR_FileSize));
-
-		if (msfatctx->fatinfo.FAT_size == 32) {
-			libmsfat_cluster_t c;
-
-			c = (libmsfat_cluster_t)le16toh(dir->a.n.DIR_FstClusLO);
-			c += (libmsfat_cluster_t)le16toh(dir->a.n.DIR_FstClusHI) << (libmsfat_cluster_t)16UL;
-			printf("            Starting cluster:     %lu\n",(unsigned long)c);
-		}
-		else {
-			printf("            Starting cluster:     %lu\n",(unsigned long)le16toh(dir->a.n.DIR_FstClusLO));
-		}
+		printf("            Starting cluster:     %lu\n",(unsigned long)libmsfat_dirent_get_starting_cluster(msfatctx,dir));
 
 		{
 			struct libmsfat_msdos_date_t d;
