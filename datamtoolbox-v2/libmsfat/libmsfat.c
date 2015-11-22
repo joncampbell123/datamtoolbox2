@@ -1391,7 +1391,15 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 	/* sanity check */
 	if (fioctx == NULL || fioctx_parent == NULL || msfatctx == NULL || dirent == NULL) return -1;
 	if (!fioctx->is_cluster_chain) return -1;
-	if (!fioctx_parent->is_directory) return -1;
+
+	/* parent fioctx must be a directory, unless it's the virtual parent of the root dir */
+	if (!fioctx_parent->is_directory && !fioctx_parent->is_root_parent)
+		return -1;
+
+	/* do not permit the root directory to be truncated to zero (especially FAT32).
+	 * FAT32 filesystem drivers don't like it when the root directory starts in a cluster marked free. */
+	if (!fioctx_parent->is_directory && fioctx_parent->is_root_parent && offset == (uint32_t)0UL)
+		offset = (uint32_t)1UL;
 
 	/* at this point, dirent_start must be the byte offset within fioctx_parent of the short 8.3 dirent */
 
@@ -1457,6 +1465,12 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 
 		current = next;
 	} while (1);
+
+	/* root directory child doesn't have a dirent to update */
+	if (!fioctx_parent->is_directory) {
+		if (fioctx_parent->is_root_parent)
+			return 0;
+	}
 
 	/* done */
 	return libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,dirent,lfn_name);
