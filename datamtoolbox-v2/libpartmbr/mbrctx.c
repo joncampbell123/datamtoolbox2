@@ -1,5 +1,9 @@
+#if defined(_MSC_VER)
+# include <datamtoolbox-v2/polyfill/ms_posix_stfu.h>
+#endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
+# include <endian.h>
 #endif
 #include <stdlib.h>
 #include <sys/types.h>

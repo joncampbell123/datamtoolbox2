@@ -1,24 +1,13 @@
 #if defined(_MSC_VER)
-/* shut up Microsoft. how the fuck is strerror() unsafe? */
-# define _CRT_SECURE_NO_WARNINGS
-# include <io.h>
-/* shut up Microsoft. what the hell is your problem with POSIX functions? */
-# define dup _dup
-# define open _open
-# define read _read
-# define write _write
-# define close _close
-# define lseek _lseeki64
-# define lseek_off_t __int64
-#else
-# define lseek_off_t off_t
+# include <datamtoolbox-v2/polyfill/ms_posix_stfu.h>
 #endif
-#include <stdlib.h>
 #if !defined(_MSC_VER)
 # include <unistd.h>
+# include <endian.h>
 #endif
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <stddef.h>
@@ -27,6 +16,10 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <ctype.h>
+#if defined(_MSC_VER)
+# include <datamtoolbox-v2/polyfill/ms_cpp.h>
+#endif
+#include <datamtoolbox-v2/polyfill/lseek.h>
 
 #include <datamtoolbox-v2/libpartmbr/mbrctx.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
