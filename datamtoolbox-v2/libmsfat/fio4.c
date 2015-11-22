@@ -39,9 +39,10 @@ int main(int argc,char **argv) {
 	const char *s_partition = NULL;
 	const char *s_image = NULL;
 	const char *s_path = NULL;
+	const char *s_out = NULL;
 	uint32_t first_lba=0;
+	int i,fd,out_fd=-1;
 	char tmp[512];
-	int i,fd;
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -57,6 +58,9 @@ int main(int argc,char **argv) {
 			}
 			else if (!strcmp(a,"path")) {
 				s_path = argv[i++];
+			}
+			else if (!strcmp(a,"o") || !strcmp(a,"out")) {
+				s_out = argv[i++];
 			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
@@ -80,6 +84,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--partition <n>          Hard disk image, use partition N from the MBR\n");
 		fprintf(stderr,"--cluster <n>            Which cluster to start from (if not root dir)\n");
 		fprintf(stderr,"--path <x>               File/dir to look up\n");
+		fprintf(stderr,"-o <file>                Dump directory to file\n");
 		return 1;
 	}
 
@@ -352,18 +357,31 @@ int main(int argc,char **argv) {
 		uint64_t count=0;
 		int rd;
 
+		if (s_out != NULL) {
+			out_fd = open(s_out,O_CREAT|O_TRUNC|O_BINARY|O_WRONLY,0644);
+			if (out_fd < 0) {
+				fprintf(stderr,"Failed to create dump file, %s\n",strerror(errno));
+				return 1;
+			}
+		}
+
 		printf("File found (%lu bytes)\n",
 			(unsigned long)fioctx->file_size);
-		printf("-------------------------------[ contents follow ]-------------------------\n"); fflush(stdout);
+		if (out_fd < 0)
+			printf("-------------------------------[ contents follow ]-------------------------\n"); fflush(stdout);
 
 		while ((rd=libmsfat_file_io_ctx_read(fioctx,msfatctx,buffer,sizeof(buffer))) > 0) {
-			write(1/*STDOUT*/,buffer,rd);
+			if (out_fd >= 0) write(out_fd,buffer,rd);
+			else write(1/*STDOUT*/,buffer,rd);
 			count += (uint64_t)rd;
 		}
 		if (rd < 0) fprintf(stderr,"Read error\n");
 		if (count != (uint64_t)fioctx->file_size)
 			fprintf(stderr,"File size mismatch. Read %llu, actual size %lu\n",
 				(unsigned long long)count,(unsigned long)fioctx->file_size);
+
+		if (out_fd >= 0 && rd > 0)
+			write(out_fd,buffer,rd);
 	}
 
 	fioctx = libmsfat_file_io_ctx_destroy(fioctx);
