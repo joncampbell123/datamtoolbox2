@@ -42,27 +42,27 @@ unicode_char_t utf8_encode(char **ptr,char *fence,unicode_char_t code) {
 	if ((p+uchar_size) > fence) return UTFERR_NO_ROOM;
 
 	switch (uchar_size) {
-		case 1:	*p++ = (char)(code & 0xFFU);
+		case 1:	*p++ = (char)(         code                          & 0x7FU);
 			break;
-		case 2:	*p++ = (char)(0xC0 | ((code >>  (unicode_char_t)6UL) & 0xFFU));
+		case 2:	*p++ = (char)(0xC0 | ((code >>  (unicode_char_t)6UL) & 0x1FU));
 			*p++ = (char)(0x80 |  (code                          & 0x3FU));
 			break;
-		case 3:	*p++ = (char)(0xE0 | ((code >> (unicode_char_t)12UL) & 0xFFU));
+		case 3:	*p++ = (char)(0xE0 | ((code >> (unicode_char_t)12UL) & 0x0FU));
 			*p++ = (char)(0x80 | ((code >>  (unicode_char_t)6UL) & 0x3FU));
 			*p++ = (char)(0x80 |  (code                          & 0x3FU));
 			break;
-		case 4:	*p++ = (char)(0xF0 | ((code >> (unicode_char_t)18UL) & 0xFFU));
+		case 4:	*p++ = (char)(0xF0 | ((code >> (unicode_char_t)18UL) & 0x07U));
 			*p++ = (char)(0x80 | ((code >> (unicode_char_t)12UL) & 0x3FU));
 			*p++ = (char)(0x80 | ((code >>  (unicode_char_t)6UL) & 0x3FU));
 			*p++ = (char)(0x80 |  (code                          & 0x3FU));
 			break;
-		case 5:	*p++ = (char)(0xF8 | ((code >> (unicode_char_t)24UL) & 0xFFU));
+		case 5:	*p++ = (char)(0xF8 | ((code >> (unicode_char_t)24UL) & 0x03U));
 			*p++ = (char)(0x80 | ((code >> (unicode_char_t)18UL) & 0x3FU));
 			*p++ = (char)(0x80 | ((code >> (unicode_char_t)12UL) & 0x3FU));
 			*p++ = (char)(0x80 | ((code >>  (unicode_char_t)6UL) & 0x3FU));
 			*p++ = (char)(0x80 |  (code                          & 0x3FU));
 			break;
-		case 6:	*p++ = (char)(0xFC | ((code >> (unicode_char_t)30UL) & 0xFFU));
+		case 6:	*p++ = (char)(0xFC | ((code >> (unicode_char_t)30UL) & 0x01U));
 			*p++ = (char)(0x80 | ((code >> (unicode_char_t)24UL) & 0x3FU));
 			*p++ = (char)(0x80 | ((code >> (unicode_char_t)18UL) & 0x3FU));
 			*p++ = (char)(0x80 | ((code >> (unicode_char_t)12UL) & 0x3FU));
