@@ -290,13 +290,26 @@ int main(int argc,char **argv) {
 	}
 
 	if (fioctx->is_directory) {
+		int files = 0;
+
 		if (libmsfat_dirent_is_dot_dir(&dirent)) {
 			printf("I refuse to modify . and .. directory entries\n");
 			return 1;
 		}
 
-		printf("The path refers to a directory. Before I can delete it, I need to check that no files and folders exist within it.\n");
-		return 1;//TODO
+		printf("Path refers to a directory. Scanning directory to make sure no files remain.\n");
+
+		while (libmsfat_file_io_ctx_readdir(fioctx,msfatctx,&lfn_name,&dirent) == 0) {
+			if (!libmsfat_dirent_is_dot_dir(&dirent)) {
+				if (!(dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID))
+					files++;
+			}
+		}
+
+		if (files != 0) {
+			printf("%u files remain. Will not delete or truncate directory\n",files);
+			return 1;
+		}
 	}
 
 	if (s_trunc != NULL) {
