@@ -69,6 +69,7 @@ struct libpartmbr_entry_t {
 	uint32_t			number_lba_sectors;	/* +12 CONVERTED TO/FROM HOST BYTE ORDER */
 };								/* =16 */
 #pragma pack(pop)
+#pragma pack()
 
 typedef uint8_t libpartmbr_sector_t[LIBPARTMBR_SECTOR_SIZE];
 

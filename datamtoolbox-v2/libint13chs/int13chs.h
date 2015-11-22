@@ -35,6 +35,7 @@ struct int13h_packed_geometry_t {
 // DH      = head
 };
 #pragma pack(pop)
+#pragma pack()
 
 extern const char *int13cnv_default_large_chs;
 

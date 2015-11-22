@@ -16,6 +16,7 @@ struct libmsfat_BS_bootsector_header { /* Boot sector, starting at byte offset +
 	uint8_t				BS_OEMName[8];			/* struct  +3 + 0 -> boot secotr  +3 */
 };									/*=struct +11 + 0 -> boot sector +11 */
 #pragma pack(pop)
+#pragma pack()
 /* Fields:
  *
  *      BS_jmpBoot
@@ -51,6 +52,7 @@ struct libmsfat_BPB_common_header { /* BPB structure, starting with BPB_BytsPerS
 	uint32_t			BPB_TotSec32;			/* struct +21 + 11 -> boot sector +32 */
 };									/*=struct +25 + 11 -> boot sector +36 */
 #pragma pack(pop)
+#pragma pack()
 /* Fields:
  *
  *      BPB_BytsPerSec
@@ -94,6 +96,7 @@ struct libmsfat_BPBat36_FAT1216 { /* BPB structure, starting with BPB_DrvNum at 
 	uint8_t				BS_FilSysType[8];		/* struct +18 + 36 -> boot sector +54 */
 };									/*=struct +26 + 36 -> boot sector +62 */
 #pragma pack(pop)
+#pragma pack()
 
 #pragma pack(push,1)
 /* Microsoft FAT32 File System Specification v1.03 December 6, 2000 - Fat32 Structure Starting at Offset 36 */
@@ -113,6 +116,7 @@ struct libmsfat_BPBat36_FAT32 { /* BPB structure, starting with BPB_DrvNum at by
 	uint8_t				BS_FilSysType[8];		/* struct +46 + 36 -> boot sector +82 */
 };									/*=struct +54 + 36 -> boot sector +90 */
 #pragma pack(pop)
+#pragma pack()
 
 #pragma pack(push,1)
 /* combined structure, to typedef against an MS-DOS FAT boot sector */
@@ -125,6 +129,7 @@ struct libmsfat_bootsector { /* boot sector, from byte offset +0 */
 	} at36;								/*=boot sector +90 (union) */
 };									/*=boot sector +90 */
 #pragma pack(pop)
+#pragma pack()
 
 /* struct to hold computed disk locations */
 struct libmsfat_disk_locations_and_info {
@@ -223,6 +228,7 @@ struct libmsfat_msdos_time_t {
 };
 # undef bitfield_t
 #pragma pack(pop)
+#pragma pack()
 
 #pragma pack(push,1)
 # if defined(_MSC_VER) /* Microsoft C++ treats unsigned int bitfields properly except the struct becomes 32-bit wide, which is WRONG */
@@ -242,6 +248,7 @@ struct libmsfat_msdos_date_t {
 };
 # undef bitfield_t
 #pragma pack(pop)
+#pragma pack()
 
 #pragma pack(push,1)
 /* directory entry */
@@ -298,6 +305,7 @@ struct libmsfat_dirent_t {
 	} a;
 };									/*=offset +32 */
 #pragma pack(pop)
+#pragma pack()
 
 #define libmsfat_DIR_ATTR_READ_ONLY			(1U << 0U)
 #define libmsfat_DIR_ATTR_HIDDEN			(1U << 1U)
