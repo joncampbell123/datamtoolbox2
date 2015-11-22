@@ -126,3 +126,60 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 	return -1;
 }
 
+int libmsfat_file_io_ctx_path_lookup(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,
+	struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,
+	const char *path,unsigned int flags) {
+	char tmp[320],*d,*df;
+
+	// requires fioctx to set up target file/dir
+	if (fioctx == NULL) return -1;
+	// requires fioctx for the directory containing file/dir
+	if (fioctx_parent == NULL) return -1;
+	// other requirements
+	if (msfatctx == NULL || dirent == NULL || path == NULL) return -1;
+	// lfn_name == NULL is OK
+
+	// start from root directory
+	if (libmsfat_file_io_ctx_assign_root_directory(fioctx,msfatctx) || libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,lfn_name))
+		return -1;
+	if (!fioctx->is_directory)
+		return -1;
+
+	/* MS-DOS \ path separator or Linux / path separator */
+	while (*path == '\\' || *path == '/') path++;
+
+	while (*path != 0) {
+		d = tmp; df = tmp+sizeof(tmp)-1;
+		while (*path != 0 && d < df) {
+			if (*path == '/' || *path == '\\') {
+				while (*path == '\\' || *path == '/') path++; /* MS-DOS \ path separator or Linux / path separator */
+				break;
+			}
+
+			*d++ = *path++;
+		}
+		*d = 0;
+		if (d >= df) return -1;
+
+		/* fioctx becomes parent, start a new one */
+		*fioctx_parent = *fioctx;
+		memset(fioctx,0,sizeof(*fioctx));
+
+		/* use parent fioctx to scan for path element */
+		if (libmsfat_file_io_ctx_find_in_dir(fioctx_parent,msfatctx,dirent,lfn_name,tmp,flags))
+			return -1;
+
+		/* got it. assign to fioctx (child) */
+		if (libmsfat_file_io_ctx_assign_from_dirent(fioctx,msfatctx,dirent) ||
+			libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,lfn_name))
+			return -1;
+
+		if (dirent->a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
+			fioctx->is_directory = 1;
+		else
+			fioctx->file_size = dirent->a.n.DIR_FileSize;
+	}
+
+	return 0;
+}
+
