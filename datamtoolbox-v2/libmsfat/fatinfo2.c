@@ -362,7 +362,7 @@ int main(int argc,char **argv) {
 		}
 
 		// the first two entries in the FAT filesystem table are the media byte (with extended 1s set) and another end of chain with upper bits used by Win9x for FAT sanity flags
-		if (libmsfat_context_read_FAT(msfatctx,&fatent,libmsfat_CLUSTER_0_MEDIA_TYPE)) {
+		if (libmsfat_context_read_FAT(msfatctx,&fatent,libmsfat_CLUSTER_0_MEDIA_TYPE,0)) {
 			fprintf(stderr,"Failed to read FAT entry #0\n");
 			return -1;
 		}
@@ -378,7 +378,7 @@ int main(int argc,char **argv) {
 		if (((uint8_t)(fatent&0xFFUL)) != p_bs->BPB_common.BPB_Media)
 			fprintf(stderr,"WARNING: media byte in entry #0 does not match media byte type in BPB\n");
 
-		if (libmsfat_context_read_FAT(msfatctx,&fatent,libmsfat_CLUSTER_1_DIRTY_FLAGS)) {
+		if (libmsfat_context_read_FAT(msfatctx,&fatent,libmsfat_CLUSTER_1_DIRTY_FLAGS,0)) {
 			fprintf(stderr,"Failed to read FAT entry #1\n");
 			return -1;
 		}

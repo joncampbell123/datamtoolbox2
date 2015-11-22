@@ -566,7 +566,7 @@ int main(int argc,char **argv) {
 				fprintf(stderr,"Failed to map offset from cluster number %lu\n",(unsigned long)cluster);
 				return 1;
 			}
-			if (libmsfat_context_read_FAT(msfatctx,&next_cluster,cluster)) {
+			if (libmsfat_context_read_FAT(msfatctx,&next_cluster,cluster,0)) {
 				fprintf(stderr,"WARNING: unable to read FAT entry for cluster #%lu\n",(unsigned long)cluster);
 				next_cluster = libmsfat_FAT32_CLUSTER_MASK;
 			}

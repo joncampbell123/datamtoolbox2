@@ -273,7 +273,7 @@ int main(int argc,char **argv) {
 	for (scan=0;scan < locinfo.Total_clusters;scan++) {
 		if ((col&7) == 0) printf("    0x%08lx: ",(unsigned long)scan);
 
-		if (libmsfat_context_read_FAT(msfatctx,&fatent,scan) == 0)
+		if (libmsfat_context_read_FAT(msfatctx,&fatent,scan,0) == 0)
 			printf("0x%08lx ",(unsigned long)fatent);
 		else
 			printf("  CANTREAD ");
@@ -292,7 +292,7 @@ int main(int argc,char **argv) {
 	for (scan=locinfo.Total_clusters;scan < locinfo.Max_possible_clusters;scan++) {
 		if ((col&7) == 0) printf("    0x%08lx: ",(unsigned long)scan);
 
-		if (libmsfat_context_read_FAT(msfatctx,&fatent,scan) == 0)
+		if (libmsfat_context_read_FAT(msfatctx,&fatent,scan,0) == 0)
 			printf("0x%08lx ",(unsigned long)fatent);
 		else
 			printf("  CANTREAD ");

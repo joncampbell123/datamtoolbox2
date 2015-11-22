@@ -414,7 +414,7 @@ int libmsfat_bs_compute_disk_locations(struct libmsfat_disk_locations_and_info *
 // NTS: "cluster" is not range-checked from fatinfo Total Clusters value, in case you want to peep at the extra entries.
 //      But this code does range-limit against the FAT table size.
 // NTS: For FAT32, it is the caller's responsibility to strip off bits 28-31 before using as cluster number.
-int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t *entry,const libmsfat_cluster_t cluster) {
+int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t *entry,const libmsfat_cluster_t cluster,unsigned int instance) {
 	uint64_t offset;
 	uint8_t rdsize;
 	uint8_t buf[4];
@@ -422,6 +422,7 @@ int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t 
 	if (r == NULL || entry == NULL) return -1;
 	if (!r->fatinfo_set) return -1;
 	if (r->read == NULL) return -1;
+	if (instance >= r->fatinfo.FAT_tables) return -1;
 	// fatinfo_set means the FAT offset has been validated
 
 	if (r->fatinfo.FAT_size == 12) {
@@ -442,6 +443,8 @@ int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t 
 	offset += (uint64_t)r->fatinfo.FAT_offset * (uint64_t)r->fatinfo.BytesPerSector;
 	// and the partition offset
 	offset += r->partition_byte_offset;
+	// instance
+	offset += (uint64_t)instance * (uint64_t)r->fatinfo.BytesPerSector * (uint64_t)r->fatinfo.FAT_table_size;
 
 	if (r->read(r,buf,offset,(size_t)rdsize) != 0) return -1;
 
@@ -471,7 +474,7 @@ int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t 
 // NTS: "cluster" is not range-checked from fatinfo Total Clusters value, in case you want to peep at the extra entries.
 //      But this code does range-limit against the FAT table size.
 // NTS: For FAT32, it is the caller's responsibility to preserve bits 28-31 when modifying.
-int libmsfat_context_write_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t entry,const libmsfat_cluster_t cluster) {
+int libmsfat_context_write_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t entry,const libmsfat_cluster_t cluster,unsigned int instance) {
 	uint64_t offset;
 	uint8_t rdsize;
 	uint8_t buf[4];
@@ -480,6 +483,7 @@ int libmsfat_context_write_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t
 	if (!r->fatinfo_set) return -1;
 	if (r->read == NULL) return -1;
 	if (r->write == NULL) return -1;
+	if (instance >= r->fatinfo.FAT_tables) return -1;
 	// fatinfo_set means the FAT offset has been validated
 
 	if (r->fatinfo.FAT_size == 12) {
@@ -500,6 +504,8 @@ int libmsfat_context_write_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t
 	offset += (uint64_t)r->fatinfo.FAT_offset * (uint64_t)r->fatinfo.BytesPerSector;
 	// and the partition offset
 	offset += r->partition_byte_offset;
+	// instance
+	offset += (uint64_t)instance * (uint64_t)r->fatinfo.BytesPerSector * (uint64_t)r->fatinfo.FAT_table_size;
 
 	if (r->fatinfo.FAT_size == 12) {
 		uint16_t raw,tmp;
@@ -992,7 +998,7 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 				break;
 
 			c->cluster_position_start += c->cluster_size;
-			if (libmsfat_context_read_FAT(msfatctx,&next_cluster_fat,c->cluster_position)) {
+			if (libmsfat_context_read_FAT(msfatctx,&next_cluster_fat,c->cluster_position,0)) {
 				c->cluster_position = 0;
 				break;
 			}
@@ -1406,7 +1412,7 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 	do {
 		if (libmsfat_context_fat_is_end_of_chain(msfatctx,current))
 			break;
-		if (libmsfat_context_read_FAT(msfatctx,&fatent,current))
+		if (libmsfat_context_read_FAT(msfatctx,&fatent,current,0))
 			return -1;
 
 		next = (libmsfat_cluster_t)fatent;
@@ -1419,7 +1425,7 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 			 * set the flag to reminder ourself the rest of the chain is to be overwritten by zeros. */
 			if (offset == (uint32_t)0 || cut) {
 				/* mark the cluster as empty. */
-				if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)0,current)) return -1;
+				if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)0,current,0)) return -1;
 				if (count == fioctx->cluster_size) {
 					/* if this is the FIRST cluster we are removing, then the file is now zero length
 					 * and the file's "cluster start" value should be set to zero to show that nothing
@@ -1431,7 +1437,7 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 			else {
 				/* mark the cluster as end of the chain, meaning that the current cluster holds data
 				 * that appears as the end of the file. */
-				if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)eoc,current)) return -1;
+				if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)eoc,current,0)) return -1;
 			}
 
 			if (!cut) {
