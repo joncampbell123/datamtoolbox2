@@ -38,11 +38,13 @@ int main(int argc,char **argv) {
 	struct libmsfat_lfn_assembly_t lfn_name;
 	struct libmsfat_dirent_t dirent;
 	const char *s_partition = NULL;
+	const char *s_trunc = NULL;
 	const char *s_image = NULL;
 	const char *s_path = NULL;
 	const char *s_out = NULL;
 	uint32_t first_lba=0;
 	int i,fd,out_fd=-1;
+	uint32_t trunc=0;
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -61,6 +63,9 @@ int main(int argc,char **argv) {
 			}
 			else if (!strcmp(a,"o") || !strcmp(a,"out")) {
 				s_out = argv[i++];
+			}
+			else if (!strcmp(a,"t")) {
+				s_trunc = argv[i++];
 			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
@@ -84,6 +89,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--partition <n>          Hard disk image, use partition N from the MBR\n");
 		fprintf(stderr,"--cluster <n>            Which cluster to start from (if not root dir)\n");
 		fprintf(stderr,"--path <x>               File/dir to look up\n");
+		fprintf(stderr,"-t <n>                   Truncate file to N bytes, don't delete\n");
 		fprintf(stderr,"-o <file>                Dump directory to file\n");
 		return 1;
 	}
@@ -101,6 +107,9 @@ int main(int argc,char **argv) {
 			return 1;
 		}
 	}
+
+	if (s_trunc != NULL)
+		trunc = (uint32_t)strtoul(s_trunc,NULL,0);
 
 	if (s_partition != NULL) {
 		struct libpartmbr_context_t *ctx = NULL;
@@ -280,15 +289,27 @@ int main(int argc,char **argv) {
 		out_fd = -1;
 	}
 
-	/* now delete it.
-	 * at this level we first call to truncate the file to zero, then delete the dirent */
-	if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,(uint32_t)0)) {
-		fprintf(stderr,"Failed to truncate file\n");
-		return 1;
+	if (s_trunc != NULL) {
+		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,trunc)) {
+			fprintf(stderr,"Failed to truncate file\n");
+			return 1;
+		}
+
+		printf("File has been truncated to %lu bytes (asked for %lu)\n",
+			(unsigned long)fioctx->file_size,
+			(unsigned long)trunc);
 	}
-	if (libmsfat_file_io_ctx_delete_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name)) {
-		fprintf(stderr,"Failed to delete file\n");
-		return 1;
+	else {
+		/* now delete it.
+		 * at this level we first call to truncate the file to zero, then delete the dirent */
+		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,(uint32_t)0)) {
+			fprintf(stderr,"Failed to truncate file\n");
+			return 1;
+		}
+		if (libmsfat_file_io_ctx_delete_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name)) {
+			fprintf(stderr,"Failed to delete file\n");
+			return 1;
+		}
 	}
 
 	fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
