@@ -1294,7 +1294,7 @@ int libmsfat_file_io_ctx_rewinddir(struct libmsfat_file_io_ctx_t *fioctx,struct 
 int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_lfn_assembly_t *lfn_name,struct libmsfat_dirent_t *dirent) {
 	if (fioctx == NULL || msfatctx == NULL || dirent == NULL) return -1;
 	if (lfn_name != NULL) libmsfat_lfn_assembly_init(lfn_name);
-	fioctx->dirent_lfn_start = ~((uint32_t)0xFFFFFFFFUL);
+	fioctx->dirent_lfn_start = (uint32_t)0xFFFFFFFFUL;
 	fioctx->dirent_start = 0;
 
 	assert(sizeof(*dirent) == 32);
@@ -1333,7 +1333,7 @@ int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct li
 	} while (1);
 
 	if (lfn_name != NULL && !lfn_name->name_avail)
-		fioctx->dirent_lfn_start = ~((uint32_t)0xFFFFFFFFUL);
+		fioctx->dirent_lfn_start = (uint32_t)0xFFFFFFFFUL;
 
 	return 0;
 }
