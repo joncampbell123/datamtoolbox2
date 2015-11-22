@@ -999,9 +999,10 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 	uint8_t *d = buffer;
 	size_t canread;
 	size_t doread;
+	size_t rd = 0;
+	uint32_t npos;
 	uint64_t dofs;
 	uint32_t ofs;
-	int rd = 0;
 
 	if (c == NULL || msfatctx == NULL || buffer == NULL) return -1;
 	if (!msfatctx->fatinfo_set) return -1;
@@ -1020,7 +1021,7 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 
 		d += canread;
 		rd = canread;
-		c->position += rd;
+		c->position += (uint32_t)rd;
 	}
 	else if (c->is_cluster_chain) {
 		if (c->cluster_size == (uint32_t)0) return 0;
@@ -1035,8 +1036,6 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 		}
 
 		while (canread > (size_t)0) {
-			uint32_t npos;
-
 			if (c->position == (uint32_t)0xFFFFFFFFUL)
 				break;
 			if (c->cluster_position < (uint32_t)2UL)
@@ -1053,7 +1052,7 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 			if (msfatctx->read(msfatctx,d,dofs+(uint64_t)ofs,doread))
 				return -1;
 
-			npos = c->position+doread;
+			npos = (uint32_t)(c->position+doread);
 			if (npos < c->position) { /* integer overflow */
 				npos = (uint32_t)0xFFFFFFFFUL;
 				doread = npos - c->position;
@@ -1072,6 +1071,6 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 		return -1;
 	}
 
-	return rd;
+	return (int)rd;
 }
 
