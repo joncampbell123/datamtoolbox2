@@ -841,7 +841,7 @@ struct libmsfat_file_io_ctx_t *libmsfat_file_io_ctx_create() {
 	ctx = (struct libmsfat_file_io_ctx_t*)malloc(sizeof(struct libmsfat_file_io_ctx_t));
 	if (ctx == NULL) return NULL;
 	libmsfat_file_io_ctx_init(ctx);
-	return ctx;	
+	return ctx;
 }
 
 struct libmsfat_file_io_ctx_t *libmsfat_file_io_ctx_destroy(struct libmsfat_file_io_ctx_t *c) {
