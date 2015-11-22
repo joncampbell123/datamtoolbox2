@@ -139,6 +139,10 @@ int libmsfat_file_io_ctx_path_lookup(struct libmsfat_file_io_ctx_t *fioctx,struc
 	if (msfatctx == NULL || dirent == NULL || path == NULL) return -1;
 	// lfn_name == NULL is OK
 
+	// parent at first represents a virtual "parent" of the root directory
+	libmsfat_file_io_ctx_init(fioctx_parent);
+	fioctx_parent->is_root_parent = 1;
+
 	// start from root directory
 	if (libmsfat_file_io_ctx_assign_root_directory(fioctx,msfatctx) || libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,lfn_name))
 		return -1;

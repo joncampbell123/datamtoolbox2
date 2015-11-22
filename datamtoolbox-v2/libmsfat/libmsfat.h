@@ -200,6 +200,7 @@ struct libmsfat_file_io_ctx_t {
 	unsigned int			is_root_dir:1;		// FAT12/FAT16 root dir, not cluster chain
 	unsigned int			is_directory:1;		// contents are that of a directory
 	unsigned int			is_cluster_chain:1;	// is cluster chain
+	unsigned int			is_root_parent:1;	// child file ioctx is root dir
 	unsigned int			_padding_:28;
 	uint64_t			non_cluster_offset;	// if root dir (non-cluster), byte offset
 	libmsfat_cluster_t		first_cluster;		// if not root dir, then starting cluster
