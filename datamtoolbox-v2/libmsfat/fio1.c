@@ -33,7 +33,7 @@ struct libmsfat_file_io_ctx_t {
 	unsigned int			is_directory:1;		// contents are that of a directory
 	unsigned int			is_cluster_chain:1;	// is cluster chain
 	unsigned int			_padding_:28;
-	uint32_t			non_cluster_offset;	// if root dir (non-cluster), byte offset
+	uint64_t			non_cluster_offset;	// if root dir (non-cluster), byte offset
 	libmsfat_cluster_t		first_cluster;		// if not root dir, then starting cluster
 	uint32_t			file_size;		// file size, in bytes
 	uint32_t			position;		// file position (pointer) a la lseek
@@ -137,13 +137,12 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 
 		/* scan forward to desired position */
 		while (c->cluster_position_start < offset_cluster_round) {
-			if (c->cluster_position < (uint32_t)2UL) {
-				offset_cluster_offset = 0;
+			if (c->cluster_position < (uint32_t)2UL)
 				break;
-			}
 
+			c->cluster_position_start += c->cluster_size;
 			if (libmsfat_context_read_FAT(msfatctx,&next_cluster_fat,c->cluster_position)) {
-				offset_cluster_offset = 0;
+				c->cluster_position = 0;
 				break;
 			}
 
@@ -153,11 +152,10 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 				next_cluster = (libmsfat_cluster_t)next_cluster_fat;
 
 			if (libmsfat_context_fat_is_end_of_chain(msfatctx,next_cluster)) {
-				offset_cluster_offset = 0;
+				c->cluster_position = 0;
 				break;
 			}
 
-			c->cluster_position_start += c->cluster_size;
 			c->cluster_position = next_cluster;
 		}
 
@@ -197,7 +195,7 @@ int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,
 		if (msfatctx->fatinfo.RootDirectory_size == (uint32_t)0UL)
 			return -1;
 
-		c->non_cluster_offset = msfatctx->fatinfo.RootDirectory_offset * msfatctx->fatinfo.BytesPerSector;
+		c->non_cluster_offset = (uint64_t)msfatctx->fatinfo.RootDirectory_offset * (uint64_t)msfatctx->fatinfo.BytesPerSector;
 		c->cluster_size = msfatctx->fatinfo.RootDirectory_size * msfatctx->fatinfo.BytesPerSector;
 		c->file_size = c->cluster_size;
 		c->is_directory = 1;
@@ -212,39 +210,87 @@ int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,
 	return 0;
 }
 
-////////////////////////////////////////
+int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,void *buffer,size_t len) {
+	uint8_t *d = buffer;
+	size_t canread;
+	size_t doread;
+	uint64_t dofs;
+	uint32_t ofs;
+	int rd = 0;
 
-static void dirent_assemble_lfn(const struct libmsfat_context_t *msfatctx,const struct libmsfat_dirent_t *dir) {
-	if (libmsfat_lfn_dirent_is_lfn(dir)) {
-		if (libmsfat_lfn_dirent_assemble(&lfn_name,dir))
-			fprintf(stderr,"LFN error: %s\n",lfn_name.err_str);
+	if (c == NULL || msfatctx == NULL || buffer == NULL) return -1;
+	if (!msfatctx->fatinfo_set) return -1;
+	if (msfatctx->read == NULL) return -1;
+	if (len == 0) return 0;
+
+	if (c->is_root_dir && !c->is_cluster_chain) {
+		if (c->position > c->file_size) return 0;
+		canread = (size_t)(c->file_size - c->position);
+		if (canread > len) canread = len;
+
+		if (canread > (size_t)0) {
+			if (msfatctx->read(msfatctx,d,msfatctx->partition_byte_offset+c->non_cluster_offset+(uint64_t)c->position,canread))
+				return -1;
+		}
+
+		d += canread;
+		rd = canread;
+		c->position += rd;
 	}
-	else {
-		if (libmsfat_lfn_dirent_complete(&lfn_name,dir))
-			fprintf(stderr,"LFN completion error: %s\n",lfn_name.err_str);
-		else if (lfn_name.name_avail) {
-			uint8_t tmp[((5U+6U+2U)*32U)+1U];
-			unsigned int i=0,imax;
-			uint16_t uc;
+	else if (c->is_cluster_chain) {
+		if (c->cluster_size == (uint32_t)0) return 0;
 
-			imax = ((5U+6U+2U)*lfn_name.name_avail);
-			assert(((char*)(&lfn_name.assembly[imax])) <= ((char*)lfn_name.assembly + sizeof(lfn_name.assembly)));
+		if (!c->is_directory) {
+			if (c->position > c->file_size) return 0;
+			canread = (size_t)(c->file_size - c->position);
+			if (canread > len) canread = len;
+		}
+		else {
+			canread = len;
+		}
 
-			for (i=0;i < imax;i++) {
-				uc = lfn_name.assembly[i];
-				if (uc == 0) break;
+		while (canread > (size_t)0) {
+			uint32_t npos;
 
-				if (uc >= 0x80U) tmp[i] = '?';
-				else tmp[i] = (char)uc;
+			if (c->position == (uint32_t)0xFFFFFFFFUL)
+				break;
+			if (c->cluster_position < (uint32_t)2UL)
+				break;
+
+			ofs = c->position % c->cluster_size;
+			doread = c->cluster_size - ofs;
+			if (doread > canread) doread = canread;
+
+			if (libmsfat_context_get_cluster_offset(msfatctx,&dofs,c->cluster_position))
+				return -1;
+
+			assert(doread != (uint32_t)0);
+			if (msfatctx->read(msfatctx,d,dofs+(uint64_t)ofs,doread))
+				return -1;
+
+			npos = c->position+doread;
+			if (npos < c->position) { /* integer overflow */
+				npos = (uint32_t)0xFFFFFFFFUL;
+				doread = npos - c->position;
 			}
-			assert(i < sizeof(tmp));
-			lfn_name.name_avail = 0;
-			tmp[i] = 0;
 
-			printf("            >> LFN name: '%s'\n",tmp);
+			d += doread;
+			rd += doread;
+			canread -= doread;
+			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos))
+				return -1;
+			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
+				break;
 		}
 	}
+	else {
+		return -1;
+	}
+
+	return rd;
 }
+
+////////////////////////////////////////
 
 static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct libmsfat_dirent_t *dir,const uint8_t nohex) {
 	if (dir->a.n.DIR_Name[0] == 0) {
@@ -438,6 +484,7 @@ int main(int argc,char **argv) {
 	unsigned char nohex = 0;
 	uint32_t fiooffset = 0;
 	int i,fd,out_fd=-1;
+	char tmp[256];
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -716,10 +763,7 @@ int main(int argc,char **argv) {
 	}
 
 	/* sanity check */
-	if (locinfo.FAT_size >= 32 && cluster < (libmsfat_cluster_t)2UL) {
-		fprintf(stderr,"ERROR: FAT32 requires a root directory cluster to start from. There is no\n");
-		fprintf(stderr,"       dedicated root directory area like what FAT12/FAT16 has.\n");
-		return 1;
+	if (locinfo.FAT_size >= 32) {
 	}
 	else if (locinfo.FAT_size < 32 && (locinfo.RootDirectory_offset == (uint32_t)0UL || locinfo.RootDirectory_size == (uint32_t)0UL)) {
 		fprintf(stderr,"ERROR: FAT12/FAT16 root directory area does not exist\n");
@@ -734,7 +778,7 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	if (cluster >= (libmsfat_cluster_t)2UL && s_cluster != NULL) {
+	if (s_cluster != NULL || cluster != (libmsfat_cluster_t)0UL) {
 		if (libmsfat_file_io_ctx_assign_cluster_chain(fioctx,msfatctx,cluster)) {
 			fprintf(stderr,"Cannot assign cluster\n");
 			return 1;
@@ -816,6 +860,104 @@ int main(int argc,char **argv) {
 			(unsigned int)fioctx->is_root_dir,
 			(unsigned int)fioctx->is_directory,
 			(unsigned int)fioctx->is_cluster_chain);
+
+		if (fiooffset == (uint32_t)0) break;
+		fiooffset -= (uint32_t)32;
+	} while (1);
+
+	printf("***** lseek+read test ******\n");
+
+	printf("FIO: file_size=%lu position=%lu cluster=%lu cluster_size=%lu first_cluster=%lu cluster_pos=%lu root=%u dir=%u chain=%u\n",
+		(unsigned long)fioctx->file_size,
+		(unsigned long)fioctx->position,
+		(unsigned long)fioctx->cluster_position,
+		(unsigned long)fioctx->cluster_size,
+		(unsigned long)fioctx->first_cluster,
+		(unsigned long)fioctx->cluster_position_start,
+		(unsigned int)fioctx->is_root_dir,
+		(unsigned int)fioctx->is_directory,
+		(unsigned int)fioctx->is_cluster_chain);
+
+	fiooffset = (uint32_t)0;
+	do {
+		uint32_t pos;
+		int rd;
+
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset)) {
+			fprintf(stderr,"Failed to lseek to %lu\n",(unsigned long)fiooffset);
+			break;
+		}
+		if ((pos=libmsfat_file_io_ctx_tell(fioctx,msfatctx)) != fiooffset) {
+			fprintf(stderr,"Lseek did not reach %lu (got to %lu)\n",(unsigned long)fiooffset,(unsigned long)pos);
+			break;
+		}
+		if ((rd=libmsfat_file_io_ctx_read(fioctx,msfatctx,tmp,32)) != 32) {
+			fprintf(stderr,"read did not get 32 bytes (rd=%d)\n",rd);
+			break;
+		}
+
+		printf("FIO(%lu): file_size=%lu position=%lu cluster=%lu cluster_size=%lu first_cluster=%lu cluster_pos=%lu root=%u dir=%u chain=%u\n",
+			(unsigned long)fiooffset,
+			(unsigned long)fioctx->file_size,
+			(unsigned long)fioctx->position,
+			(unsigned long)fioctx->cluster_position,
+			(unsigned long)fioctx->cluster_size,
+			(unsigned long)fioctx->first_cluster,
+			(unsigned long)fioctx->cluster_position_start,
+			(unsigned int)fioctx->is_root_dir,
+			(unsigned int)fioctx->is_directory,
+			(unsigned int)fioctx->is_cluster_chain);
+
+		if (!nohex) {
+			printf("   GOT: ");
+			for (i=0;i < 32;i++) printf("%02x ",(uint8_t)tmp[i]);
+			printf("\n");
+		}
+
+		print_dirent(msfatctx,(const struct libmsfat_dirent_t*)tmp,nohex);
+
+		fiooffset += (uint32_t)32;
+	} while (1);
+
+	if (fiooffset != (uint32_t)0)
+		fiooffset -= (uint32_t)32;
+
+	do {
+		uint32_t pos;
+		int rd;
+
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset)) {
+			fprintf(stderr,"Failed to lseek to %lu\n",(unsigned long)fiooffset);
+			break;
+		}
+		if ((pos=libmsfat_file_io_ctx_tell(fioctx,msfatctx)) != fiooffset) {
+			fprintf(stderr,"Lseek did not reach %lu (got to %lu)\n",(unsigned long)fiooffset,(unsigned long)pos);
+			break;
+		}
+		if ((rd=libmsfat_file_io_ctx_read(fioctx,msfatctx,tmp,32)) != 32) {
+			fprintf(stderr,"read did not get 32 bytes (rd=%d)\n",rd);
+			break;
+		}
+
+		printf("FIO2(%lu): file_size=%lu position=%lu cluster=%lu cluster_size=%lu first_cluster=%lu cluster_pos=%lu root=%u dir=%u chain=%u\n",
+			(unsigned long)fiooffset,
+			(unsigned long)fioctx->file_size,
+			(unsigned long)fioctx->position,
+			(unsigned long)fioctx->cluster_position,
+			(unsigned long)fioctx->cluster_size,
+			(unsigned long)fioctx->first_cluster,
+			(unsigned long)fioctx->cluster_position_start,
+			(unsigned int)fioctx->is_root_dir,
+			(unsigned int)fioctx->is_directory,
+			(unsigned int)fioctx->is_cluster_chain);
+
+		if (!nohex) {
+			printf("   GOT: ");
+			for (i=0;i < 32;i++) printf("%02x ",(uint8_t)tmp[i]);
+			printf("\n");
+		}
+
+		print_dirent(msfatctx,(const struct libmsfat_dirent_t*)tmp,nohex);
 
 		if (fiooffset == (uint32_t)0) break;
 		fiooffset -= (uint32_t)32;
