@@ -92,3 +92,35 @@ void libmsfat_dirent_lfn_to_str_utf16le(char *buf,size_t buflen,const struct lib
 	assert(d <= bufend);
 }
 
+int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,const char *name,unsigned int flags) {
+	char tmp[512];
+
+	if (fioctx == NULL || msfatctx == NULL || dirent == NULL || name == NULL) // lfn_name CAN be NULL
+		return -1;
+	if (libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,lfn_name))
+		return -1;
+
+	while (libmsfat_file_io_ctx_readdir(fioctx,msfatctx,lfn_name,dirent) == 0) {
+		if (dirent->a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID)
+			continue;
+
+		// first, match 8.3 filename
+		libmsfat_dirent_filename_to_str(tmp,sizeof(tmp),dirent);
+		if (!strcasecmp(tmp,name)) {
+			// MATCH
+			return 0;
+		}
+
+		// then match long filename
+		if (lfn_name != NULL && lfn_name->name_avail) {
+			libmsfat_dirent_lfn_to_str_utf8(tmp,sizeof(tmp),lfn_name);
+			if (!strcasecmp(tmp,name)) {
+				// MATCH
+				return 0;
+			}
+		}
+	}
+
+	return -1;
+}
+
