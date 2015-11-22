@@ -181,9 +181,9 @@ struct libmsfat_msdos_time_t {
 	union {
 		uint16_t				raw;
 		struct {
-			unsigned int			seconds2:5;		/* [4:0] seconds, in units of 2 seconds, 0-29 inclusive */
-			unsigned int			minutes:6;		/* [10:5] minutes, 0-59 inclusive */
-			unsigned int			hours:5;		/* [15:11] hours, 0-23 inclusive */
+			unsigned short int		seconds2:5;		/* [4:0] seconds, in units of 2 seconds, 0-29 inclusive */
+			unsigned short int		minutes:6;		/* [10:5] minutes, 0-59 inclusive */
+			unsigned short int		hours:5;		/* [15:11] hours, 0-23 inclusive */
 		} f;
 	} a;
 };
@@ -194,9 +194,9 @@ struct libmsfat_msdos_date_t {
 	union {
 		uint16_t				raw;
 		struct {
-			unsigned int			day_of_month:5;		/* [4:0] day of month, 1-31 inclusive */
-			unsigned int			month_of_year:4;	/* [8:5] month of year, 1-12 inclusive */
-			unsigned int			years_since_1980:7;	/* [15:9] years since 1980 */
+			unsigned short int		day_of_month:5;		/* [4:0] day of month, 1-31 inclusive */
+			unsigned short int		month_of_year:4;	/* [8:5] month of year, 1-12 inclusive */
+			unsigned short int		years_since_1980:7;	/* [15:9] years since 1980 */
 		} f;
 	} a;
 };
