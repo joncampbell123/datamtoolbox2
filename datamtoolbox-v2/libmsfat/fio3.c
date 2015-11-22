@@ -351,8 +351,23 @@ int main(int argc,char **argv) {
 		printf("\n");
 
 		if (lfn_name.name_avail) {
+#if defined(WIN32) && defined(_MSC_VER) /* Windows + Microsoft C++ */
+			// use widechar printf in Windows to show the name properly
+			if (isatty(1/*STDOUT*/)) {
+				if (sizeof(wchar_t) == 2) { /* Microsoft C runtime sets wchar_t == uint16_t aka WORD */
+					libmsfat_dirent_lfn_to_str_utf16le(tmp,sizeof(tmp),&lfn_name);
+					wprintf(L"        Long name:          '%ls'\n",(wchar_t)tmp);
+				}
+			}
+			else {
+				libmsfat_dirent_lfn_to_str_utf8(tmp,sizeof(tmp),&lfn_name);
+				printf("        Long name:          '%s'\n",tmp);
+			}
+#else
+			// Linux terminals nowaways use UTF-8 encoding
 			libmsfat_dirent_lfn_to_str_utf8(tmp,sizeof(tmp),&lfn_name);
 			printf("        Long name:          '%s'\n",tmp);
+#endif
 		}
 
 		printf("        File size:          %lu bytes\n",

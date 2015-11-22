@@ -25,6 +25,7 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
 #include <datamtoolbox-v2/unicode/utf8.h>
+#include <datamtoolbox-v2/unicode/utf16.h>
 
 void libmsfat_dirent_lfn_to_str_utf8(char *buf,size_t buflen,const struct libmsfat_lfn_assembly_t *lfn_name) {
 	const uint16_t *s,*se;
@@ -52,6 +53,38 @@ void libmsfat_dirent_lfn_to_str_utf8(char *buf,size_t buflen,const struct libmsf
 
 		/* TODO: does the FAT Long Filename scheme support UTF16 surrogate pairs? */
 		utf8_encode(&d,bufend,(unicode_char_t)(*s++));
+	}
+
+	*d = 0;
+	assert(d <= bufend);
+}
+
+void libmsfat_dirent_lfn_to_str_utf16le(char *buf,size_t buflen,const struct libmsfat_lfn_assembly_t *lfn_name) {
+	const uint16_t *s,*se;
+	char *bufend,*d;
+
+	if (buf == NULL || buflen <= (size_t)13) return;
+	bufend = buf + buflen - 1;
+	d = buf;
+
+	if (lfn_name == NULL) {
+		*d = 0;
+		return;
+	}
+	if (!lfn_name->name_avail) {
+		*d = 0;
+		return;
+	}
+
+	s = lfn_name->assembly;
+	se = s + ((5U+6U+2U)*lfn_name->name_avail);
+	assert((char*)se <= (((char*)lfn_name->assembly) + sizeof(lfn_name->assembly)));
+
+	while (s < se && d < bufend) {
+		if (*s == 0) break;
+
+		/* TODO: does the FAT Long Filename scheme support UTF16 surrogate pairs? */
+		utf16le_encode(&d,bufend,(unicode_char_t)(*s++));
 	}
 
 	*d = 0;
