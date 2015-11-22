@@ -173,11 +173,6 @@ int libmsfat_file_io_ctx_path_lookup(struct libmsfat_file_io_ctx_t *fioctx,struc
 		if (libmsfat_file_io_ctx_assign_from_dirent(fioctx,msfatctx,dirent) ||
 			libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,lfn_name))
 			return -1;
-
-		if (dirent->a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
-			fioctx->is_directory = 1;
-		else
-			fioctx->file_size = dirent->a.n.DIR_FileSize;
 	}
 
 	return 0;

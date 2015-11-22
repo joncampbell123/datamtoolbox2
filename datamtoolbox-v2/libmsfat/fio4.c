@@ -304,10 +304,6 @@ int main(int argc,char **argv) {
 				fprintf(stderr,"%s: Cannot assign cluster\n",tmp);
 				return 1;
 			}
-			if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
-				fioctx->is_directory = 1;
-			else
-				fioctx->file_size = dirent.a.n.DIR_FileSize;
 		}
 	}
 
@@ -391,8 +387,10 @@ int main(int argc,char **argv) {
 			fprintf(stderr,"File size mismatch. Read %llu, actual size %lu\n",
 				(unsigned long long)count,(unsigned long)fioctx->file_size);
 
-		if (out_fd >= 0 && rd > 0)
-			write(out_fd,buffer,rd);
+		if (out_fd >= 0) {
+			close(out_fd);
+			out_fd = -1;
+		}
 	}
 
 	fioctx = libmsfat_file_io_ctx_destroy(fioctx);

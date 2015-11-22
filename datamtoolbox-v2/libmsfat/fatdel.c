@@ -43,7 +43,6 @@ int main(int argc,char **argv) {
 	const char *s_out = NULL;
 	uint32_t first_lba=0;
 	int i,fd,out_fd=-1;
-	char tmp[512];
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -89,7 +88,7 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	fd = open(s_image,O_RDONLY|O_BINARY);
+	fd = open(s_image,O_RDWR|O_BINARY);
 	if (fd < 0) {
 		fprintf(stderr,"Unable to open disk image, %s\n",strerror(errno));
 		return 1;
@@ -256,96 +255,40 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	/* do it */
+	/* look up the path. this should give us two fioctx's, one for the parent dir, and one for the file itself */
 	if (libmsfat_file_io_ctx_path_lookup(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,s_path,0/*default*/)) {
 		fprintf(stderr,"Path lookup failed\n");
 		return 1;
 	}
 
-	if (fioctx->is_directory) {
-		printf("Directory contents:\n");
-
-		while (libmsfat_file_io_ctx_readdir(fioctx,msfatctx,&lfn_name,&dirent) == 0) {
-			if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID) {
-				libmsfat_dirent_volume_label_to_str(tmp,sizeof(tmp),&dirent);
-				printf("    <VOL>  '%s'",tmp);
-			}
-			else {
-				libmsfat_dirent_filename_to_str(tmp,sizeof(tmp),&dirent);
-				if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
-					printf("    <DIR>  '%s'",tmp);
-				else
-					printf("    <FIL>  '%s'",tmp);
-			}
-			printf("\n");
-
-			if (lfn_name.name_avail) {
-#if defined(_WIN32) && defined(_MSC_VER) /* Windows + Microsoft C++ */
-				// use widechar printf in Windows to show the name properly
-				if (isatty(1/*STDOUT*/)) {
-					if (sizeof(wchar_t) == 2) { /* Microsoft C runtime sets wchar_t == uint16_t aka WORD */
-						size_t wl;
-
-						libmsfat_dirent_lfn_to_str_utf16le(tmp,sizeof(tmp),&lfn_name);
-						wl = wcslen((const wchar_t*)tmp);
-
-						printf("        Long name:          '");
-						fflush(stdout);
-						{
-							DWORD written = 0;
-							WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), (const void*)tmp, (DWORD)wl, &written, NULL);
-						}
-						printf("'\n");
-					}
-				}
-				else {
-					libmsfat_dirent_lfn_to_str_utf8(tmp,sizeof(tmp),&lfn_name);
-					printf("        Long name:          '%s'\n",tmp);
-				}
-#else
-				// Linux terminals nowaways use UTF-8 encoding
-				libmsfat_dirent_lfn_to_str_utf8(tmp,sizeof(tmp),&lfn_name);
-				printf("        Long name:          '%s'\n",tmp);
-#endif
-			}
-
-			printf("        File size:          %lu bytes\n",
-				(unsigned long)le32toh(dirent.a.n.DIR_FileSize));
-			printf("        Starting cluster:   %lu\n",
-				(unsigned long)libmsfat_dirent_get_starting_cluster(msfatctx,&dirent));
-		}
-	}
-	else {
-		uint64_t count=0;
+	/* dump file contents before deleting, if instructed */
+	if (s_out != NULL) {
 		int rd;
 
-		if (s_out != NULL) {
-			out_fd = open(s_out,O_CREAT|O_TRUNC|O_BINARY|O_WRONLY,0644);
-			if (out_fd < 0) {
-				fprintf(stderr,"Failed to create dump file, %s\n",strerror(errno));
-				return 1;
-			}
+		fprintf(stderr,"Prior to deleting file, dumping to %s\n",s_out);
+
+		out_fd = open(s_out,O_CREAT|O_TRUNC|O_BINARY|O_WRONLY,0644);
+		if (out_fd < 0) {
+			fprintf(stderr,"Failed to create dump file, %s\n",strerror(errno));
+			return 1;
 		}
 
-		printf("File found (%lu bytes)\n",
-			(unsigned long)fioctx->file_size);
-		if (out_fd < 0)
-			printf("-------------------------------[ contents follow ]-------------------------\n"); fflush(stdout);
+		while ((rd=libmsfat_file_io_ctx_read(fioctx,msfatctx,buffer,sizeof(buffer))) > 0)
+			write(out_fd,buffer,rd);
 
-		while ((rd=libmsfat_file_io_ctx_read(fioctx,msfatctx,buffer,sizeof(buffer))) > 0) {
-			if (out_fd >= 0) write(out_fd,buffer,rd);
-			else write(1/*STDOUT*/,buffer,rd);
-			count += (uint64_t)rd;
-		}
-		if (rd < 0) fprintf(stderr,"Read error\n");
-		if (count != (uint64_t)fioctx->file_size)
-			fprintf(stderr,"File size mismatch. Read %llu, actual size %lu\n",
-				(unsigned long long)count,(unsigned long)fioctx->file_size);
+		close(out_fd);
+		out_fd = -1;
+	}
 
-		if (out_fd >= 0) {
-			close(out_fd);
-			out_fd = -1;
-		}
+	/* now delete it.
+	 * at this level we first call to truncate the file to zero, then delete the dirent */
+	if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,(uint32_t)0)) {
+		fprintf(stderr,"Failed to truncate file\n");
+		return 1;
+	}
+	if (libmsfat_file_io_ctx_delete_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name)) {
+		fprintf(stderr,"Failed to delete file\n");
+		return 1;
 	}
 
 	fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);

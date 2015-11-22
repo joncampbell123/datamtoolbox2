@@ -425,7 +425,7 @@ int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t 
 	// fatinfo_set means the FAT offset has been validated
 
 	if (r->fatinfo.FAT_size == 12) {
-		offset = (uint64_t)cluster + (uint64_t)(cluster / 2U); /* 1.5 bytes per entry -> 0,1,3,4,6,7,9,10... */ 
+		offset = (uint64_t)cluster + (uint64_t)(cluster / 2U); /* 1.5 bytes per entry -> 0,1,3,4,6,7,9,10... */
 		rdsize = 2;
 	}
 	else {
@@ -454,7 +454,7 @@ int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t 
 		// else
 		//   val = tmp & 0xFFF;
 
-		*entry = (libmsfat_FAT_entry_t)((tmp >> (((uint8_t)cluster & 1U) * 4U)) & 0xFFF);
+		*entry = (libmsfat_FAT_entry_t)((tmp >> (((uint16_t)cluster & 1U) * 4U)) & 0xFFF);
 	}
 	else if (r->fatinfo.FAT_size == 16) {
 		uint16_t raw = *((uint16_t*)buf);
@@ -463,6 +463,72 @@ int libmsfat_context_read_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t 
 	else { // FAT_size == 32
 		uint32_t raw = *((uint32_t*)buf);
 		*entry = (libmsfat_FAT_entry_t)le32toh(raw);
+	}
+
+	return 0;
+}
+
+// NTS: "cluster" is not range-checked from fatinfo Total Clusters value, in case you want to peep at the extra entries.
+//      But this code does range-limit against the FAT table size.
+// NTS: For FAT32, it is the caller's responsibility to preserve bits 28-31 when modifying.
+int libmsfat_context_write_FAT(struct libmsfat_context_t *r,libmsfat_FAT_entry_t entry,const libmsfat_cluster_t cluster) {
+	uint64_t offset;
+	uint8_t rdsize;
+	uint8_t buf[4];
+
+	if (r == NULL) return -1;
+	if (!r->fatinfo_set) return -1;
+	if (r->read == NULL) return -1;
+	if (r->write == NULL) return -1;
+	// fatinfo_set means the FAT offset has been validated
+
+	if (r->fatinfo.FAT_size == 12) {
+		offset = (uint64_t)cluster + (uint64_t)(cluster / 2U); /* 1.5 bytes per entry -> 0,1,3,4,6,7,9,10... */
+		rdsize = 2;
+	}
+	else {
+		rdsize = (uint8_t)(r->fatinfo.FAT_size / 8U); /* FAT16/FAT32 -> 2/4 */
+		offset = (uint64_t)cluster * (uint64_t)rdsize;
+	}
+
+	{//range check against the sector max
+		uint64_t max = (uint64_t)r->fatinfo.FAT_table_size * (uint64_t)r->fatinfo.BytesPerSector;
+		if ((offset+((uint64_t)rdsize)) > max) return -1;
+	}
+
+	// add the offset of the FAT table
+	offset += (uint64_t)r->fatinfo.FAT_offset * (uint64_t)r->fatinfo.BytesPerSector;
+	// and the partition offset
+	offset += r->partition_byte_offset;
+
+	if (r->fatinfo.FAT_size == 12) {
+		uint16_t raw,tmp;
+
+		// if (cluster & 1)
+		//   val = tmp >> 4
+		// else
+		//   val = tmp & 0xFFF;
+
+		if (r->read(r,buf,offset,(size_t)rdsize) != 0) return -1;
+
+		raw = *((uint16_t*)buf);
+		tmp = le16toh(raw);
+
+		tmp &= ~((uint16_t)(0xFFF << (((uint16_t)cluster & 1U) * 4U)));
+		tmp |=  ((uint16_t)entry & 0xFFF) << (((uint16_t)cluster & 1U) * 4U);
+
+		raw = htole16(tmp);
+		*((uint16_t*)buf) = raw;
+
+		if (r->write(r,buf,offset,(size_t)rdsize) != 0) return -1;
+	}
+	else if (r->fatinfo.FAT_size == 16) {
+		*((uint16_t*)buf) = htole16((uint16_t)entry);
+		if (r->write(r,buf,offset,(size_t)rdsize) != 0) return -1;
+	}
+	else { // FAT_size == 32
+		*((uint32_t*)buf) = htole32((uint32_t)entry);
+		if (r->write(r,buf,offset,(size_t)rdsize) != 0) return -1;
 	}
 
 	return 0;
@@ -995,6 +1061,87 @@ int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,
 	return 0;
 }
 
+/* TODO: If enabled, this code should also support allocating new clusters to write beyond the current end of the file.
+ *       This includes allcating a cluster and modifying the dirent if the file is zero length. */
+int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,const void *buffer,size_t len) {
+	const uint8_t *d = buffer;
+	size_t canread;
+	size_t doread;
+	size_t rd = 0;
+	uint32_t npos;
+	uint64_t dofs;
+	uint32_t ofs;
+
+	if (c == NULL || msfatctx == NULL || buffer == NULL) return -1;
+	if (!msfatctx->fatinfo_set) return -1;
+	if (msfatctx->write == NULL) return -1;
+	if (len == 0) return 0;
+
+	if (c->is_root_dir && !c->is_cluster_chain) {
+		if (c->position > c->file_size) return 0;
+		canread = (size_t)(c->file_size - c->position);
+		if (canread > len) canread = len;
+
+		if (canread > (size_t)0) {
+			if (msfatctx->write(msfatctx,d,msfatctx->partition_byte_offset+c->non_cluster_offset+(uint64_t)c->position,canread))
+				return -1;
+		}
+
+		d += canread;
+		rd = canread;
+		c->position += (uint32_t)rd;
+	}
+	else if (c->is_cluster_chain) {
+		if (c->cluster_size == (uint32_t)0) return 0;
+
+		if (!c->is_directory) {
+			if (c->position > c->file_size) return 0;
+			canread = (size_t)(c->file_size - c->position);
+			if (canread > len) canread = len;
+		}
+		else {
+			canread = len;
+		}
+
+		while (canread > (size_t)0) {
+			if (c->position == (uint32_t)0xFFFFFFFFUL)
+				break;
+			if (c->cluster_position < (uint32_t)2UL)
+				break;
+
+			ofs = c->position % c->cluster_size;
+			doread = c->cluster_size - ofs;
+			if (doread > canread) doread = canread;
+
+			if (libmsfat_context_get_cluster_offset(msfatctx,&dofs,c->cluster_position))
+				return -1;
+
+			assert(doread != (uint32_t)0);
+			if (msfatctx->write(msfatctx,d,dofs+(uint64_t)ofs,doread))
+				return -1;
+
+			npos = (uint32_t)(c->position+doread);
+			if (npos < c->position) { /* integer overflow */
+				npos = (uint32_t)0xFFFFFFFFUL;
+				doread = npos - c->position;
+			}
+
+			d += doread;
+			rd += doread;
+			canread -= doread;
+			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos))
+				return -1;
+			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
+				break;
+		}
+	}
+	else {
+		return -1;
+	}
+
+	return (int)rd;
+}
+
 int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,void *buffer,size_t len) {
 	uint8_t *d = buffer;
 	size_t canread;
@@ -1141,7 +1288,7 @@ int libmsfat_file_io_ctx_rewinddir(struct libmsfat_file_io_ctx_t *fioctx,struct 
 int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_lfn_assembly_t *lfn_name,struct libmsfat_dirent_t *dirent) {
 	if (fioctx == NULL || msfatctx == NULL || dirent == NULL) return -1;
 	if (lfn_name != NULL) libmsfat_lfn_assembly_init(lfn_name);
-	fioctx->dirent_lfn_start = 0;
+	fioctx->dirent_lfn_start = ~((uint32_t)0xFFFFFFFFUL);
 	fioctx->dirent_start = 0;
 
 	assert(sizeof(*dirent) == 32);
@@ -1180,7 +1327,7 @@ int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct li
 	} while (1);
 
 	if (lfn_name != NULL && !lfn_name->name_avail)
-		fioctx->dirent_lfn_start = 0;
+		fioctx->dirent_lfn_start = ~((uint32_t)0xFFFFFFFFUL);
 
 	return 0;
 }
@@ -1191,6 +1338,141 @@ int libmsfat_file_io_ctx_assign_from_dirent(struct libmsfat_file_io_ctx_t *fioct
 	if (fioctx == NULL || msfatctx == NULL || dirent == NULL) return -1;
 
 	cluster = libmsfat_dirent_get_starting_cluster(msfatctx,dirent);
-	return libmsfat_file_io_ctx_assign_cluster_chain(fioctx,msfatctx,cluster);
+	if (libmsfat_file_io_ctx_assign_cluster_chain(fioctx,msfatctx,cluster)) return -1;
+
+	if (dirent->a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
+		fioctx->is_directory = 1;
+	else
+		fioctx->file_size = dirent->a.n.DIR_FileSize;
+
+	return 0;
+}
+
+int libmsfat_file_io_ctx_write_dirent(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,
+	struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name) {
+	/* sanity check */
+	if (fioctx == NULL || fioctx_parent == NULL || msfatctx == NULL || dirent == NULL) return -1;
+	if (!fioctx_parent->is_directory) return -1;
+
+	/* we want to modify the entry in the parent directory ioctx */
+	if (libmsfat_file_io_ctx_lseek(fioctx_parent,msfatctx,fioctx_parent->dirent_start)) return -1;
+	if (libmsfat_file_io_ctx_tell(fioctx_parent,msfatctx) != fioctx_parent->dirent_start) return -1;
+	if (libmsfat_file_io_ctx_write(fioctx_parent,msfatctx,dirent,sizeof(*dirent)) != sizeof(*dirent)) return -1;
+
+	/* done */
+	return 0;
+}
+
+int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,
+	struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,uint32_t offset) {
+	libmsfat_cluster_t current,next,eoc;
+	libmsfat_FAT_entry_t fatent;
+	unsigned char cut=0;
+	uint32_t count=0;
+
+	/* sanity check */
+	if (fioctx == NULL || fioctx_parent == NULL || msfatctx == NULL || dirent == NULL) return -1;
+	if (!fioctx->is_cluster_chain) return -1;
+	if (!fioctx_parent->is_directory) return -1;
+
+	/* at this point, dirent_start must be the byte offset within fioctx_parent of the short 8.3 dirent */
+
+	/* end of chain */
+	if (msfatctx->fatinfo.FAT_size == 32)
+		eoc = (libmsfat_cluster_t)0x0FFFFFFFUL;
+	else if (msfatctx->fatinfo.FAT_size == 16)
+		eoc = (libmsfat_cluster_t)0xFFFFUL;
+	else
+		eoc = (libmsfat_cluster_t)0xFFFUL;
+
+	/* can't truncate a file that's zero length */
+	if (libmsfat_context_fat_is_end_of_chain(msfatctx,fioctx->first_cluster)) {
+		dirent->a.n.DIR_FileSize = 0;
+		fioctx->file_size = 0;
+		return 0;
+	}
+
+	/* first cluster */
+	current = fioctx->first_cluster;
+
+	do {
+		if (libmsfat_context_fat_is_end_of_chain(msfatctx,current))
+			break;
+		if (libmsfat_context_read_FAT(msfatctx,&fatent,current))
+			return -1;
+
+		next = (libmsfat_cluster_t)fatent;
+		if (msfatctx->fatinfo.FAT_size == 32) next &= libmsfat_FAT32_CLUSTER_MASK;
+
+		count += fioctx->cluster_size;
+		if (count >= offset || cut) {
+			/* if trimming the file to zero length or having already decided to cut the file, write zeros into the FAT table */
+			/* if we just started cutting the file, then the first FAT modification is to write an end of chain marker, then
+			 * set the flag to reminder ourself the rest of the chain is to be overwritten by zeros. */
+			if (offset == (uint32_t)0 || cut) {
+				/* mark the cluster as empty. */
+				if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)0,current)) return -1;
+				if (count == fioctx->cluster_size) {
+					/* if this is the FIRST cluster we are removing, then the file is now zero length
+					 * and the file's "cluster start" value should be set to zero to show that nothing
+					 * is allocated to it. */
+					dirent->a.n.DIR_FstClusLO = 0;
+					dirent->a.n.DIR_FstClusHI = 0;
+				}
+			}
+			else {
+				/* mark the cluster as end of the chain, meaning that the current cluster holds data
+				 * that represents the end of the file. */
+				if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)eoc,current)) return -1;
+			}
+
+			if (!cut) {
+				dirent->a.n.DIR_FileSize = htole32(offset);
+				fioctx->file_size = offset;
+				cut = 1;
+			}
+		}
+
+		current = next;
+	} while (1);
+
+	/* done */
+	return libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,dirent,lfn_name);
+}
+
+int libmsfat_file_io_ctx_delete_dirent(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,
+	struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name) {
+	/* sanity check */
+	if (fioctx == NULL || fioctx_parent == NULL || msfatctx == NULL || dirent == NULL) return -1;
+	if (!fioctx_parent->is_directory) return -1;
+
+	/* mark the dirent deleted */
+	dirent->a.n.DIR_Name[0] = (char)0xE5;
+
+	/* write back */
+	if (libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,dirent,lfn_name)) return -1;
+
+	/* does the dirent have Long Filenames? They need to be erased too */
+	if (fioctx_parent->dirent_lfn_start != (uint32_t)0xFFFFFFFFUL) {
+		struct libmsfat_dirent_t lfnent;
+
+		while (fioctx_parent->dirent_lfn_start < fioctx_parent->dirent_start) {
+			if (libmsfat_file_io_ctx_lseek(fioctx_parent,msfatctx,fioctx_parent->dirent_lfn_start)) break;
+			if (libmsfat_file_io_ctx_tell(fioctx_parent,msfatctx) != fioctx_parent->dirent_lfn_start) return -1;
+			if (libmsfat_file_io_ctx_read(fioctx_parent,msfatctx,&lfnent,sizeof(lfnent)) != sizeof(lfnent)) return -1;
+
+			lfnent.a.n.DIR_Name[0] = (char)0xE5;
+			if (libmsfat_file_io_ctx_lseek(fioctx_parent,msfatctx,fioctx_parent->dirent_lfn_start)) break;
+			if (libmsfat_file_io_ctx_tell(fioctx_parent,msfatctx) != fioctx_parent->dirent_lfn_start) return -1;
+			if (libmsfat_file_io_ctx_write(fioctx_parent,msfatctx,&lfnent,sizeof(lfnent)) != sizeof(lfnent)) return -1;
+
+			fioctx_parent->dirent_lfn_start += (uint32_t)32;
+		}
+
+		fioctx_parent->dirent_lfn_start = (uint32_t)0xFFFFFFFFUL;
+	}
+
+	/* done */
+	return 0;
 }
 
