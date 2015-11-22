@@ -26,7 +26,6 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 
 static unsigned char			sectorbuf[512];
-static struct libmsfat_lfn_assembly_t	lfn_name;
 
 static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct libmsfat_dirent_t *dir,const uint8_t nohex) {
 	if (dir->a.n.DIR_Name[0] == 0) {
@@ -505,8 +504,6 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"ERROR: FAT12/FAT16 root directory area does not exist\n");
 		return 1;
 	}
-
-	libmsfat_lfn_assembly_init(&lfn_name);
 
 	fioctx = libmsfat_file_io_ctx_create();
 	if (fioctx == NULL) {
