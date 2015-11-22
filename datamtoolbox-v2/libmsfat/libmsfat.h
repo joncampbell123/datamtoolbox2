@@ -442,6 +442,7 @@ int libmsfat_file_io_ctx_delete_dirent(struct libmsfat_file_io_ctx_t *fioctx,str
 	struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name);
 
 int libmsfat_dirent_is_dot_dir(struct libmsfat_dirent_t *dirent);
+int libmsfat_context_copy_FAT(struct libmsfat_context_t *msfatctx,unsigned int dst,unsigned int src);
 
 #endif // __DATAMTOOLBOX_LIBMSFAT_LIBMSFAT_H
 

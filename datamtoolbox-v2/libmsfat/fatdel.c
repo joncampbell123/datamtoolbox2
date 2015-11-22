@@ -322,6 +322,13 @@ int main(int argc,char **argv) {
 		}
 	}
 
+	/* this code focuses on FAT table #0. make sure to copy FAT 0 to FAT 1/2/3 etc. */
+	for (i=1;i < (int)msfatctx->fatinfo.FAT_tables;i++) {
+		if (libmsfat_context_copy_FAT(msfatctx,/*dst*/i,/*src*/0))
+			fprintf(stderr,"Problem copying FAT table\n");
+	}
+
+	/* done */
 	fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
 	fioctx = libmsfat_file_io_ctx_destroy(fioctx);
 	msfatctx = libmsfat_context_destroy(msfatctx);

@@ -1526,3 +1526,45 @@ int libmsfat_dirent_is_dot_dir(struct libmsfat_dirent_t *dirent) {
 	return 0;
 }
 
+int libmsfat_context_copy_FAT(struct libmsfat_context_t *msfatctx,unsigned int dst,unsigned int src) {
+	unsigned char tmp[512];
+	uint64_t ofs1,ofs2;
+	uint32_t rd,len;
+
+	if (msfatctx == NULL) return -1;
+	if (src == dst) return 0;
+	if (src >= msfatctx->fatinfo.FAT_tables) return -1;
+	if (dst >= msfatctx->fatinfo.FAT_tables) return -1;
+	if (msfatctx->read == NULL) return 0;
+	if (msfatctx->write == NULL) return 0;
+
+	ofs1 = (uint64_t)msfatctx->fatinfo.FAT_offset *
+		(uint32_t)msfatctx->fatinfo.BytesPerSector;
+	ofs1 += (uint64_t)msfatctx->fatinfo.FAT_table_size *
+		(uint64_t)src * (uint64_t)msfatctx->fatinfo.BytesPerSector;
+	ofs1 += (uint64_t)msfatctx->partition_byte_offset;
+
+	ofs2 = (uint64_t)msfatctx->fatinfo.FAT_offset *
+		(uint32_t)msfatctx->fatinfo.BytesPerSector;
+	ofs2 += (uint64_t)msfatctx->fatinfo.FAT_table_size *
+		(uint64_t)dst * (uint64_t)msfatctx->fatinfo.BytesPerSector;
+	ofs2 += (uint64_t)msfatctx->partition_byte_offset;
+
+	len = (uint32_t)msfatctx->fatinfo.FAT_table_size *
+		(uint32_t)msfatctx->fatinfo.BytesPerSector;
+
+	while (len > (uint32_t)0UL) {
+		rd = len;
+		if (rd > (uint32_t)sizeof(tmp)) rd = (uint32_t)sizeof(tmp);
+
+		if (msfatctx->read(msfatctx,tmp,ofs1,rd)) return -1;
+		if (msfatctx->write(msfatctx,tmp,ofs2,rd)) return -1;
+
+		len -= rd;
+		ofs1 += (uint64_t)rd;
+		ofs2 += (uint64_t)rd;
+	}
+
+	return 0;
+}
+
