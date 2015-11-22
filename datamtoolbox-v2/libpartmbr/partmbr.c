@@ -1,8 +1,3 @@
-#if defined(_MSC_VER)
-/*hack: Microsoft C++ does not have le32toh() and friends, but Windows is Little Endian anyway*/
-# define le32toh(x) (x)
-# define htole32(x) (x)
-#endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
 # include <endian.h>
@@ -16,6 +11,10 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
+#if defined(_MSC_VER)
+# include <datamtoolbox-v2/polyfill/ms_cpp.h>
+#endif
+#include <datamtoolbox-v2/polyfill/lseek.h>
 
 #include <datamtoolbox-v2/libint13chs/int13chs.h>
 #include <datamtoolbox-v2/libpartmbr/partmbr.h>
