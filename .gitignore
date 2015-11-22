@@ -9,6 +9,7 @@
 *.idb
 *.tlog
 *.lastbuildstate
+*.vcxproj.user
 *.iobj
 *.ipdb
 .vs
