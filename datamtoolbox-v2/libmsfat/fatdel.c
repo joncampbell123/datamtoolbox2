@@ -310,6 +310,8 @@ int main(int argc,char **argv) {
 			printf("%u files remain. Will not delete or truncate directory\n",files);
 			return 1;
 		}
+
+		printf("Directory is empty. Proceeding to delete.\n");
 	}
 
 	if (s_trunc != NULL) {
