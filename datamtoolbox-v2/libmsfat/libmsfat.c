@@ -1488,3 +1488,35 @@ int libmsfat_file_io_ctx_delete_dirent(struct libmsfat_file_io_ctx_t *fioctx,str
 	return 0;
 }
 
+int libmsfat_dirent_is_dot_dir(struct libmsfat_dirent_t *dirent) {
+	unsigned int i;
+
+	if (dirent == NULL)
+		return 0;
+
+	/* we're looking for . or .. */
+	if (dirent->a.n.DIR_Name[0] == '.') {
+		if (dirent->a.n.DIR_Name[1] == '.' || dirent->a.n.DIR_Name[1] == ' ' || dirent->a.n.DIR_Name[1] == 0) {
+			i = 2;
+			while (i < 8) {
+				if (dirent->a.n.DIR_Name[i] == ' ' || dirent->a.n.DIR_Name[i] == 0)
+					i++;
+				else
+					return 0;
+			}
+
+			i = 0;
+			while (i < 3) {
+				if (dirent->a.n.DIR_Ext[i] == ' ' || dirent->a.n.DIR_Ext[i] == 0)
+					i++;
+				else
+					return 0;
+			}
+
+			return 1;
+		}
+	}
+
+	return 0;
+}
+

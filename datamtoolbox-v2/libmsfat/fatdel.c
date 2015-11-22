@@ -289,6 +289,16 @@ int main(int argc,char **argv) {
 		out_fd = -1;
 	}
 
+	if (fioctx->is_directory) {
+		if (libmsfat_dirent_is_dot_dir(&dirent)) {
+			printf("I refuse to modify . and .. directory entries\n");
+			return 1;
+		}
+
+		printf("The path refers to a directory. Before I can delete it, I need to check that no files and folders exist within it.\n");
+		return 1;//TODO
+	}
+
 	if (s_trunc != NULL) {
 		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,trunc)) {
 			fprintf(stderr,"Failed to truncate file\n");

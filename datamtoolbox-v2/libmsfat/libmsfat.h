@@ -441,5 +441,7 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 int libmsfat_file_io_ctx_delete_dirent(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,
 	struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name);
 
+int libmsfat_dirent_is_dot_dir(struct libmsfat_dirent_t *dirent);
+
 #endif // __DATAMTOOLBOX_LIBMSFAT_LIBMSFAT_H
 
