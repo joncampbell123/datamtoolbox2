@@ -25,6 +25,8 @@
 
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 
+#include <datamtoolbox-v2/unicode/utf8.h>
+
 int libmsfat_sanity_check() {
 	struct libmsfat_msdos_time_t time_e;
 	struct libmsfat_msdos_date_t date_e;
@@ -1074,7 +1076,7 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 	return (int)rd;
 }
 
-void libmsfat_dirent_lfn_to_str_printable(char *buf,size_t buflen,const struct libmsfat_lfn_assembly_t *lfn_name) {
+void libmsfat_dirent_lfn_to_str_utf8(char *buf,size_t buflen,const struct libmsfat_lfn_assembly_t *lfn_name) {
 	const uint16_t *s,*se;
 	char *bufend,*d;
 
@@ -1095,16 +1097,11 @@ void libmsfat_dirent_lfn_to_str_printable(char *buf,size_t buflen,const struct l
 	se = s + ((5U+6U+2U)*lfn_name->name_avail);
 	assert((char*)se <= (((char*)lfn_name->assembly) + sizeof(lfn_name->assembly)));
 
-	/* TODO: conversion to UTF-8 on Linux systems */
 	while (s < se && d < bufend) {
 		if (*s == 0) break;
 
-		if (*s >= 0x80U)
-			*d++ = '?';
-		else
-			*d++ = (char)(*s);
-
-		s++;
+		/* TODO: does the FAT Long Filename scheme support UTF16 surrogate pairs? */
+		utf8_encode(&d,bufend,(unicode_char_t)(*s++));
 	}
 
 	*d = 0;

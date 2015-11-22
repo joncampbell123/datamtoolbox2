@@ -350,7 +350,7 @@ int main(int argc,char **argv) {
 		printf("\n");
 
 		if (lfn_name.name_avail) {
-			libmsfat_dirent_lfn_to_str_printable(tmp,sizeof(tmp),&lfn_name);
+			libmsfat_dirent_lfn_to_str_utf8(tmp,sizeof(tmp),&lfn_name);
 			printf("        Long name:          '%s'\n",tmp);
 		}
 
