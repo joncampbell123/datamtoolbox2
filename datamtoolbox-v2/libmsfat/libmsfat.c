@@ -929,6 +929,7 @@ void libmsfat_file_io_ctx_close(struct libmsfat_file_io_ctx_t *c) {
 	if (c == NULL) return;
 	c->is_root_dir = 0;
 	c->is_directory = 0;
+	c->is_root_parent = 0;
 	c->is_cluster_chain = 0;
 	c->non_cluster_offset = 0;
 	c->first_cluster = 0;
@@ -945,6 +946,7 @@ int libmsfat_file_io_ctx_assign_cluster_chain(struct libmsfat_file_io_ctx_t *c,c
 	c->file_size = 0;
 	c->is_root_dir = 0;
 	c->is_directory = 0;
+	c->is_root_parent = 0;
 	c->is_cluster_chain = 1;
 	c->first_cluster = cluster;
 	c->cluster_position_start = 0;
@@ -1042,6 +1044,7 @@ int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,
 		if (libmsfat_file_io_ctx_assign_cluster_chain(c,msfatctx,msfatctx->fatinfo.fat32.RootDirectory_cluster))
 			return -1;
 
+		c->is_root_parent = 0;
 		c->is_directory = 1;
 		c->is_root_dir = 1;
 		c->file_size = 0;
@@ -1055,6 +1058,7 @@ int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,
 		c->non_cluster_offset = (uint64_t)msfatctx->fatinfo.RootDirectory_offset * (uint64_t)msfatctx->fatinfo.BytesPerSector;
 		c->cluster_size = msfatctx->fatinfo.RootDirectory_size * msfatctx->fatinfo.BytesPerSector;
 		c->file_size = c->cluster_size;
+		c->is_root_parent = 0;
 		c->is_directory = 1;
 		c->is_root_dir = 1;
 	}
