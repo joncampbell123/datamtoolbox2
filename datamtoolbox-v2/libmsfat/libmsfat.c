@@ -1074,3 +1074,140 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 	return (int)rd;
 }
 
+void libmsfat_dirent_lfn_to_str_printable(char *buf,size_t buflen,const struct libmsfat_lfn_assembly_t *lfn_name) {
+	const uint16_t *s,*se;
+	char *bufend,*d;
+
+	if (buf == NULL || buflen <= (size_t)13) return;
+	bufend = buf + buflen - 1;
+	d = buf;
+
+	if (lfn_name == NULL) {
+		*d = 0;
+		return;
+	}
+	if (!lfn_name->name_avail) {
+		*d = 0;
+		return;
+	}
+
+	s = lfn_name->assembly;
+	se = s + ((5U+6U+2U)*lfn_name->name_avail);
+	assert((char*)se <= (((char*)lfn_name->assembly) + sizeof(lfn_name->assembly)));
+
+	/* TODO: conversion to UTF-8 on Linux systems */
+	while (s < se && d < bufend) {
+		if (*s == 0) break;
+
+		if (*s >= 0x80U)
+			*d++ = '?';
+		else
+			*d++ = (char)(*s);
+
+		s++;
+	}
+
+	*d = 0;
+	assert(d <= bufend);
+}
+
+void libmsfat_dirent_volume_label_to_str(char *buf,size_t buflen,const struct libmsfat_dirent_t *dirent) {
+	const char *s,*se;
+	char *bufend,*d;
+
+	if (buf == NULL || buflen <= (size_t)13) return;
+	bufend = buf + buflen - 1;
+	d = buf;
+
+	if (dirent == NULL) {
+		*d = 0;
+		return;
+	}
+
+	/* DIR_Name is immediately followed by DIR_Ext */
+	s = dirent->a.n.DIR_Name;
+	se = s + sizeof(dirent->a.n.DIR_Name) + sizeof(dirent->a.n.DIR_Ext) - 1;
+	while (se >= s && (*se == ' ' || *se == 0)) se--;
+	se++;
+	while (s < se && d < bufend) *d++ = *s++;
+
+	*d = 0;
+	assert(d <= bufend);
+}
+
+void libmsfat_dirent_filename_to_str(char *buf,size_t buflen,const struct libmsfat_dirent_t *dirent) {
+	const char *s,*se;
+	char *bufend,*d;
+
+	if (buf == NULL || buflen <= (size_t)13) return;
+	bufend = buf + buflen - 1;
+	d = buf;
+
+	if (dirent == NULL) {
+		*d = 0;
+		return;
+	}
+
+	s = dirent->a.n.DIR_Name;
+	se = s + sizeof(dirent->a.n.DIR_Name) - 1;
+	while (se >= s && (*se == ' ' || *se == 0)) se--;
+	se++;
+	while (s < se && d < bufend) *d++ = *s++;
+
+	s = dirent->a.n.DIR_Ext;
+	se = s + sizeof(dirent->a.n.DIR_Ext) - 1;
+	while (se >= s && (*se == ' ' || *se == 0)) se--;
+	se++;
+	if (s < se) {
+		*d++ = '.';
+		while (s < se && d < bufend) *d++ = *s++;
+	}
+
+	*d = 0;
+	assert(d <= bufend);
+}
+
+int libmsfat_file_io_ctx_rewinddir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_lfn_assembly_t *lfn_name) {
+	if (fioctx == NULL || msfatctx == NULL) return -1;
+	if (lfn_name != NULL) libmsfat_lfn_assembly_init(lfn_name);
+	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,(uint32_t)0)) return -1;
+	if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != (uint32_t)0) return -1;
+	return 0;
+}
+
+int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_lfn_assembly_t *lfn_name,struct libmsfat_dirent_t *dirent) {
+	if (fioctx == NULL || msfatctx == NULL || dirent == NULL) return -1;
+	if (lfn_name != NULL) libmsfat_lfn_assembly_init(lfn_name);
+
+	assert(sizeof(*dirent) == 32);
+	do {
+		if (libmsfat_file_io_ctx_read(fioctx,msfatctx,dirent,sizeof(*dirent)) != sizeof(*dirent))
+			return -1;
+
+		if (libmsfat_lfn_dirent_is_lfn(dirent)) {
+			if (lfn_name != NULL) {
+				if (libmsfat_lfn_dirent_assemble(lfn_name,dirent))
+					libmsfat_lfn_assembly_init(lfn_name);
+			}
+		}
+		else {
+			if (lfn_name != NULL) {
+				if (libmsfat_lfn_dirent_complete(lfn_name,dirent))
+					libmsfat_lfn_assembly_init(lfn_name);
+			}
+
+			/* 0x00, end of directory */
+			if (dirent->a.n.DIR_Name[0] == 0x00)
+				return -1;
+			/* 0xE5, deleted entry */
+			if (dirent->a.n.DIR_Name[0] == 0xE5)
+				continue;
+
+			/* found one! */
+			break;
+		}
+	} while (1);
+
+	return 0;
+}
+
