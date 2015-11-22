@@ -64,7 +64,7 @@ void libmsfat_dirent_lfn_to_str_utf16le(char *buf,size_t buflen,const struct lib
 	char *bufend,*d;
 
 	if (buf == NULL || buflen <= (size_t)13) return;
-	bufend = buf + buflen - 1;
+	bufend = buf + buflen - 2;
 	d = buf;
 
 	if (lfn_name == NULL) {
@@ -87,6 +87,7 @@ void libmsfat_dirent_lfn_to_str_utf16le(char *buf,size_t buflen,const struct lib
 		utf16le_encode(&d,bufend,(unicode_char_t)(*s++));
 	}
 
+	*d++ = 0;
 	*d = 0;
 	assert(d <= bufend);
 }

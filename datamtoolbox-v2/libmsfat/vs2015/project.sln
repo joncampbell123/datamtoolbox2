@@ -45,6 +45,17 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fio2", "fio2.vcxproj", "{FACE2853-72D4-44D6-B9DB-F499A5E942A1}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fio3", "fio3.vcxproj", "{FACEA553-72D4-44D6-B9DB-F499A5E942A1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9} = {FF217562-2F64-4785-A22C-D4B329ABDEE9}
+		{CCF5BBEA-475C-49AB-957C-19EA8414DECD} = {CCF5BBEA-475C-49AB-957C-19EA8414DECD}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libunicode", "..\..\unicode\vs2015\libunicode.vcxproj", "{FF217562-2F64-4785-A22C-D4B329ABDEE9}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libmsfat_unicode", "libmsfat_unicode.vcxproj", "{CCF5BBEA-475C-49AB-957C-19EA8414DECD}"
+	ProjectSection(ProjectDependencies) = postProject
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9} = {FF217562-2F64-4785-A22C-D4B329ABDEE9}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -142,6 +153,22 @@ Global
 		{FACEA553-72D4-44D6-B9DB-F499A5E942A1}.Release|x64.Build.0 = Release|x64
 		{FACEA553-72D4-44D6-B9DB-F499A5E942A1}.Release|x86.ActiveCfg = Release|Win32
 		{FACEA553-72D4-44D6-B9DB-F499A5E942A1}.Release|x86.Build.0 = Release|Win32
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9}.Debug|x64.ActiveCfg = Debug|x64
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9}.Debug|x64.Build.0 = Debug|x64
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9}.Debug|x86.ActiveCfg = Debug|Win32
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9}.Debug|x86.Build.0 = Debug|Win32
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9}.Release|x64.ActiveCfg = Release|x64
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9}.Release|x64.Build.0 = Release|x64
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9}.Release|x86.ActiveCfg = Release|Win32
+		{FF217562-2F64-4785-A22C-D4B329ABDEE9}.Release|x86.Build.0 = Release|Win32
+		{CCF5BBEA-475C-49AB-957C-19EA8414DECD}.Debug|x64.ActiveCfg = Debug|x64
+		{CCF5BBEA-475C-49AB-957C-19EA8414DECD}.Debug|x64.Build.0 = Debug|x64
+		{CCF5BBEA-475C-49AB-957C-19EA8414DECD}.Debug|x86.ActiveCfg = Debug|Win32
+		{CCF5BBEA-475C-49AB-957C-19EA8414DECD}.Debug|x86.Build.0 = Debug|Win32
+		{CCF5BBEA-475C-49AB-957C-19EA8414DECD}.Release|x64.ActiveCfg = Release|x64
+		{CCF5BBEA-475C-49AB-957C-19EA8414DECD}.Release|x64.Build.0 = Release|x64
+		{CCF5BBEA-475C-49AB-957C-19EA8414DECD}.Release|x86.ActiveCfg = Release|Win32
+		{CCF5BBEA-475C-49AB-957C-19EA8414DECD}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

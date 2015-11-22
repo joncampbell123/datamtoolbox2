@@ -22,6 +22,7 @@
 # define read _read
 # define write _write
 # define close _close
+# define isatty _isatty
 # define lseek _lseeki64
 
 /* Microsoft C++ does not have le32toh() and friends, but Windows is Little Endian anyway*/
