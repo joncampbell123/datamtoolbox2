@@ -266,18 +266,8 @@ int main(int argc,char **argv) {
 				return 1;
 			}
 
-			if (!fioctx->is_directory) {
-				fprintf(stderr,"Path element %s: asked to search within non-directory\n",tmp);
-				return 1;
-			}
-
 			if (libmsfat_file_io_ctx_find_in_dir(fioctx,msfatctx,&dirent,&lfn_name,tmp,0/*default*/)) {
 				fprintf(stderr,"%s not found\n",tmp);
-				return 1;
-			}
-
-			if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID) {
-				fprintf(stderr,"I found a volume label for %s?\n",tmp);
 				return 1;
 			}
 

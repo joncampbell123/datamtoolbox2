@@ -97,6 +97,8 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 
 	if (fioctx == NULL || msfatctx == NULL || dirent == NULL || name == NULL) // lfn_name CAN be NULL
 		return -1;
+	if (!fioctx->is_directory)
+		return -1;
 	if (libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,lfn_name))
 		return -1;
 
