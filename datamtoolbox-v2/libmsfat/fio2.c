@@ -402,39 +402,48 @@ int main(int argc,char **argv) {
 			break;
 		}
 
-		printf("FIO(%lu): file_size=%lu position=%lu cluster=%lu cluster_size=%lu first_cluster=%lu cluster_pos=%lu root=%u dir=%u chain=%u\n",
-			(unsigned long)fiooffset,
-			(unsigned long)fioctx->file_size,
-			(unsigned long)fioctx->position,
-			(unsigned long)fioctx->cluster_position,
-			(unsigned long)fioctx->cluster_size,
-			(unsigned long)fioctx->first_cluster,
-			(unsigned long)fioctx->cluster_position_start,
-			(unsigned int)fioctx->is_root_dir,
-			(unsigned int)fioctx->is_directory,
-			(unsigned int)fioctx->is_cluster_chain);
+		if (!nohex) {
+			printf("FIO(%lu): file_size=%lu position=%lu cluster=%lu cluster_size=%lu first_cluster=%lu cluster_pos=%lu root=%u dir=%u chain=%u\n",
+				(unsigned long)fiooffset,
+				(unsigned long)fioctx->file_size,
+				(unsigned long)fioctx->position,
+				(unsigned long)fioctx->cluster_position,
+				(unsigned long)fioctx->cluster_size,
+				(unsigned long)fioctx->first_cluster,
+				(unsigned long)fioctx->cluster_position_start,
+				(unsigned int)fioctx->is_root_dir,
+				(unsigned int)fioctx->is_directory,
+				(unsigned int)fioctx->is_cluster_chain);
+		}
 
 		rd = libmsfat_file_io_ctx_read(fioctx,msfatctx,buffer,sizeof(buffer));
-		printf("     Read: %d\n",rd);
+		if (!nohex) printf("     Read: %d\n",rd);
 
-		for (i=0;i < rd;i++) {
-			if ((i&0x1F) == 0) printf("        ");
-			printf("%02x ",buffer[i]);
-			if ((i&0x1F) == 0x1F) printf("\n");
+		if (out_fd >= 0 && rd > 0)
+			write(out_fd,buffer,rd);
+
+		if (!nohex) {
+			for (i=0;i < rd;i++) {
+				if ((i&0x1F) == 0) printf("        ");
+				printf("%02x ",buffer[i]);
+				if ((i&0x1F) == 0x1F) printf("\n");
+			}
+			if ((i&0x1F) != 0) printf("\n");
 		}
-		if ((i&0x1F) != 0) printf("\n");
 
-		printf("FIO(%lu)result: file_size=%lu position=%lu cluster=%lu cluster_size=%lu first_cluster=%lu cluster_pos=%lu root=%u dir=%u chain=%u\n",
-			(unsigned long)fiooffset,
-			(unsigned long)fioctx->file_size,
-			(unsigned long)fioctx->position,
-			(unsigned long)fioctx->cluster_position,
-			(unsigned long)fioctx->cluster_size,
-			(unsigned long)fioctx->first_cluster,
-			(unsigned long)fioctx->cluster_position_start,
-			(unsigned int)fioctx->is_root_dir,
-			(unsigned int)fioctx->is_directory,
-			(unsigned int)fioctx->is_cluster_chain);
+		if (!nohex) {
+			printf("FIO(%lu)result: file_size=%lu position=%lu cluster=%lu cluster_size=%lu first_cluster=%lu cluster_pos=%lu root=%u dir=%u chain=%u\n",
+				(unsigned long)fiooffset,
+				(unsigned long)fioctx->file_size,
+				(unsigned long)fioctx->position,
+				(unsigned long)fioctx->cluster_position,
+				(unsigned long)fioctx->cluster_size,
+				(unsigned long)fioctx->first_cluster,
+				(unsigned long)fioctx->cluster_position_start,
+				(unsigned int)fioctx->is_root_dir,
+				(unsigned int)fioctx->is_directory,
+				(unsigned int)fioctx->is_cluster_chain);
+		}
 
 		fiooffset += (uint32_t)sizeof(buffer);
 	} while (1);
