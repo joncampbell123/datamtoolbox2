@@ -1,4 +1,4 @@
-SUBDIR=libint13chs libpartmbr libmsfat
+SUBDIR=libint13chs libpartmbr libmsfat unicode
 
 all:
 	for i in $(SUBDIR); do make -C "$$i" all || break; done
