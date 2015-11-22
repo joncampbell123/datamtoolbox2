@@ -293,7 +293,7 @@ int main(int argc,char **argv) {
 			}
 			printf("\n");
 
-			if (libmsfat_file_io_ctx_assign_cluster_chain(fioctx,msfatctx,libmsfat_dirent_get_starting_cluster(msfatctx,&dirent)) ||
+			if (libmsfat_file_io_ctx_assign_from_dirent(fioctx,msfatctx,&dirent) ||
 				libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,&lfn_name)) {
 				fprintf(stderr,"%s: Cannot assign cluster\n",tmp);
 				return 1;

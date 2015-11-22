@@ -412,6 +412,7 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx);
 int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,void *buffer,size_t len);
 int libmsfat_file_io_ctx_assign_cluster_chain(struct libmsfat_file_io_ctx_t *c,const struct libmsfat_context_t *msfatctx,libmsfat_cluster_t cluster);
+int libmsfat_file_io_ctx_assign_from_dirent(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent);
 
 void libmsfat_dirent_filename_to_str(char *buf,size_t buflen,const struct libmsfat_dirent_t *dirent);
 void libmsfat_dirent_volume_label_to_str(char *buf,size_t buflen,const struct libmsfat_dirent_t *dirent);

@@ -1174,3 +1174,12 @@ int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct li
 	return 0;
 }
 
+int libmsfat_file_io_ctx_assign_from_dirent(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent) {
+	libmsfat_cluster_t cluster;
+
+	if (fioctx == NULL || msfatctx == NULL || dirent == NULL) return -1;
+
+	cluster = libmsfat_dirent_get_starting_cluster(msfatctx,dirent);
+	return libmsfat_file_io_ctx_assign_cluster_chain(fioctx,msfatctx,cluster);
+}
+
