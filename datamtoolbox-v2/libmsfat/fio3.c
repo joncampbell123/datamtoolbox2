@@ -18,6 +18,7 @@
 #include <ctype.h>
 #if defined(_MSC_VER)
 # include <datamtoolbox-v2/polyfill/ms_cpp.h>
+# include <windows.h>
 #endif
 #include <datamtoolbox-v2/polyfill/lseek.h>
 #include <datamtoolbox-v2/polyfill/unix.h>
@@ -355,8 +356,18 @@ int main(int argc,char **argv) {
 			// use widechar printf in Windows to show the name properly
 			if (isatty(1/*STDOUT*/)) {
 				if (sizeof(wchar_t) == 2) { /* Microsoft C runtime sets wchar_t == uint16_t aka WORD */
+					size_t wl;
+
 					libmsfat_dirent_lfn_to_str_utf16le(tmp,sizeof(tmp),&lfn_name);
-					wprintf(L"        Long name:          '%ls'\n",(wchar_t*)tmp);
+					wl = wcslen((const wchar_t*)tmp);
+
+					printf("        Long name:          '");
+					fflush(stdout);
+					{
+						DWORD written = 0;
+						WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), (const void*)tmp, (DWORD)wl, &written, NULL);
+					}
+					printf("'\n");
 				}
 			}
 			else {
