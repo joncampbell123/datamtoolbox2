@@ -1363,6 +1363,14 @@ int libmsfat_file_io_ctx_write_dirent(struct libmsfat_file_io_ctx_t *fioctx,stru
 	return 0;
 }
 
+/* WARNING: This code will also by design allow truncating directories to zero length. It does not regard the directory entries
+ *          inside the directory and whether or not they have clusters allocated. This code assumes that if you truncate a directory
+ *          to zero length that you took responsibility to delete all files and folders within the directory. If you did not do
+ *          that, the clusters associated with the files and folders will not be freed and will show up as lost clusters.
+ *
+ *          I'm also not certain whether it is valid on FAT filesystems to have directories with no allocated clusters. To be
+ *          safe, it is recommended that you do not truncate a directory to zero length unless you fully intend to delete the
+ *          directory entry as well. */
 int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,
 	struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,uint32_t offset) {
 	libmsfat_cluster_t current,next,eoc;
@@ -1422,12 +1430,16 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 			}
 			else {
 				/* mark the cluster as end of the chain, meaning that the current cluster holds data
-				 * that represents the end of the file. */
+				 * that appears as the end of the file. */
 				if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)eoc,current)) return -1;
 			}
 
 			if (!cut) {
-				dirent->a.n.DIR_FileSize = htole32(offset);
+				if (dirent->a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
+					dirent->a.n.DIR_FileSize = (uint32_t)0UL;
+				else
+					dirent->a.n.DIR_FileSize = htole32(offset);
+
 				fioctx->file_size = offset;
 				cut = 1;
 			}
