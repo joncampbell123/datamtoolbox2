@@ -827,3 +827,251 @@ int libmsfat_lfn_dirent_is_lfn(const struct libmsfat_dirent_t *dir) {
 	return 0;
 }
 
+void libmsfat_file_io_ctx_init(struct libmsfat_file_io_ctx_t *c) {
+	memset(c,0,sizeof(*c));
+}
+
+void libmsfat_file_io_ctx_free(struct libmsfat_file_io_ctx_t *c) {
+	memset(c,0,sizeof(*c));
+}
+
+struct libmsfat_file_io_ctx_t *libmsfat_file_io_ctx_create() {
+	struct libmsfat_file_io_ctx_t *ctx;
+
+	ctx = (struct libmsfat_file_io_ctx_t*)malloc(sizeof(struct libmsfat_file_io_ctx_t));
+	if (ctx == NULL) return NULL;
+	libmsfat_file_io_ctx_init(ctx);
+	return ctx;	
+}
+
+struct libmsfat_file_io_ctx_t *libmsfat_file_io_ctx_destroy(struct libmsfat_file_io_ctx_t *c) {
+	if (c != NULL) {
+		libmsfat_file_io_ctx_free(c);
+		free(c);
+	}
+
+	return NULL;
+}
+
+void libmsfat_file_io_ctx_close(struct libmsfat_file_io_ctx_t *c) {
+	if (c == NULL) return;
+	c->is_root_dir = 0;
+	c->is_directory = 0;
+	c->is_cluster_chain = 0;
+	c->non_cluster_offset = 0;
+	c->first_cluster = 0;
+	c->position = 0;
+}
+
+int libmsfat_file_io_ctx_assign_cluster_chain(struct libmsfat_file_io_ctx_t *c,const struct libmsfat_context_t *msfatctx,libmsfat_cluster_t cluster) {
+	if (c == NULL || msfatctx == NULL) return -1;
+	libmsfat_file_io_ctx_close(c);
+	if (!msfatctx->fatinfo_set) return -1;
+	if (cluster < (libmsfat_cluster_t)2) cluster = (libmsfat_cluster_t)0;
+
+	c->position = 0;
+	c->file_size = 0;
+	c->is_root_dir = 0;
+	c->is_directory = 0;
+	c->is_cluster_chain = 1;
+	c->first_cluster = cluster;
+	c->cluster_position_start = 0;
+	c->cluster_position = c->first_cluster;
+	c->cluster_size = (uint32_t)msfatctx->fatinfo.Sectors_Per_Cluster *
+		(uint32_t)msfatctx->fatinfo.BytesPerSector;
+	return 0;
+}
+
+uint32_t libmsfat_file_io_ctx_tell(struct libmsfat_file_io_ctx_t *c,const struct libmsfat_context_t *msfatctx) {
+	if (c == NULL || msfatctx == NULL) return -1;
+	return c->position;
+}
+
+int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,uint32_t offset) {
+	libmsfat_FAT_entry_t next_cluster_fat;
+	libmsfat_cluster_t next_cluster;
+	uint32_t offset_cluster_offset;
+	uint32_t offset_cluster_round;
+
+	if (c == NULL || msfatctx == NULL) return -1;
+	if (!msfatctx->fatinfo_set) return -1;
+
+	if (c->is_root_dir && !c->is_cluster_chain) {
+		if (offset > c->file_size) offset = c->file_size;
+		c->position = offset;
+	}
+	else if (c->is_cluster_chain) {
+		/* NTS: directories tend not to indicate their size */
+		if (offset > c->file_size && !c->is_directory) offset = c->file_size;
+
+		/* if we go backwards, then we have to re-scan the FAT table from the start */
+		if (offset < c->cluster_position_start) {
+			c->cluster_position = c->first_cluster;
+			c->cluster_position_start = 0;
+			c->position = 0;
+		}
+
+		/* we need a cluster size */
+		if (c->cluster_size == (uint32_t)0UL)
+			return -1;
+
+		/* what cluster to seek to? */
+		offset_cluster_round = offset;
+		offset_cluster_offset = offset_cluster_round % c->cluster_size;
+		offset_cluster_round -= offset_cluster_offset;
+
+		/* scan forward to desired position */
+		while (c->cluster_position_start < offset_cluster_round) {
+			if (c->cluster_position < (uint32_t)2UL)
+				break;
+
+			c->cluster_position_start += c->cluster_size;
+			if (libmsfat_context_read_FAT(msfatctx,&next_cluster_fat,c->cluster_position)) {
+				c->cluster_position = 0;
+				break;
+			}
+
+			if (msfatctx->fatinfo.FAT_size >= 32)
+				next_cluster = libmsfat_FAT32_CLUSTER((libmsfat_cluster_t)next_cluster_fat);
+			else
+				next_cluster = (libmsfat_cluster_t)next_cluster_fat;
+
+			if (libmsfat_context_fat_is_end_of_chain(msfatctx,next_cluster)) {
+				c->cluster_position = 0;
+				break;
+			}
+
+			c->cluster_position = next_cluster;
+		}
+
+		/* if we're not in a cluster then we cannot allow an offset */
+		if (c->cluster_position < (uint32_t)2UL)
+			offset_cluster_offset = 0;
+
+		/* final... */
+		c->position = offset_cluster_round + offset_cluster_offset;
+	}
+	else {
+		return -1;
+	}
+
+	return 0;
+}
+
+int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx) {
+	if (c == NULL || msfatctx == NULL) return -1;
+	libmsfat_file_io_ctx_close(c);
+	if (!msfatctx->fatinfo_set) return -1;
+
+	if (msfatctx->fatinfo.FAT_size == 32) {
+		if (msfatctx->fatinfo.fat32.RootDirectory_cluster == (libmsfat_cluster_t)0UL)
+			return -1;
+
+		if (libmsfat_file_io_ctx_assign_cluster_chain(c,msfatctx,msfatctx->fatinfo.fat32.RootDirectory_cluster))
+			return -1;
+
+		c->is_directory = 1;
+		c->is_root_dir = 1;
+		c->file_size = 0;
+	}
+	else {
+		if (msfatctx->fatinfo.RootDirectory_offset == (uint32_t)0UL)
+			return -1;
+		if (msfatctx->fatinfo.RootDirectory_size == (uint32_t)0UL)
+			return -1;
+
+		c->non_cluster_offset = (uint64_t)msfatctx->fatinfo.RootDirectory_offset * (uint64_t)msfatctx->fatinfo.BytesPerSector;
+		c->cluster_size = msfatctx->fatinfo.RootDirectory_size * msfatctx->fatinfo.BytesPerSector;
+		c->file_size = c->cluster_size;
+		c->is_directory = 1;
+		c->is_root_dir = 1;
+	}
+
+	if (libmsfat_file_io_ctx_lseek(c,msfatctx,(uint32_t)0UL) || libmsfat_file_io_ctx_tell(c,msfatctx) != (uint32_t)0UL) {
+		libmsfat_file_io_ctx_close(c);
+		return -1;
+	}
+
+	return 0;
+}
+
+int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,void *buffer,size_t len) {
+	uint8_t *d = buffer;
+	size_t canread;
+	size_t doread;
+	uint64_t dofs;
+	uint32_t ofs;
+	int rd = 0;
+
+	if (c == NULL || msfatctx == NULL || buffer == NULL) return -1;
+	if (!msfatctx->fatinfo_set) return -1;
+	if (msfatctx->read == NULL) return -1;
+	if (len == 0) return 0;
+
+	if (c->is_root_dir && !c->is_cluster_chain) {
+		if (c->position > c->file_size) return 0;
+		canread = (size_t)(c->file_size - c->position);
+		if (canread > len) canread = len;
+
+		if (canread > (size_t)0) {
+			if (msfatctx->read(msfatctx,d,msfatctx->partition_byte_offset+c->non_cluster_offset+(uint64_t)c->position,canread))
+				return -1;
+		}
+
+		d += canread;
+		rd = canread;
+		c->position += rd;
+	}
+	else if (c->is_cluster_chain) {
+		if (c->cluster_size == (uint32_t)0) return 0;
+
+		if (!c->is_directory) {
+			if (c->position > c->file_size) return 0;
+			canread = (size_t)(c->file_size - c->position);
+			if (canread > len) canread = len;
+		}
+		else {
+			canread = len;
+		}
+
+		while (canread > (size_t)0) {
+			uint32_t npos;
+
+			if (c->position == (uint32_t)0xFFFFFFFFUL)
+				break;
+			if (c->cluster_position < (uint32_t)2UL)
+				break;
+
+			ofs = c->position % c->cluster_size;
+			doread = c->cluster_size - ofs;
+			if (doread > canread) doread = canread;
+
+			if (libmsfat_context_get_cluster_offset(msfatctx,&dofs,c->cluster_position))
+				return -1;
+
+			assert(doread != (uint32_t)0);
+			if (msfatctx->read(msfatctx,d,dofs+(uint64_t)ofs,doread))
+				return -1;
+
+			npos = c->position+doread;
+			if (npos < c->position) { /* integer overflow */
+				npos = (uint32_t)0xFFFFFFFFUL;
+				doread = npos - c->position;
+			}
+
+			d += doread;
+			rd += doread;
+			canread -= doread;
+			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos))
+				return -1;
+			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
+				break;
+		}
+	}
+	else {
+		return -1;
+	}
+
+	return rd;
+}
+

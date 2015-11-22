@@ -188,6 +188,21 @@ struct libmsfat_lfn_assembly_t {
 	const char*			err_str;
 };
 
+// context for reading files and directories
+struct libmsfat_file_io_ctx_t {
+	unsigned int			is_root_dir:1;		// FAT12/FAT16 root dir, not cluster chain
+	unsigned int			is_directory:1;		// contents are that of a directory
+	unsigned int			is_cluster_chain:1;	// is cluster chain
+	unsigned int			_padding_:28;
+	uint64_t			non_cluster_offset;	// if root dir (non-cluster), byte offset
+	libmsfat_cluster_t		first_cluster;		// if not root dir, then starting cluster
+	uint32_t			file_size;		// file size, in bytes
+	uint32_t			position;		// file position (pointer) a la lseek
+	uint32_t			cluster_position;	// current cluster representing file position
+	uint32_t			cluster_position_start;	// byte offset in file representing start of current cluster
+	uint32_t			cluster_size;		// size of cluster unit. if FAT12/16 root dir, then size of root dir.
+};
+
 #pragma pack(push,1)
 # if defined(_MSC_VER) /* Microsoft C++ treats unsigned int bitfields properly except the struct becomes 32-bit wide, which is WRONG */
 #  define bitfield_t					unsigned short int
@@ -384,4 +399,15 @@ void libmsfat_lfn_assembly_init(struct libmsfat_lfn_assembly_t *l);
 int libmsfat_lfn_dirent_complete(struct libmsfat_lfn_assembly_t *lfna,const struct libmsfat_dirent_t *dir);
 int libmsfat_lfn_dirent_assemble(struct libmsfat_lfn_assembly_t *lfna,const struct libmsfat_dirent_t *dir);
 int libmsfat_lfn_dirent_is_lfn(const struct libmsfat_dirent_t *dir);
+
+struct libmsfat_file_io_ctx_t *libmsfat_file_io_ctx_create();
+void libmsfat_file_io_ctx_init(struct libmsfat_file_io_ctx_t *c);
+void libmsfat_file_io_ctx_free(struct libmsfat_file_io_ctx_t *c);
+void libmsfat_file_io_ctx_close(struct libmsfat_file_io_ctx_t *c);
+struct libmsfat_file_io_ctx_t *libmsfat_file_io_ctx_destroy(struct libmsfat_file_io_ctx_t *c);
+uint32_t libmsfat_file_io_ctx_tell(struct libmsfat_file_io_ctx_t *c,const struct libmsfat_context_t *msfatctx);
+int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,uint32_t offset);
+int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx);
+int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,void *buffer,size_t len);
+int libmsfat_file_io_ctx_assign_cluster_chain(struct libmsfat_file_io_ctx_t *c,const struct libmsfat_context_t *msfatctx,libmsfat_cluster_t cluster);
 
