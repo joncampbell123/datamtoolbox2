@@ -1,5 +1,5 @@
 SUBDIR=
-TARGET_EXE=fatinfo fatinfo2 tabldump dcluster dumpdir
+TARGET_EXE=fatinfo fatinfo2 tabldump dcluster dumpdir fio1
 TARGET_LIB=libmsfat.a
 
 AR := ar
@@ -15,7 +15,7 @@ CFLAGS := -Wall -pedantic -std=gnu99 -I../../
 all: lib exe
 	for i in $(SUBDIR); do make -C "$$i" all || break; done
 
-exe: lib fatinfo fatinfo2 tabldump dcluster dumpdir
+exe: lib fatinfo fatinfo2 tabldump dcluster dumpdir fio1
 	for i in $(SUBDIR); do make -C "$$i" exe || break; done
 
 lib: $(LIBINT13CHS) $(LIBPARTMBR) libmsfat.a
@@ -78,5 +78,12 @@ dumpdir: dumpdir.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
 	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
 
 dumpdir.o: dumpdir.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+#--------------------------------------
+fio1: fio1.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
+	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
+
+fio1.o: fio1.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
