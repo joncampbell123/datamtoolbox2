@@ -24,6 +24,7 @@
 
 #include <datamtoolbox-v2/libpartmbr/mbrctx.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
+#include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
 static unsigned char			sectorbuf[512];
 

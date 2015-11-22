@@ -1,3 +1,5 @@
+#ifndef __DATAMTOOLBOX_LIBMSFAT_LIBMSFAT_H
+#define __DATAMTOOLBOX_LIBMSFAT_LIBMSFAT_H
 
 #include <stdint.h>
 
@@ -413,7 +415,8 @@ int libmsfat_file_io_ctx_assign_cluster_chain(struct libmsfat_file_io_ctx_t *c,c
 
 void libmsfat_dirent_filename_to_str(char *buf,size_t buflen,const struct libmsfat_dirent_t *dirent);
 void libmsfat_dirent_volume_label_to_str(char *buf,size_t buflen,const struct libmsfat_dirent_t *dirent);
-void libmsfat_dirent_lfn_to_str_utf8(char *buf,size_t buflen,const struct libmsfat_lfn_assembly_t *lfn_name);
 int libmsfat_file_io_ctx_rewinddir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_lfn_assembly_t *lfn_name);
 int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_lfn_assembly_t *lfn_name,struct libmsfat_dirent_t *dirent);
+
+#endif // __DATAMTOOLBOX_LIBMSFAT_LIBMSFAT_H
 

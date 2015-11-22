@@ -52,57 +52,65 @@ libmsfat.o: libmsfat.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
-fatinfo: fatinfo.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
-	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
+libmsfat_unicode.a: libmsfat_unicode.o
+	rm -f $@
+	$(AR) r $@ $^
+
+libmsfat_unicode.o: libmsfat_unicode.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+#--------------------------------------
+fatinfo: fatinfo.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
+	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
 
 fatinfo.o: fatinfo.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
-fatinfo2: fatinfo2.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
-	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
+fatinfo2: fatinfo2.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
+	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
 
 fatinfo2.o: fatinfo2.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
-tabldump: tabldump.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
-	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
+tabldump: tabldump.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
+	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
 
 tabldump.o: tabldump.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
-dcluster: dcluster.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
-	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
+dcluster: dcluster.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
+	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
 
 dcluster.o: dcluster.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
-dumpdir: dumpdir.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
-	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
+dumpdir: dumpdir.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
+	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
 
 dumpdir.o: dumpdir.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
-fio1: fio1.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
-	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
+fio1: fio1.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
+	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
 
 fio1.o: fio1.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
-fio2: fio2.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
-	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
+fio2: fio2.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR)
+	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LDFLAGS)
 
 fio2.o: fio2.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
-fio3: fio3.o libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
-	$(CC) -o $@ $^ libmsfat.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
+fio3: fio3.o libmsfat.a libmsfat_unicode.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
+	$(CC) -o $@ $^ libmsfat.a libmsfat_unicode.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
 
 fio3.o: fio3.c
 	$(CC) $(CFLAGS) -c -o $@ $^
