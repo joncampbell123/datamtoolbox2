@@ -1,2 +1,11 @@
 Utility library to read and manipulate the FAT filesystem (MS-DOS).
 
+TESTING NOTES:
+
+1. When creating LFN test cases on Linux, make sure you use the 'vfat' driver,
+   and you mount it with the utf8=1 option. If you do not set utf8=1, the vfat
+   driver blindly copies the filename byte-for-byte to the LFN entry, which is
+   NOT VALID UTF-16.
+
+   mount -o loop,utf8=1 diskimage.img /mnt/diskimage
+
