@@ -208,6 +208,9 @@ struct libmsfat_file_io_ctx_t {
 	uint32_t			cluster_position;	// current cluster representing file position
 	uint32_t			cluster_position_start;	// byte offset in file representing start of current cluster
 	uint32_t			cluster_size;		// size of cluster unit. if FAT12/16 root dir, then size of root dir.
+	// directory reading, last dirent read by readdir
+	uint32_t			dirent_lfn_start;
+	uint32_t			dirent_start;
 };
 
 #pragma pack(push,1)

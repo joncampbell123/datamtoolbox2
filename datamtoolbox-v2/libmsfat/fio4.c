@@ -285,6 +285,9 @@ int main(int argc,char **argv) {
 			}
 
 			printf("%s: found ",tmp);
+			printf("dirent=%lu lfn=%lu\n",
+				(unsigned long)fioctx->dirent_start,
+				(unsigned long)fioctx->dirent_lfn_start);
 			libmsfat_dirent_filename_to_str(tmp,sizeof(tmp),&dirent);
 			if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
 				printf("directory '%s'",tmp);

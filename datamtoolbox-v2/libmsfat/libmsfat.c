@@ -1141,14 +1141,21 @@ int libmsfat_file_io_ctx_rewinddir(struct libmsfat_file_io_ctx_t *fioctx,struct 
 int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_lfn_assembly_t *lfn_name,struct libmsfat_dirent_t *dirent) {
 	if (fioctx == NULL || msfatctx == NULL || dirent == NULL) return -1;
 	if (lfn_name != NULL) libmsfat_lfn_assembly_init(lfn_name);
+	fioctx->dirent_lfn_start = 0;
+	fioctx->dirent_start = 0;
 
 	assert(sizeof(*dirent) == 32);
 	do {
+		uint32_t pos = fioctx->position;
+
 		if (libmsfat_file_io_ctx_read(fioctx,msfatctx,dirent,sizeof(*dirent)) != sizeof(*dirent))
 			return -1;
 
 		if (libmsfat_lfn_dirent_is_lfn(dirent)) {
 			if (lfn_name != NULL) {
+				if (lfn_name != NULL && lfn_name->max == 0)
+					fioctx->dirent_lfn_start = pos;
+
 				if (libmsfat_lfn_dirent_assemble(lfn_name,dirent))
 					libmsfat_lfn_assembly_init(lfn_name);
 			}
@@ -1167,9 +1174,13 @@ int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct li
 				continue;
 
 			/* found one! */
+			fioctx->dirent_start = pos;
 			break;
 		}
 	} while (1);
+
+	if (lfn_name != NULL && !lfn_name->name_avail)
+		fioctx->dirent_lfn_start = 0;
 
 	return 0;
 }
