@@ -1163,7 +1163,7 @@ int libmsfat_file_io_ctx_readdir(struct libmsfat_file_io_ctx_t *fioctx,struct li
 			if (dirent->a.n.DIR_Name[0] == 0x00)
 				return -1;
 			/* 0xE5, deleted entry */
-			if (dirent->a.n.DIR_Name[0] == 0xE5)
+			if (dirent->a.n.DIR_Name[0] == (char)0xE5)
 				continue;
 
 			/* found one! */
