@@ -1,4 +1,11 @@
 #if defined(_MSC_VER)
+/*hack: Microsoft C++ does not have le32toh() and friends, but Windows is Little Endian anyway*/
+# define le16toh(x) (x)
+# define le32toh(x) (x)
+# define htole32(x) (x)
+# define htole16(x) (x)
+#endif
+#if defined(_MSC_VER)
 /* shut up Microsoft. how the fuck is strerror() unsafe? */
 # define _CRT_SECURE_NO_WARNINGS
 # include <io.h>
@@ -81,9 +88,9 @@ static void lfn_complete(const struct libmsfat_dirent_t *dir) { // non LFN entry
 	else if (cksumerr)
 		fprintf(stderr,"LFN error: Assembled LFN checksum mismatch against 8.3 name\n");
 	else {
-		uint8_t tmp[((5+6+2)*32)+1];
+		uint8_t tmp[((5U+6U+2U)*32U)+1U];
 
-		for (i=0;i < ((5+6+2)*lfn_name_max);i++) {
+		for (i=0;i < ((5U+6U+2U)*lfn_name_max);i++) {
 			uc = lfn_name_assembly[i];
 			if (uc == 0) break;
 
