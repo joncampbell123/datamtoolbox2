@@ -39,7 +39,7 @@ int libpartmbr_context_def_fd_read_sector(struct libpartmbr_context_t *r,uint8_t
 	}
 
 	ofs = (lseek_off_t)sector_number * (lseek_off_t)LIBPARTMBR_SECTOR_SIZE;
-	res = lseek(r->user_fd,ofs,SEEK_SET);
+	res = lseek64(r->user_fd,ofs,SEEK_SET);
 	if (res < (lseek_off_t)0)
 		return -1; // lseek() also sets errno
 	else if (res != ofs) {
@@ -72,7 +72,7 @@ int libpartmbr_context_def_fd_write_sector(struct libpartmbr_context_t *r,const 
 	}
 
 	ofs = (lseek_off_t)sector_number * (lseek_off_t)LIBPARTMBR_SECTOR_SIZE;
-	res = lseek(r->user_fd,ofs,SEEK_SET);
+	res = lseek64(r->user_fd,ofs,SEEK_SET);
 	if (res < (lseek_off_t)0)
 		return -1; // lseek() also sets errno
 	else if (res != ofs) {

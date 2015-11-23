@@ -4,6 +4,12 @@
 # ifndef _CRT_SECURE_NO_WARNINGS
 #  define _CRT_SECURE_NO_WARNINGS
 # endif
+# ifndef _SCL_SECURE_NO_WARNINGS
+#  define _SCL_SECURE_NO_WARNINGS
+# endif
+
+/* shut up! */
+#pragma warning(disable : 4996)
 
 # include <sys/types.h>
 # include <sys/stat.h>
@@ -18,15 +24,7 @@
 # include <errno.h>
 # include <io.h>
 
-# define dup _dup
-# define open _open
-# define read _read
-# define write _write
-# define close _close
-# define isatty _isatty
-# define lseek _lseeki64
-
-/* Microsoft C++ does not have GNU/Linux's naming scheme for strcmpi vs strcasecmp. Oh, and their underscored POSIX fetish too. */
+/* Microsoft C++ does not have GNU/Linux's naming scheme, strcmpi vs strcasecmp. Oh, and their underscored POSIX fetish too. */
 # define strcasecmp strcmpi
 # define strcmpi _strcmpi
 

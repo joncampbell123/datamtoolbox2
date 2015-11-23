@@ -577,7 +577,7 @@ int libmsfat_context_def_fd_read(struct libmsfat_context_t *r,uint8_t *buffer,ui
 	}
 
 	ofs = (lseek_off_t)offset;
-	res = lseek(r->user_fd,ofs,SEEK_SET);
+	res = lseek64(r->user_fd,ofs,SEEK_SET);
 	if (res < (lseek_off_t)0)
 		return -1; // lseek() also sets errno
 	else if (res != ofs) {
@@ -585,7 +585,7 @@ int libmsfat_context_def_fd_read(struct libmsfat_context_t *r,uint8_t *buffer,ui
 		return -1;
 	}
 
-	rd = read(r->user_fd,buffer,len);
+	rd = read(r->user_fd,buffer,(unsigned int)len);
 	if (rd < 0)
 		return -1; // read() also set errno
 	else if ((size_t)rd != len) {
@@ -613,7 +613,7 @@ int libmsfat_context_def_fd_write(struct libmsfat_context_t *r,const uint8_t *bu
 	}
 
 	ofs = (lseek_off_t)offset;
-	res = lseek(r->user_fd,ofs,SEEK_SET);
+	res = lseek64(r->user_fd,ofs,SEEK_SET);
 	if (res < (lseek_off_t)0)
 		return -1; // lseek() also sets errno
 	else if (res != ofs) {
@@ -621,7 +621,7 @@ int libmsfat_context_def_fd_write(struct libmsfat_context_t *r,const uint8_t *bu
 		return -1;
 	}
 
-	rd = write(r->user_fd,buffer,len);
+	rd = write(r->user_fd,buffer,(unsigned int)len);
 	if (rd < 0)
 		return -1; // read() also set errno
 	else if ((size_t)rd != len) {
