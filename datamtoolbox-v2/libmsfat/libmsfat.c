@@ -48,6 +48,7 @@ int libmsfat_sanity_check() {
 	if (sizeof(de.a.lfn) != 32) return -1;
 	if (sizeof(time_e) != 2) return -1;
 	if (sizeof(date_e) != 2) return -1;
+	if (sizeof(struct libmsfat_fat32_fsinfo_t) != 512) return -1;
 
 	/* bitfield tests */
 	time_e.a.raw = 0x01 << 0;

@@ -311,6 +311,19 @@ struct libmsfat_dirent_t {
 #pragma pack(pop)
 #pragma pack()
 
+#pragma pack(push,1)
+struct libmsfat_fat32_fsinfo_t { /* FAT32 FSInfo structure */
+	uint32_t					FSI_LeadSig;		/* offset   +0 = 0x41615252 */
+	uint8_t						FSI_Reserved1[480];	/* offset   +4 */
+	uint32_t					FSI_StrucSig;		/* offset +484 = 0x61417272 */
+	uint32_t					FSI_Free_Count;		/* offset +488 = last known free cluster count */
+	uint32_t					FSI_Nxt_Free;		/* offset +492 = cluster number to scan from when allocating clusters */
+	uint8_t						FSI_Reserved2[12];	/* offset +496 */
+	uint32_t					FSI_TrailSig;		/* offset +508 = 0xAA550000 */
+};										/*=offset +512 */
+#pragma pack(pop)
+#pragma pack()
+
 #define libmsfat_DIR_ATTR_READ_ONLY			(1U << 0U)
 #define libmsfat_DIR_ATTR_HIDDEN			(1U << 1U)
 #define libmsfat_DIR_ATTR_SYSTEM			(1U << 2U)
