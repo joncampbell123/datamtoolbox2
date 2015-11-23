@@ -2,7 +2,7 @@
 #ifndef DATAMTOOLBOXV2_LIBPARTMBR_MBRCTX_H
 #define DATAMTOOLBOXV2_LIBPARTMBR_MBRCTX_H
 
-#if defined(WIN32)
+#if defined(_WIN32)
 # include <windows.h>
 #endif
 
@@ -39,7 +39,7 @@ struct libpartmbr_context_t {
 	void*				user_ptr;
 	uint64_t			user_id;
 	int				user_fd;
-#if defined(WIN32)
+#if defined(_WIN32)
 	HANDLE				user_win32_handle;
 #endif
 	const char*			err_str;	// error string

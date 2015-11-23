@@ -171,7 +171,7 @@ struct libmsfat_context_t {
 	void*						user_ptr;
 	uint64_t					user_id;
 	int						user_fd;
-#if defined(WIN32)
+#if defined(_WIN32)
 	HANDLE						user_win32_handle;
 #endif
 	struct libmsfat_disk_locations_and_info		fatinfo;

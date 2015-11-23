@@ -95,7 +95,7 @@ int libpartmbr_context_init(struct libpartmbr_context_t *r) {
 	if (r == NULL) return -1;
 	memset(r,0,sizeof(*r));
 	r->user_fd = -1;
-#if defined(WIN32)
+#if defined(_WIN32)
 	r->user_win32_handle = INVALID_HANDLE_VALUE;
 #endif
 	return 0;
@@ -108,7 +108,7 @@ void libpartmbr_context_close_file(struct libpartmbr_context_t *r) {
 		close(r->user_fd);
 		r->user_fd = -1;
 	}
-#if defined(WIN32)
+#if defined(_WIN32)
 	if (r->user_win32_handle != INVALID_HANDLE_VALUE) {
 		CloseHandle(r->user_win32_handle);
 		r->user_win32_handle = INVALID_HANDLE_VALUE;

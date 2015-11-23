@@ -2,7 +2,7 @@
 #ifndef DATAMTOOLBOXV2_LIBPARTMBR_PARTMBR_H
 #define DATAMTOOLBOXV2_LIBPARTMBR_PARTMBR_H
 
-#if defined(WIN32)
+#if defined(_WIN32)
 # include <windows.h>
 #endif
 
