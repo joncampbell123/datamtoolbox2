@@ -346,6 +346,12 @@ int main(int argc,char **argv) {
 			fprintf(stderr,"Problem copying FAT table\n");
 	}
 
+	/* FAT32: Need to update free cluster count */
+	if (msfatctx->fatinfo.FAT_size == 32) {
+		if (libmsfat_context_update_fat32_free_cluster_count(msfatctx))
+			fprintf(stderr,"Problem updating FSInfo free cluster count\n");
+	}
+
 	/* done */
 	fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
 	fioctx = libmsfat_file_io_ctx_destroy(fioctx);

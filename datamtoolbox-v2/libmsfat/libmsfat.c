@@ -1608,3 +1608,51 @@ int libmsfat_context_load_fat32_fsinfo(struct libmsfat_context_t *msfatctx,struc
 	return 0;
 }
 
+int libmsfat_context_write_fat32_fsinfo(struct libmsfat_context_t *msfatctx,struct libmsfat_fat32_fsinfo_t *fsinfo) {
+	uint64_t ofs;
+
+	if (msfatctx == NULL || fsinfo == NULL) return -1;
+	if (msfatctx->write == NULL) return -1;
+	if (!msfatctx->fatinfo_set) return -1;
+	if (msfatctx->fatinfo.FAT_size != 32) return -1;
+	if (msfatctx->fatinfo.fat32.BPB_FSInfo == (uint32_t)0UL) return -1;
+
+	ofs = (uint64_t)msfatctx->fatinfo.fat32.BPB_FSInfo *
+		(uint64_t)msfatctx->fatinfo.BytesPerSector;
+	ofs += (uint64_t)msfatctx->partition_byte_offset;
+
+	if (le32toh(fsinfo->FSI_LeadSig) != 0x41615252UL) return -1;
+	if (le32toh(fsinfo->FSI_StrucSig) != 0x61417272UL) return -1;
+	if (le32toh(fsinfo->FSI_TrailSig) != 0xAA550000UL) return -1;
+	if (msfatctx->write(msfatctx,(uint8_t*)fsinfo,ofs,sizeof(*fsinfo)) != 0) return -1;
+
+	return 0;
+}
+
+int libmsfat_context_update_fat32_free_cluster_count(struct libmsfat_context_t *msfatctx) {
+	struct libmsfat_fat32_fsinfo_t fsinfo;
+	libmsfat_FAT_entry_t entry;
+	uint32_t free_count = 0;
+	libmsfat_cluster_t c;
+
+	if (msfatctx == NULL) return -1;
+	if (!msfatctx->fatinfo_set) return -1;
+	if (msfatctx->fatinfo.FAT_size != 32) return -1;
+	if (libmsfat_context_load_fat32_fsinfo(msfatctx,&fsinfo)) return -1;
+
+	for (c=(libmsfat_cluster_t)2UL;c < (libmsfat_cluster_t)msfatctx->fatinfo.Total_clusters;c++) {
+		if (libmsfat_context_read_FAT(msfatctx,&entry,c,0))
+			return -1;
+
+		/* assume FAT32. we made sure of that, remember? */
+		entry &= libmsfat_FAT32_CLUSTER_MASK;
+
+		/* count */
+		if (entry == (libmsfat_FAT_entry_t)0) free_count++;
+	}
+
+	fsinfo.FSI_Free_Count = htole32(free_count);
+	if (libmsfat_context_write_fat32_fsinfo(msfatctx,&fsinfo)) return -1;
+	return 0;
+}
+
