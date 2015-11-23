@@ -154,14 +154,6 @@ int main(int argc,char **argv) {
 		/* valid? */
 		struct libpartmbr_context_entry_t *ent = &ctx->list[(size_t)index];
 
-#if defined(_MSC_VER)
-		// Microsoft Visual Studio 2015: Strange pointer corruption here in x64 builds?!?!?!?!
-		// ctx = (valid pointer)
-		// ctx->list = (valid pointer)
-		// ent = &ctx->list[...] = 0x0000000000000008   (WTF??)
-		assert((uintptr_t)ent >= (uintptr_t)0x1000UL);
-#endif
-
 		if (ent->is_empty) {
 			fprintf(stderr,"You chose an empty MBR partition\n");
 			return 1;
