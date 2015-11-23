@@ -7,10 +7,13 @@ CC := gcc
 CPP := cpp
 CXX := g++
 
+# Linux: ensure lseek64
+CFLAGS_LSEEK64 = -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
+
 # I know GCC 4.8 has -std=gnu++11 but I want a wider 
-CXXFLAGS := -Wall -pedantic -std=gnu++0x -I../..
+CXXFLAGS := -Wall -pedantic -std=gnu++0x -I../.. $(CFLAGS_LSEEK64)
 LDFLAGS := -L.. -L../..
-CFLAGS := -Wall -pedantic -std=gnu99 -I../../
+CFLAGS := -Wall -pedantic -std=gnu99 -I../../ $(CFLAGS_LSEEK64)
 
 all: lib exe
 	for i in $(SUBDIR); do make -C "$$i" all || break; done

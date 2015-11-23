@@ -6,6 +6,15 @@ static lseek_off_t lseek64(int fd, lseek_off_t ofs, int origin) {
 	return (lseek_off_t)_lseeki64(fd, (__int64)ofs, origin);
 }
 #else
+# ifndef _FILE_OFFSET_BITS
+#  pragma message("you need to define _FILE_OFFSET_BITS")
+# elif _FILE_OFFSET_BITS != 64
+#  pragma message("you need to set _FILE_OFFSET_BITS == 64")
+# endif
+# ifndef _LARGEFILE64_SOURCE
+#  pragma message("you need to define _LARGEFILE64_SOURCE")
+# endif
+
 # include <sys/types.h>
 # include <unistd.h>
 # define lseek_off_t off_t
