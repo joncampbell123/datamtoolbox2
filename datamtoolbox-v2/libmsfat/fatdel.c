@@ -327,13 +327,16 @@ int main(int argc,char **argv) {
 	else {
 		/* now delete it.
 		 * at this level we first call to truncate the file to zero, then delete the dirent */
-		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,(uint32_t)0)) {
-			fprintf(stderr,"Failed to truncate file\n");
-			return 1;
+		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,(uint32_t)0) == 0) {
+			if (libmsfat_file_io_ctx_delete_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name) == 0) {
+				/* OK */
+			}
+			else {
+				fprintf(stderr,"Failed to delete file\n");
+			}
 		}
-		if (libmsfat_file_io_ctx_delete_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name)) {
-			fprintf(stderr,"Failed to delete file\n");
-			return 1;
+		else {
+			fprintf(stderr,"Failed to truncate file\n");
 		}
 	}
 
