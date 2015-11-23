@@ -11,6 +11,7 @@
 # include <stdint.h>
 # include <string.h>
 # include <assert.h>
+# include <malloc.h>
 # include <fcntl.h>
 # include <stdio.h>
 # include <ctype.h>
