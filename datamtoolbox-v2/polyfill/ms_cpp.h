@@ -25,6 +25,10 @@
 # define isatty _isatty
 # define lseek _lseeki64
 
+/* Microsoft C++ does not have GNU/Linux's naming scheme for strcmpi vs strcasecmp. Oh, and their underscored POSIX fetish too. */
+# define strcasecmp strcmpi
+# define strcmpi _strcmpi
+
 /* Microsoft C++ does not have le32toh() and friends, but Windows is Little Endian anyway*/
 # ifndef le16toh
 #  define le16toh(x) (x)
