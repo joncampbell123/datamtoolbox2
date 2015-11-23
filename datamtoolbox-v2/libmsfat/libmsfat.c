@@ -1587,3 +1587,24 @@ int libmsfat_context_copy_FAT(struct libmsfat_context_t *msfatctx,unsigned int d
 	return 0;
 }
 
+int libmsfat_context_load_fat32_fsinfo(struct libmsfat_context_t *msfatctx,struct libmsfat_fat32_fsinfo_t *fsinfo) {
+	uint64_t ofs;
+
+	if (msfatctx == NULL || fsinfo == NULL) return -1;
+	if (msfatctx->read == NULL) return -1;
+	if (!msfatctx->fatinfo_set) return -1;
+	if (msfatctx->fatinfo.FAT_size != 32) return -1;
+	if (msfatctx->fatinfo.fat32.BPB_FSInfo == (uint32_t)0UL) return -1;
+
+	ofs = (uint64_t)msfatctx->fatinfo.fat32.BPB_FSInfo *
+		(uint64_t)msfatctx->fatinfo.BytesPerSector;
+	ofs += (uint64_t)msfatctx->partition_byte_offset;
+
+	if (msfatctx->read(msfatctx,(uint8_t*)fsinfo,ofs,sizeof(*fsinfo)) != 0) return -1;
+	if (le32toh(fsinfo->FSI_LeadSig) != 0x41615252UL) return -1;
+	if (le32toh(fsinfo->FSI_StrucSig) != 0x61417272UL) return -1;
+	if (le32toh(fsinfo->FSI_TrailSig) != 0xAA550000UL) return -1;
+
+	return 0;
+}
+

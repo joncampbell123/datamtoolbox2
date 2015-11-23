@@ -43,6 +43,7 @@ static void field2str(char *dst,size_t dstlen,const uint8_t *src,const size_t sr
 int main(int argc,char **argv) {
 	struct libmsfat_disk_locations_and_info locinfo;
 	struct libmsfat_context_t *msfatctx = NULL;
+	struct libmsfat_fat32_fsinfo_t fsinfo;
 	uint32_t first_lba=0,size_lba=0;
 	const char *s_partition = NULL;
 	const char *s_image = NULL;
@@ -405,6 +406,20 @@ int main(int argc,char **argv) {
 				printf("        * Volume is marked as dirty. Run CHKDSK/SCANDISK on the volume to repair\n");
 			if (!(fatent & libmsfat_FAT16_DIRTYFLAG_NOIOERROR))
 				printf("        * Volume is marked as having had an I/O error. Run CHKDSK/SCANDISK on the volume to repair\n");
+		}
+
+		if (locinfo.FAT_size == 32) {
+			if (libmsfat_context_load_fat32_fsinfo(msfatctx,&fsinfo) == 0) {
+				printf("    FAT32 FSInfo:\n");
+				printf("        FSI_LeadSig:           0x%08lx\n",(unsigned long)le32toh(fsinfo.FSI_LeadSig));
+				printf("        FSI_StrucSig:          0x%08lx\n",(unsigned long)le32toh(fsinfo.FSI_StrucSig));
+				printf("        FSI_Free_Count:        0x%08lx clusters\n",(unsigned long)le32toh(fsinfo.FSI_Free_Count));
+				printf("        FSI_Nxt_Free:          0x%08lx cluster\n",(unsigned long)le32toh(fsinfo.FSI_Nxt_Free));
+				printf("        FSI_TrailSig:          0x%08lx\n",(unsigned long)le32toh(fsinfo.FSI_TrailSig));
+			}
+			else {
+				printf("    (not able to load FSInfo)\n");
+			}
 		}
 	}
 
