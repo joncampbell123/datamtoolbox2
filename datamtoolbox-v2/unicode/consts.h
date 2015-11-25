@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 
+typedef uint16_t utf16_char_t;
 typedef uint32_t unicode_char_t;
 
 #ifndef UNICODE_BOM
