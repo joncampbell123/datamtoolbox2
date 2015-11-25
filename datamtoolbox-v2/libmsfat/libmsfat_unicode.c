@@ -29,67 +29,63 @@
 
 void libmsfat_dirent_lfn_to_str_utf8(char *buf,size_t buflen,const struct libmsfat_lfn_assembly_t *lfn_name) {
 	const uint16_t *s,*se;
-	char *bufend,*d;
+	char *d,*de;
 
-	if (buf == NULL || buflen <= (size_t)13) return;
-	bufend = buf + buflen - 1;
+	if (buf == NULL || buflen == (size_t)0) return;
+
 	d = buf;
-
+	de = d + buflen - 1;
 	if (lfn_name == NULL) {
 		*d = 0;
-		return;
 	}
-	if (!lfn_name->name_avail) {
+	else if (!lfn_name->name_avail) {
 		*d = 0;
-		return;
 	}
+	else {
+		s = lfn_name->assembly;
+		se = s + ((5U+6U+2U)*lfn_name->name_avail);
+		assert((char*)se <= (((char*)lfn_name->assembly) + sizeof(lfn_name->assembly)));
 
-	s = lfn_name->assembly;
-	se = s + ((5U+6U+2U)*lfn_name->name_avail);
-	assert((char*)se <= (((char*)lfn_name->assembly) + sizeof(lfn_name->assembly)));
+		while (s < se && d < de) {
+			if (*s == 0) break;
 
-	while (s < se && d < bufend) {
-		if (*s == 0) break;
-
-		/* TODO: does the FAT Long Filename scheme support UTF16 surrogate pairs? */
-		utf8_encode(&d,bufend,(unicode_char_t)(*s++));
+			/* TODO: does the FAT Long Filename scheme support UTF16 surrogate pairs? */
+			utf8_encode(&d,de,(unicode_char_t)le16toh(*s));
+			s++; // le16toh might be a macro, not a good idea to do *s++ within it
+		}
 	}
 
 	*d = 0;
-	assert(d <= bufend);
+	assert(d <= de);
 }
 
 void libmsfat_dirent_lfn_to_str_utf16le(char *buf,size_t buflen,const struct libmsfat_lfn_assembly_t *lfn_name) {
 	const uint16_t *s,*se;
-	char *bufend,*d;
+	uint16_t *d,*de;
 
-	if (buf == NULL || buflen <= (size_t)13) return;
-	bufend = buf + buflen - 2;
-	d = buf;
+	if (buf == NULL || buflen <= (size_t)1U) return;
 
+	d = (uint16_t*)buf;
+	de = d + (buflen >> (size_t)1U) - 1U;
 	if (lfn_name == NULL) {
-		*d = 0;
-		return;
+		*d = 0U;
 	}
-	if (!lfn_name->name_avail) {
-		*d = 0;
-		return;
+	else if (!lfn_name->name_avail) {
+		*d = 0U;
 	}
+	else {
+		s = lfn_name->assembly;
+		se = s + ((5U+6U+2U)*lfn_name->name_avail);
+		assert((char*)se <= (((char*)lfn_name->assembly) + sizeof(lfn_name->assembly)));
 
-	s = lfn_name->assembly;
-	se = s + ((5U+6U+2U)*lfn_name->name_avail);
-	assert((char*)se <= (((char*)lfn_name->assembly) + sizeof(lfn_name->assembly)));
-
-	while (s < se && d < bufend) {
-		if (*s == 0) break;
-
-		/* TODO: does the FAT Long Filename scheme support UTF16 surrogate pairs? */
-		utf16le_encode(&d,bufend,(unicode_char_t)(*s++));
+		while (s < se && d < de) {
+			if (*s == 0) break;
+			*d++ = *s++; // we're copying UTF16LE to UTF16LE, no conversion needed
+		}
 	}
 
-	*d++ = 0;
 	*d = 0;
-	assert(d <= bufend);
+	assert(d <= de);
 }
 
 int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,const char *name,unsigned int flags) {
