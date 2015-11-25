@@ -99,3 +99,20 @@ unicode_char_t utf16le_decode(const char **ptr,const char *fence) {
 	return ret;
 }
 
+unicode_char_t utf16_decode_surrogate_pair(uint16_t hi,uint16_t lo) {
+	if (!utf16_is_surrogate_pair_start((unicode_char_t)hi) || !utf16_is_surrogate_pair_end((unicode_char_t)lo))
+		return (unicode_char_t)0UL;
+
+	return	(((unicode_char_t)(hi & (uint16_t)0x3FFU)) << (unicode_char_t)10UL) +
+		 ((unicode_char_t)(lo & (uint16_t)0x3FFU)) +
+		 ((unicode_char_t)0x10000UL);
+}
+
+int utf16_is_surrogate_pair_start(const uint16_t c) {
+	return ((c & (uint16_t)0xFC00U) == (uint16_t)0xD800U);
+}
+
+int utf16_is_surrogate_pair_end(const uint16_t c) {
+	return ((c & (uint16_t)0xFC00U) == (uint16_t)0xDC00U);
+}
+
