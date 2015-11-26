@@ -182,7 +182,9 @@ void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_
 	/* truncate, if possible (if the directory is based on a cluster chain) */
 	if (fioctx->is_cluster_chain) {
 		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,dir_dirent,NULL,truncate))
-			fprintf(stderr,"ERROR: failed to truncate directory\n");
+			fprintf(stderr,"ERROR: failed to truncate directory (truncate point=%lu first_cluster=%lu)\n",
+				(unsigned long)truncate,
+				(unsigned long)fioctx->first_cluster);
 	}
 }
 
