@@ -30,6 +30,58 @@
 static unsigned char			sectorbuf[512];
 static unsigned char			buffer[4096];
 
+void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx) {
+	struct libmsfat_dirent_t dirent;
+	uint32_t truncate=0;
+	uint32_t ro=0,wo=0;
+
+	while (1) {
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,ro))
+			break;
+		if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != ro)
+			break;
+		if (libmsfat_file_io_ctx_read(fioctx,msfatctx,&dirent,sizeof(dirent)) != sizeof(dirent))
+			break;
+
+		/* skip empty/deleted dirent entries */
+		if (dirent.a.n.DIR_Name[0] == 0x00 || dirent.a.n.DIR_Name[0] == (char)0xE5) {
+			ro += (uint32_t)sizeof(dirent);
+			continue;
+		}
+
+		/* if ro != wo, move the dirent back */
+		if (ro != wo) {
+			if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,wo))
+				break;
+			if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != wo)
+				break;
+			if (libmsfat_file_io_ctx_write(fioctx,msfatctx,&dirent,sizeof(dirent)) != sizeof(dirent))
+				break;
+		}
+
+		ro += (uint32_t)sizeof(dirent);
+		wo += (uint32_t)sizeof(dirent);
+	}
+
+	/* take note where the write pointer is. we will truncate there after zeroing the directory */
+	truncate = wo;
+
+	/* fill out the rest of the directory with zeros */
+	memset(&dirent,0,sizeof(dirent));
+	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,wo))
+		return;
+	if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != wo)
+		return;
+	while (libmsfat_file_io_ctx_write(fioctx,msfatctx,&dirent,sizeof(dirent)) == sizeof(dirent))
+		{ };
+
+	/* truncate, if possible (if the directory is based on a cluster chain) */
+	if (fioctx->is_cluster_chain) {
+		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,NULL,NULL,truncate))
+			fprintf(stderr,"ERROR: failed to truncate directory\n");
+	}
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_disk_locations_and_info locinfo;
 	struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
@@ -248,6 +300,12 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"Cannot alloc FIO ctx\n");
 		return 1;
 	}
+
+	printf("Scanning directory structure, to clean and repack diretories\n");
+	if (libmsfat_file_io_ctx_assign_root_directory_with_parent(fioctx,fioctx_parent,msfatctx) == 0)
+		clean_directory(fioctx,fioctx_parent,msfatctx);
+	else
+		fprintf(stderr,"Unable to assign root directory\n");
 
 	bytes_per_cluster = libmsfat_context_get_cluster_size(msfatctx);
 	if (bytes_per_cluster == (uint32_t)0) {
