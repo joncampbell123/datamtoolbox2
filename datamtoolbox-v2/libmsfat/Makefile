@@ -1,5 +1,5 @@
 SUBDIR=
-TARGET_EXE=fatinfo fatinfo2 tabldump dcluster dumpdir fio1 fio2 fio3 fio4 fio5 fatdel
+TARGET_EXE=fatinfo fatinfo2 tabldump dcluster dumpdir fio1 fio2 fio3 fio4 fio5 fatdel zerofree
 TARGET_LIB=libmsfat.a
 
 AR := ar
@@ -18,7 +18,7 @@ CFLAGS := -Wall -pedantic -std=gnu99 -I../../ $(CFLAGS_LSEEK64)
 all: lib exe
 	for i in $(SUBDIR); do make -C "$$i" all || break; done
 
-exe: lib fatinfo fatinfo2 tabldump dcluster dumpdir fio1 fio2 fio3 fio4 fio5 fatdel
+exe: lib fatinfo fatinfo2 tabldump dcluster dumpdir fio1 fio2 fio3 fio4 fio5 fatdel zerofree
 	for i in $(SUBDIR); do make -C "$$i" exe || break; done
 
 lib: $(LIBINT13CHS) $(LIBPARTMBR) libmsfat.a
@@ -137,5 +137,12 @@ fatdel: fatdel.o libmsfat.a libmsfat_unicode.a $(LIBINT13CHS) $(LIBPARTMBR) $(LI
 	$(CC) -o $@ $^ libmsfat.a libmsfat_unicode.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
 
 fatdel.o: fatdel.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+#--------------------------------------
+zerofree: zerofree.o libmsfat.a libmsfat_unicode.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE)
+	$(CC) -o $@ $^ libmsfat.a libmsfat_unicode.a $(LIBINT13CHS) $(LIBPARTMBR) $(LIBUNICODE) $(LDFLAGS)
+
+zerofree.o: zerofree.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 

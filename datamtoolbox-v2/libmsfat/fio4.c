@@ -177,15 +177,7 @@ int main(int argc,char **argv) {
 		ctx = libpartmbr_context_destroy(ctx);
 	}
 	else {
-		lseek_off_t x;
-
 		first_lba = 0;
-
-		x = lseek(fd,0,SEEK_END);
-		if (x < (lseek_off_t)0) x = 0;
-		x /= (lseek_off_t)512UL;
-		if (x > (lseek_off_t)0xFFFFFFFFUL) x = (lseek_off_t)0xFFFFFFFFUL;
-		lseek(fd,0,SEEK_SET);
 	}
 
 	{

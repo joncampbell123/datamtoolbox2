@@ -28,23 +28,20 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
 static unsigned char			sectorbuf[512];
-static unsigned char			buffer[800];
+static unsigned char			buffer[4096];
 
 int main(int argc,char **argv) {
 	struct libmsfat_disk_locations_and_info locinfo;
 	struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
 	struct libmsfat_file_io_ctx_t *fioctx = NULL;
 	struct libmsfat_context_t *msfatctx = NULL;
-	struct libmsfat_lfn_assembly_t lfn_name;
-	struct libmsfat_dirent_t dirent;
+	uint32_t first_lba=0,size_lba=0;
 	const char *s_partition = NULL;
-	const char *s_trunc = NULL;
+	libmsfat_FAT_entry_t fatent;
+	uint32_t bytes_per_cluster;
 	const char *s_image = NULL;
-	const char *s_path = NULL;
-	const char *s_out = NULL;
-	uint32_t first_lba=0;
-	int i,fd,out_fd=-1;
-	uint32_t trunc=0;
+	libmsfat_cluster_t cluster;
+	int i,fd;
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -57,15 +54,6 @@ int main(int argc,char **argv) {
 			}
 			else if (!strcmp(a,"partition")) {
 				s_partition = argv[i++];
-			}
-			else if (!strcmp(a,"path")) {
-				s_path = argv[i++];
-			}
-			else if (!strcmp(a,"o") || !strcmp(a,"out")) {
-				s_out = argv[i++];
-			}
-			else if (!strcmp(a,"t")) {
-				s_trunc = argv[i++];
 			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
@@ -83,13 +71,11 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	if (s_image == NULL || s_path == NULL) {
-		fprintf(stderr,"fatinfo --image <image> ...\n");
+	if (s_image == NULL) {
+		fprintf(stderr,"zerofree --image <image> ...\n");
+		fprintf(stderr,"zero out all areas of the disk/partition that are not allocated by the filesystem.\n");
 		fprintf(stderr,"\n");
 		fprintf(stderr,"--partition <n>          Hard disk image, use partition N from the MBR\n");
-		fprintf(stderr,"--path <x>               File/dir to look up\n");
-		fprintf(stderr,"-t <n>                   Truncate file to N bytes, don't delete\n");
-		fprintf(stderr,"-o <file>                Dump directory to file\n");
 		return 1;
 	}
 
@@ -106,9 +92,6 @@ int main(int argc,char **argv) {
 			return 1;
 		}
 	}
-
-	if (s_trunc != NULL)
-		trunc = (uint32_t)strtoul(s_trunc,NULL,0);
 
 	if (s_partition != NULL) {
 		struct libpartmbr_context_t *ctx = NULL;
@@ -179,14 +162,33 @@ int main(int argc,char **argv) {
 			fprintf(stderr,"MBR type does not suggest a FAT filesystem\n");
 			return 1;
 		}
+		if (ent->entry.number_lba_sectors == (uint32_t)0) {
+			fprintf(stderr,"Partition has no size\n");
+			return 1;
+		}
 		first_lba = ent->entry.first_lba_sector;
+		size_lba = ent->entry.number_lba_sectors;
 
 		/* done */
 		ctx = libpartmbr_context_destroy(ctx);
 	}
 	else {
+		lseek_off_t x;
+
 		first_lba = 0;
+
+		x = lseek(fd,0,SEEK_END);
+		if (x < (lseek_off_t)0) x = 0;
+		x /= (lseek_off_t)512UL;
+		if (x > (lseek_off_t)0xFFFFFFFFUL) x = (lseek_off_t)0xFFFFFFFFUL;
+		size_lba = (uint32_t)x;
+		lseek(fd,0,SEEK_SET);
 	}
+
+	printf("Reading from disk sectors %lu-%lu (%lu sectors)\n",
+		(unsigned long)first_lba,
+		(unsigned long)first_lba+(unsigned long)size_lba-(unsigned long)1UL,
+		(unsigned long)size_lba);
 
 	{
 		lseek_off_t x = (lseek_off_t)first_lba * (lseek_off_t)512UL;
@@ -247,81 +249,61 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	/* look up the path. this should give us two fioctx's, one for the parent dir, and one for the file itself */
-	if (libmsfat_file_io_ctx_path_lookup(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,s_path,0/*default*/)) {
-		fprintf(stderr,"Path lookup failed\n");
+	bytes_per_cluster = libmsfat_context_get_cluster_size(msfatctx);
+	if (bytes_per_cluster == (uint32_t)0) {
+		fprintf(stderr,"Unable to determine bytes per cluster\n");
 		return 1;
 	}
 
-	/* dump file contents before deleting, if instructed */
-	if (s_out != NULL) {
-		int rd;
+	printf("Scanning FAT table and zeroing unallocated clusters.\n");
+	for (cluster=(libmsfat_cluster_t)2;cluster < msfatctx->fatinfo.Total_clusters;cluster++) {
+		int percent;
 
-		fprintf(stderr,"Prior to deleting file, dumping to %s\n",s_out);
-
-		out_fd = open(s_out,O_CREAT|O_TRUNC|O_BINARY|O_WRONLY,0644);
-		if (out_fd < 0) {
-			fprintf(stderr,"Failed to create dump file, %s\n",strerror(errno));
-			return 1;
+		if (libmsfat_context_read_FAT(msfatctx,&fatent,cluster,0)) {
+			fprintf(stderr,"\nERROR: unable to read FAT table entry #%lu\n",
+				(unsigned long)cluster);
+			continue;
 		}
 
-		while ((rd=libmsfat_file_io_ctx_read(fioctx,msfatctx,buffer,sizeof(buffer))) > 0)
-			write(out_fd,buffer,rd);
+		percent = (int)(((uint64_t)cluster * (uint64_t)100UL) / msfatctx->fatinfo.Total_clusters);
 
-		close(out_fd);
-		out_fd = -1;
-	}
-
-	if (fioctx->is_directory) {
-		int files = 0;
-
-		if (libmsfat_dirent_is_dot_dir(&dirent)) {
-			printf("I refuse to modify . and .. directory entries\n");
-			return 1;
+		if (((uint32_t)cluster & 0xFF) == (uint32_t)0) {
+			printf("\x0D" "Reading cluster %lu / %lu (%%%u) ",
+				(unsigned long)cluster,
+				(unsigned long)msfatctx->fatinfo.Total_clusters,
+				percent);
+			fflush(stdout);
 		}
 
-		printf("Path refers to a directory. Scanning directory to make sure no files remain.\n");
+		if (cluster < (libmsfat_cluster_t)2UL) {
+			uint32_t sz = bytes_per_cluster,wr;
+			uint64_t offset;
 
-		while (libmsfat_file_io_ctx_readdir(fioctx,msfatctx,&lfn_name,&dirent) == 0) {
-			if (!libmsfat_dirent_is_dot_dir(&dirent)) {
-				if (!(dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID))
-					files++;
+			/* cluster is free! zero it! */
+			if (libmsfat_context_get_cluster_offset(msfatctx,&offset,cluster)) {
+				fprintf(stderr,"\nERROR: unable to locate cluster #%lu\n",
+					(unsigned long)cluster);
+				continue;
+			}
+
+			memset(buffer,0,sizeof(buffer));
+			while (sz != (uint32_t)0) {
+				if (sz > sizeof(buffer))
+					wr = sizeof(buffer);
+				else
+					wr = sz;
+
+				if (msfatctx->write(msfatctx,buffer,offset,(size_t)wr)) {
+					fprintf(stderr,"\nERROR: write error to offset %llu\n",(unsigned long long)offset);
+					break;
+				}
+
+				offset += (uint64_t)wr;
+				sz -= wr;
 			}
 		}
-
-		if (files != 0) {
-			printf("%u files remain. Will not delete or truncate directory\n",files);
-			return 1;
-		}
-
-		printf("Directory is empty. Proceeding to delete.\n");
 	}
-
-	if (s_trunc != NULL) {
-		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,trunc)) {
-			fprintf(stderr,"Failed to truncate file\n");
-			return 1;
-		}
-
-		printf("File has been truncated to %lu bytes (asked for %lu)\n",
-			(unsigned long)fioctx->file_size,
-			(unsigned long)trunc);
-	}
-	else {
-		/* now delete it.
-		 * at this level we first call to truncate the file to zero, then delete the dirent */
-		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,(uint32_t)0) == 0) {
-			if (libmsfat_file_io_ctx_delete_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name) == 0) {
-				/* OK */
-			}
-			else {
-				fprintf(stderr,"Failed to delete file\n");
-			}
-		}
-		else {
-			fprintf(stderr,"Failed to truncate file\n");
-		}
-	}
+	printf("\nDone!\n");
 
 	/* this code focuses on FAT table #0. make sure to copy FAT 0 to FAT 1/2/3 etc. */
 	for (i=1;i < (int)msfatctx->fatinfo.FAT_tables;i++) {
