@@ -27,8 +27,54 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
+static unsigned char			zero_by_holepunch = 0;
+
 static unsigned char			sectorbuf[512];
 static unsigned char			buffer[4096];
+
+int holepunch(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
+#if defined(_LINUX) && defined(FALLOC_FL_PUNCH_HOLE)
+	if (msfatctx->user_fd < 0) return -1;
+	if (fallocate(msfatctx->user_fd,FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE,(off_t)offset,(off_t)sz)) {
+		if (errno == ENOSYS)
+			fprintf(stderr,"Filesystem does not support punching holes\n");
+		else
+			fprintf(stderr,"holepunch failed, offset=%llu sz=%llu %s\n",(unsigned long long)offset,(unsigned long long)sz,strerror(errno));
+
+		zero_by_holepunch = 0;
+		return -1;
+	}
+
+	return 0;
+#endif
+
+	return -1;
+}
+
+void zero_write(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
+	size_t wr;
+
+	memset(buffer,0,sizeof(buffer));
+	while (sz != (uint64_t)0UL) {
+		if (sz > sizeof(buffer))
+			wr = sizeof(buffer);
+		else
+			wr = sz;
+
+		if (msfatctx->write(msfatctx,buffer,offset,(size_t)wr)) {
+			fprintf(stderr,"\nERROR: write error to offset %llu\n",(unsigned long long)offset);
+			break;
+		}
+
+		offset += (uint64_t)wr;
+		sz -= wr;
+	}
+}
+
+void do_zero(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
+	if (zero_by_holepunch && holepunch(msfatctx,offset,sz) == 0) return; /* if hole punching worked.. */
+	zero_write(msfatctx,offset,sz);
+}
 
 void clean_file_cluster_tip(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
 	uint32_t bytes_per_cluster;
@@ -50,39 +96,20 @@ void clean_file_cluster_tip(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfa
 	/* if the file size is not a multiple of the cluster size, then we need to zero the last cluster beyond
 	 * the end of the file. */
 	if (fioctx->file_size % bytes_per_cluster) {
-		libmsfat_cluster_t cluster;
 		uint32_t partial = fioctx->file_size % bytes_per_cluster;
 		uint32_t sz = bytes_per_cluster - partial;
 		uint64_t offset;
-		uint32_t wr;
 
 		/* locate the cluster */
 		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size))
 			return;
 		if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != fioctx->file_size)
 			return;
-		cluster = fioctx->cluster_position;
-		if (libmsfat_context_get_cluster_offset(msfatctx,&offset,cluster))
+		if (libmsfat_context_get_cluster_offset(msfatctx,&offset,fioctx->cluster_position))
 			return;
 
 		printf("....clearing %lu bytes in the cluster tip\n",(unsigned long)sz);
-
-		offset += partial;
-		memset(buffer,0,sizeof(buffer));
-		while (sz != (uint32_t)0) {
-			if (sz > sizeof(buffer))
-				wr = sizeof(buffer);
-			else
-				wr = sz;
-
-			if (msfatctx->write(msfatctx,buffer,offset,(size_t)wr)) {
-				fprintf(stderr,"\nERROR: write error to offset %llu\n",(unsigned long long)offset);
-				break;
-			}
-
-			offset += (uint64_t)wr;
-			sz -= wr;
-		}
+		do_zero(msfatctx,offset+partial,sz);
 	}
 }
 
@@ -214,6 +241,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"partition")) {
 				s_partition = argv[i++];
 			}
+			else if (!strcmp(a,"hole-punch")) {
+				zero_by_holepunch = 1;
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -235,6 +265,9 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"zero out all areas of the disk/partition that are not allocated by the filesystem.\n");
 		fprintf(stderr,"\n");
 		fprintf(stderr,"--partition <n>          Hard disk image, use partition N from the MBR\n");
+		fprintf(stderr,"--hole-punch             Zero unused spaces by hole punching (making the file sparse).\n");
+		fprintf(stderr,"                         This can allow zeroing the empty spaces a LOT faster, only if\n");
+		fprintf(stderr,"                         supported by the filesystem.\n");
 		return 1;
 	}
 
@@ -445,7 +478,6 @@ int main(int argc,char **argv) {
 		}
 
 		if (fatent == (libmsfat_FAT_entry_t)0UL) {
-			uint32_t sz = bytes_per_cluster,wr;
 			uint64_t offset;
 
 			/* cluster is free! zero it! */
@@ -455,22 +487,7 @@ int main(int argc,char **argv) {
 				continue;
 			}
 
-			memset(buffer,0,sizeof(buffer));
-			while (sz != (uint32_t)0) {
-				if (sz > sizeof(buffer))
-					wr = sizeof(buffer);
-				else
-					wr = sz;
-
-				if (msfatctx->write(msfatctx,buffer,offset,(size_t)wr)) {
-					fprintf(stderr,"\nERROR: write error to offset %llu\n",(unsigned long long)offset);
-					break;
-				}
-
-				offset += (uint64_t)wr;
-				sz -= wr;
-			}
-
+			do_zero(msfatctx,offset,bytes_per_cluster);
 			zeroed_clusters++;
 		}
 	}
