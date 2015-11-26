@@ -32,7 +32,7 @@ static unsigned char			zero_by_holepunch = 0;
 static unsigned char			sectorbuf[512];
 static unsigned char			buffer[4096];
 
-int holepunch(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
+static int holepunch(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
 #if defined(_LINUX) && defined(FALLOC_FL_PUNCH_HOLE)
 	if (msfatctx->user_fd < 0) return -1;
 	if (fallocate(msfatctx->user_fd,FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE,(off_t)offset,(off_t)sz)) {
@@ -51,7 +51,7 @@ int holepunch(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
 	return -1;
 }
 
-void zero_write(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
+static void zero_write(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
 	size_t wr;
 
 	memset(buffer,0,sizeof(buffer));
@@ -71,12 +71,12 @@ void zero_write(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz)
 	}
 }
 
-void do_zero(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
+static void do_zero(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
 	if (zero_by_holepunch && holepunch(msfatctx,offset,sz) == 0) return; /* if hole punching worked.. */
 	zero_write(msfatctx,offset,sz);
 }
 
-void clean_file_cluster_tip(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
+static void clean_file_cluster_tip(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
 	uint32_t bytes_per_cluster;
 
 	/* files by definition are a cluster chain */
@@ -113,7 +113,7 @@ void clean_file_cluster_tip(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfa
 	}
 }
 
-void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
+static void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
 	struct libmsfat_dirent_t dirent;
 	uint32_t last_ro_end=0;
 	uint32_t truncate=0;
