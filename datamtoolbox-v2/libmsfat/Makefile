@@ -18,8 +18,8 @@ CFLAGS := -Wall -pedantic -std=gnu99 -I../../ $(CFLAGS_LSEEK64)
 # identify Linux
 uname = $(shell uname -o)
 ifeq ($(uname),GNU/Linux)
-CXXFLAGS += -D_LINUX
-CFLAGS += -D_LINUX
+CXXFLAGS += -D_LINUX -D_GNU_SOURCE
+CFLAGS += -D_LINUX -D_GNU_SOURCE
 endif
 
 all: lib exe
