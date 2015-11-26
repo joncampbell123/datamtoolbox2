@@ -15,6 +15,13 @@ CXXFLAGS := -Wall -pedantic -std=gnu++0x -I../.. $(CFLAGS_LSEEK64)
 LDFLAGS := -L.. -L../..
 CFLAGS := -Wall -pedantic -std=gnu99 -I../../ $(CFLAGS_LSEEK64)
 
+# identify Linux
+uname = $(shell uname -o)
+ifeq ($(uname),GNU/Linux)
+CXXFLAGS += -D_LINUX
+CFLAGS += -D_LINUX
+endif
+
 all: lib exe
 	for i in $(SUBDIR); do make -C "$$i" all || break; done
 
