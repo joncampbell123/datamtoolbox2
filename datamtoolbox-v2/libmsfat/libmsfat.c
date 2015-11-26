@@ -1033,6 +1033,16 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 	return 0;
 }
 
+int libmsfat_file_io_ctx_assign_root_directory_with_parent(struct libmsfat_file_io_ctx_t *c,struct libmsfat_file_io_ctx_t *cp,struct libmsfat_context_t *msfatctx) {
+	if (libmsfat_file_io_ctx_assign_root_directory(c,msfatctx))
+		return -1;
+
+	// parent at first represents a virtual "parent" of the root directory
+	libmsfat_file_io_ctx_init(cp);
+	cp->is_root_parent = 1;
+	return 0;
+}
+
 int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx) {
 	if (c == NULL || msfatctx == NULL) return -1;
 	libmsfat_file_io_ctx_close(c);
