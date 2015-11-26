@@ -35,6 +35,31 @@ void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_
 	uint32_t truncate=0;
 	uint32_t ro=0,wo=0;
 
+	/* scan the directory. we need to recurse into subdirectories. */
+	if (libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,NULL) == 0) {
+		while (libmsfat_file_io_ctx_readdir(fioctx,msfatctx,NULL,&dirent) == 0) {
+			if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID)
+				continue;
+			if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY) {
+				struct libmsfat_file_io_ctx_t *subfioctx;
+
+				subfioctx = libmsfat_file_io_ctx_create();
+				if (subfioctx != NULL) {
+					{
+						char tmp[64];
+
+						tmp[0] = 0; libmsfat_dirent_filename_to_str(tmp,sizeof(tmp),&dirent);
+						printf("...cleaning subdir '%s'\n",tmp);
+					}
+
+					clean_directory(subfioctx,fioctx,msfatctx,&dirent);
+					subfioctx = libmsfat_file_io_ctx_destroy(subfioctx);
+				}
+			}
+		}
+	}
+
+	/* scan the directory again, copying items back to fill in deleted and empty entries */
 	while (1) {
 		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,ro))
 			break;
