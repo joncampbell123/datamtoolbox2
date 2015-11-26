@@ -30,31 +30,47 @@
 static unsigned char			sectorbuf[512];
 static unsigned char			buffer[4096];
 
+void clean_file_cluster_tip(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
+	// TODO
+}
+
 void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
 	struct libmsfat_dirent_t dirent;
+	uint32_t last_ro_end=0;
 	uint32_t truncate=0;
 	uint32_t ro=0,wo=0;
 
 	/* scan the directory. we need to recurse into subdirectories. */
 	if (libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,NULL) == 0) {
 		while (libmsfat_file_io_ctx_readdir(fioctx,msfatctx,NULL,&dirent) == 0) {
+			struct libmsfat_file_io_ctx_t *subfioctx;
+
 			if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_VOLUME_ID)
 				continue;
-			if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY) {
-				struct libmsfat_file_io_ctx_t *subfioctx;
+			if ((dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY) && libmsfat_dirent_is_dot_dir(&dirent))
+				continue;
 
-				subfioctx = libmsfat_file_io_ctx_create();
-				if (subfioctx != NULL) {
-					{
-						char tmp[64];
+			subfioctx = libmsfat_file_io_ctx_create();
+			if (subfioctx != NULL && libmsfat_file_io_ctx_assign_from_dirent(subfioctx,msfatctx,&dirent) == 0) {
+				{
+					char tmp[64];
 
-						tmp[0] = 0; libmsfat_dirent_filename_to_str(tmp,sizeof(tmp),&dirent);
-						printf("...cleaning subdir '%s'\n",tmp);
-					}
+					tmp[0] = 0; libmsfat_dirent_filename_to_str(tmp,sizeof(tmp),&dirent);
+					printf("...cleaning ");
+					if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
+						printf("subdirectory ");
+					else
+						printf("file cluster tip in ");
 
-					clean_directory(subfioctx,fioctx,msfatctx,&dirent);
-					subfioctx = libmsfat_file_io_ctx_destroy(subfioctx);
+					printf("'%s'\n",tmp);
 				}
+
+				if (dirent.a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
+					clean_directory(subfioctx,fioctx,msfatctx,&dirent);
+				else
+					clean_file_cluster_tip(subfioctx,fioctx,msfatctx,&dirent);
+
+				subfioctx = libmsfat_file_io_ctx_destroy(subfioctx);
 			}
 		}
 	}
@@ -86,10 +102,19 @@ void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_
 
 		ro += (uint32_t)sizeof(dirent);
 		wo += (uint32_t)sizeof(dirent);
+		last_ro_end = ro;
 	}
 
+	/* if we removed anything, say so (NTS: the above code should always cause wo < ro) */
+	if (last_ro_end != wo)
+		printf("Removed %lu empty/deleted directory entries\n",
+			((unsigned long)(last_ro_end-wo)) / (unsigned long)sizeof(dirent));
+
 	/* take note where the write pointer is. we will truncate there after zeroing the directory.
-	 * but, do not truncate the directory to zero! */
+	 * but, do not truncate the directory to zero! it is not specified in Microsoft's standards
+	 * document whether an empty directory is given at minimum one cluster, or whether it is not
+	 * given any clusters and the starting cluster is zero (like a file). to be safe, we do not
+	 * allow truncating to zero. */
 	truncate = wo;
 	if (truncate == (uint32_t)0) truncate = (uint32_t)sizeof(dirent);
 
@@ -328,7 +353,7 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	printf("Scanning directory structure, to clean and repack diretories\n");
+	printf("Scanning directory structure, to clean and repack diretories and zero file cluster tips\n");
 	if (libmsfat_file_io_ctx_assign_root_directory_with_parent(fioctx,fioctx_parent,msfatctx) == 0)
 		clean_directory(fioctx,fioctx_parent,msfatctx,NULL);
 	else
