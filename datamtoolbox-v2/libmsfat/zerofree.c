@@ -30,7 +30,7 @@
 static unsigned char			sectorbuf[512];
 static unsigned char			buffer[4096];
 
-void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx) {
+void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
 	struct libmsfat_dirent_t dirent;
 	uint32_t truncate=0;
 	uint32_t ro=0,wo=0;
@@ -79,7 +79,7 @@ void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_
 
 	/* truncate, if possible (if the directory is based on a cluster chain) */
 	if (fioctx->is_cluster_chain) {
-		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,NULL,NULL,truncate))
+		if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,dir_dirent,NULL,truncate))
 			fprintf(stderr,"ERROR: failed to truncate directory\n");
 	}
 }
@@ -305,7 +305,7 @@ int main(int argc,char **argv) {
 
 	printf("Scanning directory structure, to clean and repack diretories\n");
 	if (libmsfat_file_io_ctx_assign_root_directory_with_parent(fioctx,fioctx_parent,msfatctx) == 0)
-		clean_directory(fioctx,fioctx_parent,msfatctx);
+		clean_directory(fioctx,fioctx_parent,msfatctx,NULL);
 	else
 		fprintf(stderr,"Unable to assign root directory\n");
 
