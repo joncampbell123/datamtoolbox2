@@ -197,6 +197,7 @@ int main(int argc,char **argv) {
 	uint32_t bytes_per_cluster;
 	const char *s_image = NULL;
 	libmsfat_cluster_t cluster;
+	uint32_t zeroed_clusters=0;
 	int i,fd;
 
 	for (i=1;i < argc;) {
@@ -433,10 +434,11 @@ int main(int argc,char **argv) {
 		percent = (int)(((uint64_t)cluster * (uint64_t)100UL) / msfatctx->fatinfo.Total_clusters);
 
 		if (((uint32_t)cluster & 0xFF) == (uint32_t)0) {
-			printf("\x0D" "Reading cluster %lu / %lu (%%%u) ",
+			printf("\x0D" "Reading cluster %lu / %lu (%%%u) (%lu cleared) ",
 				(unsigned long)cluster,
 				(unsigned long)msfatctx->fatinfo.Total_clusters,
-				percent);
+				percent,
+				(unsigned long)zeroed_clusters);
 			fflush(stdout);
 		}
 
@@ -466,6 +468,8 @@ int main(int argc,char **argv) {
 				offset += (uint64_t)wr;
 				sz -= wr;
 			}
+
+			zeroed_clusters++;
 		}
 	}
 	printf("\nDone!\n");
