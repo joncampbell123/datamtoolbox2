@@ -1400,7 +1400,7 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 	uint32_t count=0;
 
 	/* sanity check */
-	if (fioctx == NULL || fioctx_parent == NULL || msfatctx == NULL || dirent == NULL) return -1;
+	if (fioctx == NULL || fioctx_parent == NULL || msfatctx == NULL) return -1;
 	if (!fioctx->is_cluster_chain) return -1;
 
 	/* parent fioctx must be a directory, unless it's the virtual parent of the root dir */
@@ -1424,9 +1424,14 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 
 	/* can't truncate a file that's zero length */
 	if (libmsfat_context_fat_is_end_of_chain(msfatctx,fioctx->first_cluster)) {
-		dirent->a.n.DIR_FileSize = 0;
 		fioctx->file_size = 0;
-		return libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,dirent,lfn_name);
+		if (dirent != NULL) {
+			dirent->a.n.DIR_FileSize = 0;
+			return libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,dirent,lfn_name);
+		}
+		else {
+			return 0;
+		}
 	}
 
 	/* first cluster */
@@ -1453,8 +1458,10 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 					/* if this is the FIRST cluster we are removing, then the file is now zero length
 					 * and the file's "cluster start" value should be set to zero to show that nothing
 					 * is allocated to it. */
-					dirent->a.n.DIR_FstClusLO = 0;
-					dirent->a.n.DIR_FstClusHI = 0;
+					if (dirent != NULL) {
+						dirent->a.n.DIR_FstClusLO = 0;
+						dirent->a.n.DIR_FstClusHI = 0;
+					}
 				}
 			}
 			else {
@@ -1464,10 +1471,12 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 			}
 
 			if (!cut) {
-				if (dirent->a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
-					dirent->a.n.DIR_FileSize = (uint32_t)0UL;
-				else
-					dirent->a.n.DIR_FileSize = htole32(offset);
+				if (dirent != NULL) {
+					if (dirent->a.n.DIR_Attr & libmsfat_DIR_ATTR_DIRECTORY)
+						dirent->a.n.DIR_FileSize = (uint32_t)0UL;
+					else
+						dirent->a.n.DIR_FileSize = htole32(offset);
+				}
 
 				fioctx->file_size = offset;
 				cut = 1;
@@ -1484,7 +1493,10 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 	}
 
 	/* done */
-	return libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,dirent,lfn_name);
+	if (dirent != NULL)
+		return libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,dirent,lfn_name);
+
+	return 0;
 }
 
 int libmsfat_file_io_ctx_delete_dirent(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,
