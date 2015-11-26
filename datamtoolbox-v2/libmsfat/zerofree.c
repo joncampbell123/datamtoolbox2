@@ -46,9 +46,45 @@ static int holepunch(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_
 	}
 
 	return 0;
-#endif
+#elif defined(_WIN32)
+	/* Windows NT sparse file support */
+	FILE_ZERO_DATA_INFORMATION fzdi;
+	DWORD dwTemp,err;
+	HANDLE h;
 
+	if (msfatctx->user_win32_handle != INVALID_HANDLE_VALUE)
+		h = msfatctx->user_win32_handle;
+	else if (msfatctx->user_fd >= 0)
+		h = _get_osfhandle(msfatctx->user_fd);
+	else
+		return;
+
+	if (h == INVALID_HANDLE_VALUE)
+		return;
+
+	if (DeviceIoControl(h,FSCTL_SET_SPARSE,NULL,0,NULL,0,&dwTemp,NULL)) {
+		err = GetLastError();
+
+		fprintf(stderr,"FSCTL_SET_SPARSE error code 0x%08lx\n",(unsigned long)err);
+		zero_by_holepunch = 0;
+		return -1;
+	}
+
+	memset(&fzdi,0,sizeof(fzdi));
+	fzdi.FileOffset.QuadPart = offset;
+	fzdi.BeyondFinalZero.QuadPart = offset + sz;
+	if (DeviceIoControl(h,FSCTL_SET_ZERO_DATA,&fzdi,sizeof(fzdi),NULL,0,&dwTemp,NULL)) {
+		err = GetLastError();
+
+		fprintf(stderr,"FSCTL_SET_ZERO_DATA error code 0x%08lx\n",(unsigned long)err);
+		zero_by_holepunch = 0;
+		return -1;
+	}
+
+	return 0;
+#else
 	return -1;
+#endif
 }
 
 static void zero_write(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_t sz) {
