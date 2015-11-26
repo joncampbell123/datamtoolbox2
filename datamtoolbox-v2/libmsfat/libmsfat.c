@@ -1426,7 +1426,7 @@ int libmsfat_file_io_ctx_truncate_file(struct libmsfat_file_io_ctx_t *fioctx,str
 	if (libmsfat_context_fat_is_end_of_chain(msfatctx,fioctx->first_cluster)) {
 		dirent->a.n.DIR_FileSize = 0;
 		fioctx->file_size = 0;
-		return 0;
+		return libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,dirent,lfn_name);
 	}
 
 	/* first cluster */
