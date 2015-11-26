@@ -427,6 +427,9 @@ int main(int argc,char **argv) {
 			continue;
 		}
 
+		if (msfatctx->fatinfo.FAT_size == 32)
+			fatent &= libmsfat_FAT32_CLUSTER_MASK;
+
 		percent = (int)(((uint64_t)cluster * (uint64_t)100UL) / msfatctx->fatinfo.Total_clusters);
 
 		if (((uint32_t)cluster & 0xFF) == (uint32_t)0) {
@@ -437,7 +440,7 @@ int main(int argc,char **argv) {
 			fflush(stdout);
 		}
 
-		if (cluster < (libmsfat_cluster_t)2UL) {
+		if (fatent == (libmsfat_FAT_entry_t)0UL) {
 			uint32_t sz = bytes_per_cluster,wr;
 			uint64_t offset;
 
