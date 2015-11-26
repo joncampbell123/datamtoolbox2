@@ -87,7 +87,6 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"fatinfo --image <image> ...\n");
 		fprintf(stderr,"\n");
 		fprintf(stderr,"--partition <n>          Hard disk image, use partition N from the MBR\n");
-		fprintf(stderr,"--cluster <n>            Which cluster to start from (if not root dir)\n");
 		fprintf(stderr,"--path <x>               File/dir to look up\n");
 		fprintf(stderr,"-t <n>                   Truncate file to N bytes, don't delete\n");
 		fprintf(stderr,"-o <file>                Dump directory to file\n");
