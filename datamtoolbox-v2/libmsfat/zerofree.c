@@ -63,8 +63,10 @@ void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_
 		wo += (uint32_t)sizeof(dirent);
 	}
 
-	/* take note where the write pointer is. we will truncate there after zeroing the directory */
+	/* take note where the write pointer is. we will truncate there after zeroing the directory.
+	 * but, do not truncate the directory to zero! */
 	truncate = wo;
+	if (truncate == (uint32_t)0) truncate = (uint32_t)sizeof(dirent);
 
 	/* fill out the rest of the directory with zeros */
 	memset(&dirent,0,sizeof(dirent));
