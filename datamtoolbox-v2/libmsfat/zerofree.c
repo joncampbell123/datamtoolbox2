@@ -31,7 +31,59 @@ static unsigned char			sectorbuf[512];
 static unsigned char			buffer[4096];
 
 void clean_file_cluster_tip(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
-	// TODO
+	uint32_t bytes_per_cluster;
+
+	/* files by definition are a cluster chain */
+	if (!fioctx->is_cluster_chain) return;
+	if (fioctx->is_directory) return;
+
+	/* we need the cluster size for this */
+	bytes_per_cluster = libmsfat_context_get_cluster_size(msfatctx);
+	if (bytes_per_cluster == (uint32_t)0) return;
+
+	/* first, make sure the file is truncated to exactly what it's size dictates */
+	if (libmsfat_file_io_ctx_truncate_file(fioctx,fioctx_parent,msfatctx,dir_dirent,NULL,fioctx->file_size)) {
+		fprintf(stderr,"ERROR: failed to truncate file\n");
+		return;
+	}
+
+	/* if the file size is not a multiple of the cluster size, then we need to zero the last cluster beyond
+	 * the end of the file. */
+	if (fioctx->file_size % bytes_per_cluster) {
+		libmsfat_cluster_t cluster;
+		uint32_t partial = fioctx->file_size % bytes_per_cluster;
+		uint32_t sz = bytes_per_cluster - partial;
+		uint64_t offset;
+		uint32_t wr;
+
+		/* locate the cluster */
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size))
+			return;
+		if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != fioctx->file_size)
+			return;
+		cluster = fioctx->cluster_position;
+		if (libmsfat_context_get_cluster_offset(msfatctx,&offset,cluster))
+			return;
+
+		printf("....clearing %lu bytes in the cluster tip\n",(unsigned long)sz);
+
+		offset += partial;
+		memset(buffer,0,sizeof(buffer));
+		while (sz != (uint32_t)0) {
+			if (sz > sizeof(buffer))
+				wr = sizeof(buffer);
+			else
+				wr = sz;
+
+			if (msfatctx->write(msfatctx,buffer,offset,(size_t)wr)) {
+				fprintf(stderr,"\nERROR: write error to offset %llu\n",(unsigned long long)offset);
+				break;
+			}
+
+			offset += (uint64_t)wr;
+			sz -= wr;
+		}
+	}
 }
 
 void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dir_dirent) {
