@@ -55,12 +55,12 @@ static int holepunch(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_
 	if (msfatctx->user_win32_handle != INVALID_HANDLE_VALUE)
 		h = msfatctx->user_win32_handle;
 	else if (msfatctx->user_fd >= 0)
-		h = _get_osfhandle(msfatctx->user_fd);
+		h = (HANDLE)_get_osfhandle(msfatctx->user_fd);
 	else
-		return;
+		return -1;
 
 	if (h == INVALID_HANDLE_VALUE)
-		return;
+		return -1;
 
 	if (DeviceIoControl(h,FSCTL_SET_SPARSE,NULL,0,NULL,0,&dwTemp,NULL)) {
 		err = GetLastError();
@@ -83,6 +83,8 @@ static int holepunch(struct libmsfat_context_t *msfatctx,uint64_t offset,uint64_
 
 	return 0;
 #else
+	fprintf(stderr, "Sorry, there's no support on your platform for sparse files\n");
+	zero_by_holepunch = 0;
 	return -1;
 #endif
 }
