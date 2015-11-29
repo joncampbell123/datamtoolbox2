@@ -1049,10 +1049,6 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 					if (libmsfat_context_write_FAT(msfatctx,next_cluster,c->cluster_position,0)) break;
 					/* rewrite the new cluster to be the end of the chain */
 					if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)0xFFFFFFFFUL,next_cluster,0)) break;
-
-					//DEBUG
-					fprintf(stderr,"Success: extended allocation chain to new cluster %lu\n",
-						(unsigned long)next_cluster);
 				}
 				else {
 					break;
