@@ -976,19 +976,22 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 		c->position = offset;
 	}
 	else if (c->is_cluster_chain) {
+		/* we need a cluster size */
+		if (c->cluster_size == (uint32_t)0UL)
+			return -1;
+
 		/* NTS: directories tend not to indicate their size */
 		if (offset > c->file_size && !c->is_directory) offset = c->file_size;
 
-		/* if we go backwards, then we have to re-scan the FAT table from the start */
-		if (offset < c->cluster_position_start) {
+		/* files with no allocation chain cannot seek past zero */
+		if (c->first_cluster < (uint32_t)2UL) offset = (uint32_t)0UL;
+
+		/* if we go backwards or are explicitly seeking to 0, then reset position to zero to scan the FAT table again */
+		if (offset == (uint32_t)0 || offset < c->cluster_position_start) {
 			c->cluster_position = c->first_cluster;
 			c->cluster_position_start = 0;
 			c->position = 0;
 		}
-
-		/* we need a cluster size */
-		if (c->cluster_size == (uint32_t)0UL)
-			return -1;
 
 		/* what cluster to seek to? */
 		offset_cluster_round = offset;
@@ -996,35 +999,35 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 		offset_cluster_round -= offset_cluster_offset;
 
 		/* scan forward to desired position */
+		c->position = c->cluster_position_start;
 		while (c->cluster_position_start < offset_cluster_round) {
-			if (c->cluster_position < (uint32_t)2UL)
-				break;
+			/* this code should maintain the cluster position so that we're somewhere on the chain,
+			 * and if we hit the end, we stay there. c->cluster_position == 0 should only happen IF
+			 * the file has no cluster chain at all. */
+			if (c->cluster_position < (uint32_t)2UL) break;
 
-			c->cluster_position_start += c->cluster_size;
-			if (libmsfat_context_read_FAT(msfatctx,&next_cluster_fat,c->cluster_position,0)) {
-				c->cluster_position = 0;
-				break;
-			}
+			/* update the position so that, if reading the FAT fails, or the FAT entry indicates we
+			 * hit the end of the allocation chain, the current cluster remains on the last one and
+			 * the offset reflects it (unchanged) but the position points to the END of the cluster. */
+			c->position = c->cluster_position_start + c->cluster_size;
+			if (libmsfat_context_read_FAT(msfatctx,&next_cluster_fat,c->cluster_position,0)) break;
 
 			if (msfatctx->fatinfo.FAT_size >= 32)
 				next_cluster = libmsfat_FAT32_CLUSTER((libmsfat_cluster_t)next_cluster_fat);
 			else
 				next_cluster = (libmsfat_cluster_t)next_cluster_fat;
 
-			if (libmsfat_context_fat_is_end_of_chain(msfatctx,next_cluster)) {
-				c->cluster_position = 0;
-				break;
-			}
+			if (libmsfat_context_fat_is_end_of_chain(msfatctx,next_cluster)) break;
 
+			/* the next link of the chain is valid. update position */
 			c->cluster_position = next_cluster;
+			c->cluster_position_start += c->cluster_size;
+			c->position = c->cluster_position_start;
 		}
 
-		/* if we're not in a cluster then we cannot allow an offset */
-		if (c->cluster_position < (uint32_t)2UL)
-			offset_cluster_offset = 0;
-
-		/* final... */
-		c->position = offset_cluster_round + offset_cluster_offset;
+		/* if we got to the cluster we wanted, then update the file pointer to cluster offset + offset within cluster */
+		if (c->cluster_position_start == offset_cluster_round)
+			c->position = c->cluster_position_start + offset_cluster_offset;
 	}
 	else {
 		return -1;
@@ -1086,9 +1089,9 @@ int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,
  *       This includes allcating a cluster and modifying the dirent if the file is zero length. */
 int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,const void *buffer,size_t len) {
 	const uint8_t *d = buffer;
-	size_t canread;
-	size_t doread;
-	size_t rd = 0;
+	size_t canwrite;
+	size_t dowrite;
+	size_t wd = 0;
 	uint32_t npos;
 	uint64_t dofs;
 	uint32_t ofs;
@@ -1100,56 +1103,64 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 
 	if (c->is_root_dir && !c->is_cluster_chain) {
 		if (c->position > c->file_size) return 0;
-		canread = (size_t)(c->file_size - c->position);
-		if (canread > len) canread = len;
+		canwrite = (size_t)(c->file_size - c->position);
+		if (canwrite > len) canwrite = len;
 
-		if (canread > (size_t)0) {
-			if (msfatctx->write(msfatctx,d,msfatctx->partition_byte_offset+c->non_cluster_offset+(uint64_t)c->position,canread))
+		if (canwrite > (size_t)0) {
+			if (msfatctx->write(msfatctx,d,msfatctx->partition_byte_offset+c->non_cluster_offset+(uint64_t)c->position,canwrite))
 				return -1;
 		}
 
-		d += canread;
-		rd = canread;
-		c->position += (uint32_t)rd;
+		d += canwrite;
+		wd = canwrite;
+		c->position += (uint32_t)wd;
 	}
 	else if (c->is_cluster_chain) {
 		if (c->cluster_size == (uint32_t)0) return 0;
 
 		if (!c->is_directory) {
 			if (c->position > c->file_size) return 0;
-			canread = (size_t)(c->file_size - c->position);
-			if (canread > len) canread = len;
+			canwrite = (size_t)(c->file_size - c->position);
+			if (canwrite > len) canwrite = len;
 		}
 		else {
-			canread = len;
+			canwrite = len;
 		}
 
-		while (canread > (size_t)0) {
-			if (c->position == (uint32_t)0xFFFFFFFFUL)
-				break;
+		while (canwrite > (size_t)0) {
+			/* If the file has no allocation chain, then no reading happens.
+			 * This should only happen if the file has no allocation chain.
+			 * It should never happen if the file has any kind of allocation chain.
+			 * Lseek keeps cluster_position somewhere within the chain, always. */
 			if (c->cluster_position < (uint32_t)2UL)
 				break;
 
+			/* how much more can we read within the cluster, before we need to
+			 * move to the next cluster? this limits how much we can read in this round. */
 			ofs = c->position % c->cluster_size;
-			doread = c->cluster_size - ofs;
-			if (doread > canread) doread = canread;
+			dowrite = c->cluster_size - ofs;
+			if (dowrite > canwrite) dowrite = canwrite;
+			assert(dowrite != (uint32_t)0);
 
+			/* wait. if lseek hit the end of the chain, then the offset should be right on
+			 * the start of the next cluster, and the file pointer should point exactly to
+			 * the cluster byte offset plus cluster size */
+			if (ofs == (uint32_t)0UL && c->position == (c->cluster_position_start + c->cluster_size))
+				break;
+
+			/* OK. read! */
 			if (libmsfat_context_get_cluster_offset(msfatctx,&dofs,c->cluster_position))
 				return -1;
-
-			assert(doread != (uint32_t)0);
-			if (msfatctx->write(msfatctx,d,dofs+(uint64_t)ofs,doread))
+			if (msfatctx->write(msfatctx,d,dofs+(uint64_t)ofs,dowrite))
 				return -1;
 
-			npos = (uint32_t)(c->position+doread);
-			if (npos < c->position) { /* integer overflow */
-				npos = (uint32_t)0xFFFFFFFFUL;
-				doread = npos - c->position;
-			}
+			/* advance the pointer, read count, and deduct from the amount we have yet to read. */
+			d += dowrite;
+			wd += dowrite;
+			canwrite -= dowrite;
 
-			d += doread;
-			rd += doread;
-			canread -= doread;
+			/* advance the file pointer */
+			npos = c->position + dowrite;
 			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos))
 				return -1;
 			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
@@ -1160,7 +1171,7 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 		return -1;
 	}
 
-	return (int)rd;
+	return (int)wd;
 }
 
 int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,void *buffer,size_t len) {
@@ -1204,31 +1215,39 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 		}
 
 		while (canread > (size_t)0) {
-			if (c->position == (uint32_t)0xFFFFFFFFUL)
-				break;
+			/* If the file has no allocation chain, then no reading happens.
+			 * This should only happen if the file has no allocation chain.
+			 * It should never happen if the file has any kind of allocation chain.
+			 * Lseek keeps cluster_position somewhere within the chain, always. */
 			if (c->cluster_position < (uint32_t)2UL)
 				break;
 
+			/* how much more can we read within the cluster, before we need to
+			 * move to the next cluster? this limits how much we can read in this round. */
 			ofs = c->position % c->cluster_size;
 			doread = c->cluster_size - ofs;
 			if (doread > canread) doread = canread;
+			assert(doread != (uint32_t)0);
 
+			/* wait. if lseek hit the end of the chain, then the offset should be right on
+			 * the start of the next cluster, and the file pointer should point exactly to
+			 * the cluster byte offset plus cluster size */
+			if (ofs == (uint32_t)0UL && c->position == (c->cluster_position_start + c->cluster_size))
+				break;
+
+			/* OK. read! */
 			if (libmsfat_context_get_cluster_offset(msfatctx,&dofs,c->cluster_position))
 				return -1;
-
-			assert(doread != (uint32_t)0);
 			if (msfatctx->read(msfatctx,d,dofs+(uint64_t)ofs,doread))
 				return -1;
 
-			npos = (uint32_t)(c->position+doread);
-			if (npos < c->position) { /* integer overflow */
-				npos = (uint32_t)0xFFFFFFFFUL;
-				doread = npos - c->position;
-			}
-
+			/* advance the pointer, read count, and deduct from the amount we have yet to read. */
 			d += doread;
 			rd += doread;
 			canread -= doread;
+
+			/* advance the file pointer */
+			npos = c->position + doread;
 			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos))
 				return -1;
 			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
