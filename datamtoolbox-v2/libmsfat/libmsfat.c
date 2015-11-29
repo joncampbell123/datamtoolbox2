@@ -1004,6 +1004,21 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			(flags & (libmsfat_lseek_FLAG_IGNORE_FILE_SIZE | libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN)) == 0)
 			offset = c->file_size;
 
+		/* if allowed to extend the allocation chain, and no clusters allocated to the file, and the desired offset is nonzero, then try to start the chain */
+		if ((flags & libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) && c->first_cluster < (uint32_t)2UL && offset != (uint32_t)0UL) {
+			next_cluster = libmsfat_context_find_free_cluster(msfatctx);
+			if (next_cluster != (libmsfat_cluster_t)0) {
+				/* rewrite the new cluster to be the end of the chain, and then update the dirent */
+				if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)0xFFFFFFFFUL,next_cluster,0) == 0) {
+					c->first_cluster = next_cluster;
+					c->cluster_position = c->first_cluster;
+					c->cluster_position_start = 0;
+					c->should_update_dirent = 1;
+					c->position = 0;
+				}
+			}
+		}
+
 		/* files with no allocation chain cannot seek past zero */
 		if (c->first_cluster < (uint32_t)2UL) offset = (uint32_t)0UL;
 
@@ -1184,6 +1199,16 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			 * This should only happen if the file has no allocation chain.
 			 * It should never happen if the file has any kind of allocation chain.
 			 * Lseek keeps cluster_position somewhere within the chain, always. */
+			if ((flags & libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) && c->cluster_position < (uint32_t)2UL && c->position == (uint32_t)0UL) {
+				/* lseek to cluster size, to start the allocation chain */
+				if (libmsfat_file_io_ctx_lseek(c,msfatctx,c->cluster_size,flags))
+					break;
+				if (libmsfat_file_io_ctx_tell(c,msfatctx) != c->cluster_size)
+					break;
+				/* then lseek back to zero */
+				if (libmsfat_file_io_ctx_lseek(c,msfatctx,(uint32_t)0,flags))
+					break;
+			}
 			if (c->cluster_position < (uint32_t)2UL)
 				break;
 

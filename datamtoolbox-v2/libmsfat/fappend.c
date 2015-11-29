@@ -319,7 +319,11 @@ int main(int argc,char **argv) {
 
 	/* if we need to update the dirent, then do so */
 	if (fioctx->should_update_dirent) {
+		// FIXME: Should be library call, not direct modification
 		dirent.a.n.DIR_FileSize = htole32(fioctx->file_size);
+		dirent.a.n.DIR_FstClusLO = (uint16_t)(fioctx->first_cluster & 0xFFFF);
+		if (msfatctx->fatinfo.FAT_size == 32) dirent.a.n.DIR_FstClusHI = (uint16_t)(fioctx->first_cluster >> 16);
+		/* write it back to disk */
 		if (libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name))
 			fprintf(stderr,"Failed to update dirent\n");
 	}
