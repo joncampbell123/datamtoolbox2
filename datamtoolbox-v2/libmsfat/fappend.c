@@ -272,6 +272,9 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
+	/* please allow extending the file (TODO: there should be library functions to enable this!) */
+	fioctx->allow_extend_to_cluster_tip = 1;
+
 	/* seek to the end */
 	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size)) {
 		fprintf(stderr,"Cannot lseek to end\n");
@@ -311,6 +314,13 @@ int main(int argc,char **argv) {
 
 			msg_rep--;
 		}
+	}
+
+	/* if we need to update the dirent, then do so */
+	if (fioctx->should_update_dirent) {
+		dirent.a.n.DIR_FileSize = htole32(fioctx->file_size);
+		if (libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name))
+			fprintf(stderr,"Failed to update dirent\n");
 	}
 
 	/* this code focuses on FAT table #0. make sure to copy FAT 0 to FAT 1/2/3 etc. */
