@@ -436,7 +436,7 @@ void libmsfat_file_io_ctx_free(struct libmsfat_file_io_ctx_t *c);
 void libmsfat_file_io_ctx_close(struct libmsfat_file_io_ctx_t *c);
 struct libmsfat_file_io_ctx_t *libmsfat_file_io_ctx_destroy(struct libmsfat_file_io_ctx_t *c);
 uint32_t libmsfat_file_io_ctx_tell(struct libmsfat_file_io_ctx_t *c,const struct libmsfat_context_t *msfatctx);
-int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,uint32_t offset);
+int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,uint32_t offset,unsigned int flags);
 int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx);
 int libmsfat_file_io_ctx_assign_root_directory_with_parent(struct libmsfat_file_io_ctx_t *c,struct libmsfat_file_io_ctx_t *cp,struct libmsfat_context_t *msfatctx);
 int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,void *buffer,size_t len);

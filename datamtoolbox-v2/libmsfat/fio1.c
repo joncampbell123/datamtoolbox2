@@ -543,7 +543,7 @@ int main(int argc,char **argv) {
 	do {
 		uint32_t pos;
 
-		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset)) {
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset,/*flags*/0)) {
 			fprintf(stderr,"Failed to lseek to %lu\n",(unsigned long)fiooffset);
 			break;
 		}
@@ -573,7 +573,7 @@ int main(int argc,char **argv) {
 	do {
 		uint32_t pos;
 
-		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset)) {
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset,/*flags*/0)) {
 			fprintf(stderr,"Failed to lseek to %lu\n",(unsigned long)fiooffset);
 			break;
 		}
@@ -616,7 +616,7 @@ int main(int argc,char **argv) {
 		uint32_t pos;
 		int rd;
 
-		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset)) {
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset,/*flags*/0)) {
 			fprintf(stderr,"Failed to lseek to %lu\n",(unsigned long)fiooffset);
 			break;
 		}
@@ -659,7 +659,7 @@ int main(int argc,char **argv) {
 		uint32_t pos;
 		int rd;
 
-		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset)) {
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fiooffset,/*flags*/0)) {
 			fprintf(stderr,"Failed to lseek to %lu\n",(unsigned long)fiooffset);
 			break;
 		}

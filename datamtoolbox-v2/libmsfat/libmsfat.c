@@ -962,7 +962,7 @@ uint32_t libmsfat_file_io_ctx_tell(struct libmsfat_file_io_ctx_t *c,const struct
 	return c->position;
 }
 
-int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,uint32_t offset) {
+int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,uint32_t offset,unsigned int flags) {
 	libmsfat_FAT_entry_t next_cluster_fat;
 	libmsfat_cluster_t next_cluster;
 	uint32_t offset_cluster_offset;
@@ -1077,7 +1077,7 @@ int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,
 		c->is_root_dir = 1;
 	}
 
-	if (libmsfat_file_io_ctx_lseek(c,msfatctx,(uint32_t)0UL) || libmsfat_file_io_ctx_tell(c,msfatctx) != (uint32_t)0UL) {
+	if (libmsfat_file_io_ctx_lseek(c,msfatctx,(uint32_t)0UL,/*flags*/0) || libmsfat_file_io_ctx_tell(c,msfatctx) != (uint32_t)0UL) {
 		libmsfat_file_io_ctx_close(c);
 		return -1;
 	}
@@ -1166,7 +1166,7 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 				c->should_update_dirent = 1;
 				c->file_size = npos;
 			}
-			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos))
+			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,/*flags*/0))
 				return -1;
 			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
 				break;
@@ -1253,7 +1253,7 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 
 			/* advance the file pointer */
 			npos = c->position + doread;
-			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos))
+			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,/*flags*/0))
 				return -1;
 			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
 				break;
@@ -1325,7 +1325,7 @@ void libmsfat_dirent_filename_to_str(char *buf,size_t buflen,const struct libmsf
 int libmsfat_file_io_ctx_rewinddir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_lfn_assembly_t *lfn_name) {
 	if (fioctx == NULL || msfatctx == NULL) return -1;
 	if (lfn_name != NULL) libmsfat_lfn_assembly_init(lfn_name);
-	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,(uint32_t)0)) return -1;
+	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,(uint32_t)0,/*flags*/0)) return -1;
 	if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != (uint32_t)0) return -1;
 	return 0;
 }
@@ -1400,7 +1400,7 @@ int libmsfat_file_io_ctx_write_dirent(struct libmsfat_file_io_ctx_t *fioctx,stru
 	if (!fioctx_parent->is_directory) return -1;
 
 	/* we want to modify the entry in the parent directory ioctx */
-	if (libmsfat_file_io_ctx_lseek(fioctx_parent,msfatctx,fioctx_parent->dirent_start)) return -1;
+	if (libmsfat_file_io_ctx_lseek(fioctx_parent,msfatctx,fioctx_parent->dirent_start,/*flags*/0)) return -1;
 	if (libmsfat_file_io_ctx_tell(fioctx_parent,msfatctx) != fioctx_parent->dirent_start) return -1;
 	if (libmsfat_file_io_ctx_write(fioctx_parent,msfatctx,dirent,sizeof(*dirent)) != sizeof(*dirent)) return -1;
 
@@ -1540,12 +1540,12 @@ int libmsfat_file_io_ctx_delete_dirent(struct libmsfat_file_io_ctx_t *fioctx,str
 		struct libmsfat_dirent_t lfnent;
 
 		while (fioctx_parent->dirent_lfn_start < fioctx_parent->dirent_start) {
-			if (libmsfat_file_io_ctx_lseek(fioctx_parent,msfatctx,fioctx_parent->dirent_lfn_start)) break;
+			if (libmsfat_file_io_ctx_lseek(fioctx_parent,msfatctx,fioctx_parent->dirent_lfn_start,/*flags*/0)) break;
 			if (libmsfat_file_io_ctx_tell(fioctx_parent,msfatctx) != fioctx_parent->dirent_lfn_start) return -1;
 			if (libmsfat_file_io_ctx_read(fioctx_parent,msfatctx,&lfnent,sizeof(lfnent)) != sizeof(lfnent)) return -1;
 
 			lfnent.a.n.DIR_Name[0] = (char)0xE5;
-			if (libmsfat_file_io_ctx_lseek(fioctx_parent,msfatctx,fioctx_parent->dirent_lfn_start)) break;
+			if (libmsfat_file_io_ctx_lseek(fioctx_parent,msfatctx,fioctx_parent->dirent_lfn_start,/*flags*/0)) break;
 			if (libmsfat_file_io_ctx_tell(fioctx_parent,msfatctx) != fioctx_parent->dirent_lfn_start) return -1;
 			if (libmsfat_file_io_ctx_write(fioctx_parent,msfatctx,&lfnent,sizeof(lfnent)) != sizeof(lfnent)) return -1;
 

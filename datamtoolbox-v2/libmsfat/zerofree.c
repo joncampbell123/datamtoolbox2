@@ -139,7 +139,7 @@ static void clean_file_cluster_tip(struct libmsfat_file_io_ctx_t *fioctx,struct 
 		uint64_t offset;
 
 		/* locate the cluster */
-		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size))
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size,/*flags*/0))
 			return;
 		if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != fioctx->file_size)
 			return;
@@ -194,7 +194,7 @@ static void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfa
 
 	/* scan the directory again, copying items back to fill in deleted and empty entries */
 	while (1) {
-		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,ro))
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,ro,/*flags*/0))
 			break;
 		if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != ro)
 			break;
@@ -209,7 +209,7 @@ static void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfa
 
 		/* if ro != wo, move the dirent back */
 		if (ro != wo) {
-			if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,wo))
+			if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,wo,/*flags*/0))
 				break;
 			if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != wo)
 				break;
@@ -237,7 +237,7 @@ static void clean_directory(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfa
 
 	/* fill out the rest of the directory with zeros */
 	memset(&dirent,0,sizeof(dirent));
-	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,wo))
+	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,wo,/*flags*/0))
 		return;
 	if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != wo)
 		return;

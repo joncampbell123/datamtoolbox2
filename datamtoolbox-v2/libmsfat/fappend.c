@@ -276,7 +276,7 @@ int main(int argc,char **argv) {
 	fioctx->allow_extend_to_cluster_tip = 1;
 
 	/* seek to the end */
-	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size)) {
+	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size,/*flags*/0)) {
 		fprintf(stderr,"Cannot lseek to end\n");
 		return 1;
 	}
