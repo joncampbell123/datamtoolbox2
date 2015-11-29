@@ -981,7 +981,9 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			return -1;
 
 		/* NTS: directories tend not to indicate their size */
-		if (offset > c->file_size && !c->is_directory) offset = c->file_size;
+		if (offset > c->file_size && !c->is_directory &&
+			(flags & (libmsfat_lseek_FLAG_IGNORE_FILE_SIZE | libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN)) == 0)
+			offset = c->file_size;
 
 		/* files with no allocation chain cannot seek past zero */
 		if (c->first_cluster < (uint32_t)2UL) offset = (uint32_t)0UL;
@@ -1028,6 +1030,14 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 		/* if we got to the cluster we wanted, then update the file pointer to cluster offset + offset within cluster */
 		if (c->cluster_position_start == offset_cluster_round)
 			c->position = c->cluster_position_start + offset_cluster_offset;
+
+		/* if we extended the file past the original end, then the dirent needs updating */
+		if ((flags & (libmsfat_lseek_FLAG_IGNORE_FILE_SIZE | libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN)) != 0) {
+			if (c->file_size < c->position) {
+				c->should_update_dirent = 1;
+				c->file_size = c->position;
+			}
+		}
 	}
 	else {
 		return -1;
@@ -1089,6 +1099,7 @@ int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,
  *       This includes allcating a cluster and modifying the dirent if the file is zero length. */
 int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,const void *buffer,size_t len) {
 	const uint8_t *d = buffer;
+	unsigned int flags = 0;
 	size_t canwrite;
 	size_t dowrite;
 	size_t wd = 0;
@@ -1128,6 +1139,10 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			canwrite = len;
 		}
 
+		/* if the fioctx indicates extending the file is permissible, then update flags to tell lseek */
+		if (c->allow_extend_to_cluster_tip)
+			flags |= libmsfat_lseek_FLAG_IGNORE_FILE_SIZE;
+
 		while (canwrite > (size_t)0) {
 			/* If the file has no allocation chain, then no reading happens.
 			 * This should only happen if the file has no allocation chain.
@@ -1162,11 +1177,7 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 
 			/* advance the file pointer */
 			npos = c->position + dowrite;
-			if (c->file_size < npos) {
-				c->should_update_dirent = 1;
-				c->file_size = npos;
-			}
-			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,/*flags*/0))
+			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,flags))
 				return -1;
 			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
 				break;
