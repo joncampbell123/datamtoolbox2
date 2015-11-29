@@ -1118,7 +1118,8 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 	else if (c->is_cluster_chain) {
 		if (c->cluster_size == (uint32_t)0) return 0;
 
-		if (!c->is_directory) {
+		/* limit to file_size, unless directory, or file size limits are lifted */
+		if (!c->is_directory && !c->allow_extend_to_cluster_tip) {
 			if (c->position > c->file_size) return 0;
 			canwrite = (size_t)(c->file_size - c->position);
 			if (canwrite > len) canwrite = len;
@@ -1161,6 +1162,10 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 
 			/* advance the file pointer */
 			npos = c->position + dowrite;
+			if (c->file_size < npos) {
+				c->should_update_dirent = 1;
+				c->file_size = npos;
+			}
 			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos))
 				return -1;
 			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
