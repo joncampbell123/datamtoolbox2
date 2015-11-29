@@ -962,6 +962,25 @@ uint32_t libmsfat_file_io_ctx_tell(struct libmsfat_file_io_ctx_t *c,const struct
 	return c->position;
 }
 
+libmsfat_cluster_t libmsfat_context_find_free_cluster(struct libmsfat_context_t *msfatctx) {
+	libmsfat_FAT_entry_t entry;
+	libmsfat_cluster_t i;
+
+	if (msfatctx == NULL) return (libmsfat_cluster_t)0;
+
+	/* scan */
+	for (i=(libmsfat_cluster_t)2UL;i < msfatctx->fatinfo.Total_clusters;i++) {
+		if (libmsfat_context_read_FAT(msfatctx,&entry,i,0)) break;
+		if (msfatctx->fatinfo.FAT_size == 32) entry &= libmsfat_FAT32_CLUSTER_MASK;
+
+		/* if the cluster is empty, then claim it */
+		if (entry == (libmsfat_FAT_entry_t)0UL) return i;
+	}
+
+	/* didn't find anything */
+	return (libmsfat_cluster_t)0;
+}
+
 int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,uint32_t offset,unsigned int flags) {
 	libmsfat_FAT_entry_t next_cluster_fat;
 	libmsfat_cluster_t next_cluster;
@@ -1019,7 +1038,26 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			else
 				next_cluster = (libmsfat_cluster_t)next_cluster_fat;
 
-			if (libmsfat_context_fat_is_end_of_chain(msfatctx,next_cluster)) break;
+			if (libmsfat_context_fat_is_end_of_chain(msfatctx,next_cluster)) {
+				if (flags & libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) {
+					/* the caller wants us to extend the allocation chain if necessary to
+					 * satisfy the request. find a free cluster and take it, or give up.
+					 * if for any reason we can't write the FAT table, then give up. */
+					next_cluster = libmsfat_context_find_free_cluster(msfatctx);
+					if (next_cluster == (libmsfat_cluster_t)0) break;
+					/* rewrite the current cluster to point to the new cluster */
+					if (libmsfat_context_write_FAT(msfatctx,next_cluster,c->cluster_position,0)) break;
+					/* rewrite the new cluster to be the end of the chain */
+					if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)0xFFFFFFFFUL,next_cluster,0)) break;
+
+					//DEBUG
+					fprintf(stderr,"Success: extended allocation chain to new cluster %lu\n",
+						(unsigned long)next_cluster);
+				}
+				else {
+					break;
+				}
+			}
 
 			/* the next link of the chain is valid. update position */
 			c->cluster_position = next_cluster;
@@ -1130,7 +1168,7 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 		if (c->cluster_size == (uint32_t)0) return 0;
 
 		/* limit to file_size, unless directory, or file size limits are lifted */
-		if (!c->is_directory && !c->allow_extend_to_cluster_tip) {
+		if (!c->is_directory && !c->allow_extend_to_cluster_tip && !c->allow_extend_allocation_chain) {
 			if (c->position > c->file_size) return 0;
 			canwrite = (size_t)(c->file_size - c->position);
 			if (canwrite > len) canwrite = len;
@@ -1142,9 +1180,11 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 		/* if the fioctx indicates extending the file is permissible, then update flags to tell lseek */
 		if (c->allow_extend_to_cluster_tip)
 			flags |= libmsfat_lseek_FLAG_IGNORE_FILE_SIZE;
+		if (c->allow_extend_allocation_chain)
+			flags |= libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN;
 
 		while (canwrite > (size_t)0) {
-			/* If the file has no allocation chain, then no reading happens.
+			/* If the file has no allocation chain, then no writing happens.
 			 * This should only happen if the file has no allocation chain.
 			 * It should never happen if the file has any kind of allocation chain.
 			 * Lseek keeps cluster_position somewhere within the chain, always. */
@@ -1160,7 +1200,17 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 
 			/* wait. if lseek hit the end of the chain, then the offset should be right on
 			 * the start of the next cluster, and the file pointer should point exactly to
-			 * the cluster byte offset plus cluster size */
+			 * the cluster byte offset plus cluster size. we can try lseeking to the current
+			 * position if we're told we can extend the allocation chain, which might allow
+			 * us to lseek to the target offset. */
+			if ((flags & libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) && ofs == (uint32_t)0UL &&
+				c->position == (c->cluster_position_start + c->cluster_size)) {
+				npos = c->position;
+				if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,flags))
+					break;
+				if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
+					break;
+			}
 			if (ofs == (uint32_t)0UL && c->position == (c->cluster_position_start + c->cluster_size))
 				break;
 
@@ -1178,7 +1228,7 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			/* advance the file pointer */
 			npos = c->position + dowrite;
 			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,flags))
-				return -1;
+				break;
 			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
 				break;
 		}

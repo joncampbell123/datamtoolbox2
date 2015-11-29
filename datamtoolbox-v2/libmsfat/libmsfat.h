@@ -202,6 +202,7 @@ struct libmsfat_file_io_ctx_t {
 	unsigned int			is_cluster_chain:1;	// is cluster chain
 	unsigned int			is_root_parent:1;	// child file ioctx is root dir
 	unsigned int			allow_extend_to_cluster_tip:1; // if set, allow writing past EOF to the end of the cluster tip
+	unsigned int			allow_extend_allocation_chain:1; // if set, extend allocation chain to satisfy lseek
 	unsigned int			should_update_dirent:1;	// if set, the dirent this file came from should be updated
 	unsigned int			_padding_:26;
 	uint64_t			non_cluster_offset;	// if root dir (non-cluster), byte offset
