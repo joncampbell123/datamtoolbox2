@@ -94,10 +94,10 @@ static void zero_write(struct libmsfat_context_t *msfatctx,uint64_t offset,uint6
 
 	memset(buffer,0,sizeof(buffer));
 	while (sz != (uint64_t)0UL) {
-		if (sz > sizeof(buffer))
+		if (sz > (uint64_t)sizeof(buffer))
 			wr = sizeof(buffer);
 		else
-			wr = sz;
+			wr = (size_t)sz;
 
 		if (msfatctx->write(msfatctx,buffer,offset,(size_t)wr)) {
 			fprintf(stderr,"\nERROR: write error to offset %llu\n",(unsigned long long)offset);
