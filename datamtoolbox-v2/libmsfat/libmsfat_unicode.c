@@ -148,11 +148,13 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 
 		/* name */
 		while (d < df && sa < sf) {
-			if (*sa == '.' || *sa == 0)
+			uint16_t c = le16toh(*sa);
+
+			if (c == '.' || c == 0)
 				break;
-			if (*sa > 32 && *sa < 127 &&
-				!(*sa == ':' || *sa == '\\' || *sa == '/' || *sa == '*' || *sa == ';'))
-				*d++ = (char)(*sa);
+			if (c > 32 && c < 127 &&
+				!(c == ':' || c == '\\' || c == '/' || c == '*' || c == ';'))
+				*d++ = (char)(c);
 
 			sa++;
 		}
@@ -161,20 +163,22 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 		*d++ = (char)(((hash / 26 / 26) % 26) + 'A');
 		*d++ = (char)(((hash / 26) % 26) + 'A');
 		*d++ = (char)((hash % 26) + 'A');
-		while (sa < sf && *sa != 0 && *sa != '.') sa++;
+		while (sa < sf && *sa != 0 && le16toh(*sa) != '.') sa++;
 
 		d = dirent->a.n.DIR_Ext;
 		df = d + sizeof(dirent->a.n.DIR_Ext);
 
 		/* extension */
-		if (*sa == '.') {
+		if (le16toh(*sa) == '.') {
 			sa++;
 			while (d < df && sa < sf) {
-				if (*sa == 0)
+				uint16_t c = le16toh(*sa);
+
+				if (c == 0)
 					break;
-				if (*sa > 32 && *sa < 127 &&
-					!(*sa == ':' || *sa == '\\' || *sa == '/' || *sa == '*' || *sa == ';'))
-					*d++ = (char)(*sa);
+				if (c > 32 && c < 127 &&
+					!(c == ':' || c == '\\' || c == '/' || c == '*' || c == ';'))
+					*d++ = (char)(c);
 
 				sa++;
 			}
