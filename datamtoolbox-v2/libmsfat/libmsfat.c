@@ -1199,7 +1199,8 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			 * This should only happen if the file has no allocation chain.
 			 * It should never happen if the file has any kind of allocation chain.
 			 * Lseek keeps cluster_position somewhere within the chain, always. */
-			if ((flags & libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) && c->cluster_position < (uint32_t)2UL && c->position == (uint32_t)0UL) {
+			if ((flags & libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) && c->cluster_position < (uint32_t)2UL &&
+				c->position == (uint32_t)0UL && c->file_size == (uint32_t)0UL) {
 				/* lseek to cluster size, to start the allocation chain */
 				if (libmsfat_file_io_ctx_lseek(c,msfatctx,c->cluster_size,flags))
 					break;
@@ -1208,6 +1209,8 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 				/* then lseek back to zero */
 				if (libmsfat_file_io_ctx_lseek(c,msfatctx,(uint32_t)0,flags))
 					break;
+				/* the lseek() call changes the file size. set it back to zero */
+				c->file_size = (uint32_t)0UL;
 			}
 			if (c->cluster_position < (uint32_t)2UL)
 				break;
