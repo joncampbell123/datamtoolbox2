@@ -452,6 +452,10 @@ int libmsfat_file_io_ctx_path_lookup(struct libmsfat_file_io_ctx_t *fioctx,struc
 				if (fioctx->first_cluster < (uint32_t)2UL)
 					return -1;
 
+				/* prepare dirent */
+				memset(dotdirent.a.n.DIR_Name,' ',8);
+				memset(dotdirent.a.n.DIR_Ext,' ',3);
+
 				/* . directory refers to this directory */
 				dotdirent.a.n.DIR_Name[0] = '.';
 				dotdirent.a.n.DIR_Attr = libmsfat_DIR_ATTR_DIRECTORY;
