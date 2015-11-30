@@ -256,19 +256,12 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 
 	/* then create one */
 	if (flags & libmsfat_path_lookup_CREATE) {
-		struct libmsfat_dirent_t lfndirent;
-		size_t name_len,est_entries;
 		unsigned char found = 0;
 		uint32_t last_read;
 		uint32_t ent_start;
 		uint32_t empty = 0;
+		size_t est_entries;
 		int rd;
-
-		name_len = strlen(name);
-		if (lfn_name != NULL)
-			est_entries = 1 + ((name_len + 1 + 12) / 13); // number of entries we need for the LFN
-		else
-			est_entries = 1;
 
 		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,(uint32_t)0,/*flags*/0))
 			return -1;
@@ -276,35 +269,45 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 			return -1;
 
 		/* look for an empty spot large enough to fit it */
-		rd = 0;
-		do {
-			last_read = libmsfat_file_io_ctx_tell(fioctx,msfatctx);
-			rd = libmsfat_file_io_ctx_read(fioctx,msfatctx,dirent,sizeof(*dirent));
-			if (rd == (int)sizeof(*dirent)) {
-				if (dirent->a.n.DIR_Name[0] == 0x00 || dirent->a.n.DIR_Name[0] == (char)0xE5) {
-					if (empty == 0) ent_start = last_read;
-					empty++;
+		{
+			struct libmsfat_dirent_t scandirent;
 
-					if (empty == est_entries) {
-						found = 1;
-						break;
+			if (lfn_name != NULL && lfn_name->name_avail != 0)
+				est_entries = 1 + lfn_name->name_avail; // number of entries we need for the LFN
+			else
+				est_entries = 1;
+
+			rd = 0;
+			do {
+				last_read = libmsfat_file_io_ctx_tell(fioctx,msfatctx);
+				rd = libmsfat_file_io_ctx_read(fioctx,msfatctx,&scandirent,sizeof(scandirent));
+				if (rd == (int)sizeof(scandirent)) {
+					if (scandirent.a.n.DIR_Name[0] == 0x00 || scandirent.a.n.DIR_Name[0] == (char)0xE5) {
+						if (empty == 0) ent_start = last_read;
+						empty++;
+
+						if (empty == est_entries) {
+							found = 1;
+							break;
+						}
+					}
+					else {
+						ent_start = 0;
+						empty = 0;
 					}
 				}
 				else {
-					ent_start = 0;
-					empty = 0;
+					break;
 				}
-			}
-			else {
-				break;
-			}
-		} while (1);
+			} while (1);
+		}
 
 		if (!found && rd == 0) {
 			/* empty slot big enough not found, we'll have to append to the directory.
 			 * note that we depend on the write being all or nothing. partial writes are
-			 * something to avoid. */
-			ent_start = fioctx->position;
+			 * something to avoid. start either at the end of the directory or the start
+			 * of the last empty space we found but never finished scanning. */
+			if (ent_start == 0) ent_start = fioctx->position;
 			empty = (uint32_t)est_entries;
 			found = 1;
 		}
@@ -334,6 +337,8 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 
 				/* LFN name first */
 				if (lfn_name != NULL && lfn_name->name_avail != 0) {
+					struct libmsfat_dirent_t lfndirent;
+
 					for (rd=lfn_name->name_avail-1;rd >= 0;rd--) {
 						written_ent++;
 						if (libmsfat_dirent_lfn_to_dirent_piece(&lfndirent,lfn_name,(unsigned int)rd))
