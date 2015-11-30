@@ -104,7 +104,13 @@ void libmsfat_dirent_lfn_to_str_utf16le(char *buf,size_t buflen,const struct lib
 	assert(d <= de);
 }
 
-int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,const char *name,unsigned int hash) {
+static char lfn_hash_digit52(uint32_t hdigit) {
+	if (hdigit >= 52UL) return ' ';
+	if (hdigit >= 26UL) return ((char)(hdigit - 26UL)) + 'A';
+	return ((char)(hdigit)) + 'a';
+}
+
+int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,const char *name) {
 	unicode_char_t uc;
 	unsigned int o;
 
@@ -139,12 +145,23 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 
 	/* next we need to generate a 8.3 name, checksum it, and assign the checksum to the LFN */
 	{
+		uint32_t hash = (uint32_t)0x12345678UL;
 		uint16_t *sa = lfn_name->assembly;
 		uint16_t *sf = sa + o;
 		char *d,*df;
 
+		{
+			uint16_t *s = sa;
+			while (s < sf) {
+				if (*s == (uint16_t)0) break;
+				hash = (hash << (uint32_t)3UL) + (hash >> (uint32_t)(32UL - 3UL));
+				hash ^= (uint32_t)(*s);
+				s++;
+			}
+		}
+
 		d = dirent->a.n.DIR_Name;
-		df = d + sizeof(dirent->a.n.DIR_Name) - 4;
+		df = d + sizeof(dirent->a.n.DIR_Name) - 6;
 
 		/* name */
 		while (d < df && sa < sf) {
@@ -160,9 +177,11 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 		}
 		while (d < df) *d++ = '_';
 		*d++ = '~';
-		*d++ = (char)(((hash / 26 / 26) % 26) + 'A');
-		*d++ = (char)(((hash / 26) % 26) + 'A');
-		*d++ = (char)((hash % 26) + 'A');
+		*d++ = lfn_hash_digit52((hash / 52UL  / 52UL  / 52UL  / 52UL) % 52UL);
+		*d++ = lfn_hash_digit52((hash / 52UL  / 52UL  / 52UL) % 52UL);
+		*d++ = lfn_hash_digit52((hash / 52UL  / 52UL) % 52UL);
+		*d++ = lfn_hash_digit52((hash / 52UL) % 52UL);
+		*d++ = lfn_hash_digit52(hash % 52UL);
 		while (sa < sf && *sa != 0 && le16toh(*sa) != '.') sa++;
 
 		d = dirent->a.n.DIR_Ext;
@@ -272,7 +291,7 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 		 * we need to hold the LFN and the 8.3 name. */
 		memset(dirent,0,sizeof(*dirent));
 		if (lfn_name != NULL && libmsfat_name_needs_lfn_utf8(name)) {
-			if (libmsfat_dirent_utf8_str_to_lfn(dirent,lfn_name,name,ent_start / (uint32_t)32UL)/*failed*/ || lfn_name->name_avail == 0) {
+			if (libmsfat_dirent_utf8_str_to_lfn(dirent,lfn_name,name)/*failed*/ || lfn_name->name_avail == 0) {
 				if (libmsfat_dirent_str_to_filename(dirent,name))/*give up and make 8.3 version */
 					return -1;
 			}
