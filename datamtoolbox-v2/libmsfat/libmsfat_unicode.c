@@ -342,6 +342,7 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 				if (lfn_name != NULL && lfn_name->name_avail != 0) {
 					struct libmsfat_dirent_t lfndirent;
 
+					/* NTS: LFN names are written with the segments BACKWARDS, last entry to first entry */
 					for (rd=lfn_name->name_avail-1;rd >= 0;rd--) {
 						written_ent++;
 						if (libmsfat_dirent_lfn_to_dirent_piece(&lfndirent,lfn_name,(unsigned int)rd))
