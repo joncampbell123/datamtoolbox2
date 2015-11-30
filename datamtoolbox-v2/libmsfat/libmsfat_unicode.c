@@ -257,8 +257,8 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 	/* then create one */
 	if (flags & libmsfat_path_lookup_CREATE) {
 		unsigned char found = 0;
+		uint32_t ent_start = 0;
 		uint32_t last_read;
-		uint32_t ent_start;
 		uint32_t empty = 0;
 		size_t est_entries;
 		int rd;
@@ -319,7 +319,7 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 			} while (1);
 		}
 
-		if (!found && rd == 0) {
+		if (!found && rd == 0 && fioctx->is_cluster_chain) {
 			/* empty slot big enough not found, we'll have to append to the directory.
 			 * note that we depend on the write being all or nothing. partial writes are
 			 * something to avoid. start either at the end of the directory or the start
