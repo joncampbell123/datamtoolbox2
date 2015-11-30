@@ -1796,3 +1796,12 @@ int libmsfat_file_io_ctx_update_dirent_from_context(struct libmsfat_dirent_t *di
 	return 0;
 }
 
+int libmsfat_file_io_ctx_enable_write_extend(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx) {
+	if (fioctx == NULL || fioctx_parent == NULL || msfatctx == NULL)
+		return -1;
+
+	fioctx->allow_extend_to_cluster_tip = 1;
+	fioctx->allow_extend_allocation_chain = 1;
+	return 0;
+}
+

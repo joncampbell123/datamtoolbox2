@@ -464,6 +464,7 @@ int libmsfat_context_write_fat32_fsinfo(struct libmsfat_context_t *msfatctx,stru
 int libmsfat_context_load_fat32_fsinfo(struct libmsfat_context_t *msfatctx,struct libmsfat_fat32_fsinfo_t *fsinfo);
 int libmsfat_context_update_fat32_free_cluster_count(struct libmsfat_context_t *msfatctx);
 int libmsfat_file_io_ctx_update_dirent_from_context(struct libmsfat_dirent_t *dirent,struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx);
+int libmsfat_file_io_ctx_enable_write_extend(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx);
 
 /* lseek has flags to tell it what to do */
 int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_context_t *msfatctx,uint32_t offset,unsigned int flags);

@@ -273,8 +273,10 @@ int main(int argc,char **argv) {
 	}
 
 	/* please allow extending the file (TODO: there should be library functions to enable this!) */
-	fioctx->allow_extend_to_cluster_tip = 1;
-	fioctx->allow_extend_allocation_chain = 1;
+	if (libmsfat_file_io_ctx_enable_write_extend(fioctx,fioctx_parent,msfatctx)) {
+		fprintf(stderr,"Cannot make file write-extendable\n");
+		return 1;
+	}
 
 	/* seek to the end */
 	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size,/*flags*/0)) {
