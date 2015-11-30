@@ -1832,8 +1832,8 @@ int libmsfat_dirent_str_to_filename(struct libmsfat_dirent_t *dirent,const char 
 	while (i < 8) dirent->a.n.DIR_Name[i++] = ' ';
 
 	/* extension */
+	i = 0;
 	if (*name == '.') {
-		i = 0;
 		name++;
 		while (*name != 0) {
 			if (*name == '.') return -1;
@@ -1842,8 +1842,8 @@ int libmsfat_dirent_str_to_filename(struct libmsfat_dirent_t *dirent,const char 
 			dirent->a.n.DIR_Ext[i++] = toupper(*name);
 			name++;
 		}
-		while (i < 3) dirent->a.n.DIR_Ext[i++] = ' ';
 	}
+	while (i < 3) dirent->a.n.DIR_Ext[i++] = ' ';
 
 	return 0;
 }
