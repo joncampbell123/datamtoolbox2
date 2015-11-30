@@ -122,7 +122,7 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 
 		// TODO: If encoding needs a surrogate pair...
 
-		lfn_name->assembly[o++] = (uint16_t)uc;
+		lfn_name->assembly[o++] = (uint16_t)htole16(uc);
 	}
 
 	/* NUL */
