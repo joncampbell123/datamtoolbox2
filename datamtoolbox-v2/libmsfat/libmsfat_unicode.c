@@ -128,7 +128,7 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 	}
 
 	/* NUL */
-	assert(uc < (sizeof(lfn_name->assembly)/sizeof(lfn_name->assembly[0])));
+	assert(o < (sizeof(lfn_name->assembly)/sizeof(lfn_name->assembly[0])));
 	lfn_name->assembly[o++] = 0;
 
 	/* how many dirents needed? */
@@ -136,8 +136,8 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 	if (lfn_name->name_avail > 32) return -1;
 
 	/* pad fill 0xFFFF (noted Win9x behavior) */
-	while (uc < (13U * lfn_name->name_avail)) lfn_name->assembly[uc++] = 0xFFFF;
-	assert(uc < (sizeof(lfn_name->assembly)/sizeof(lfn_name->assembly[0])));
+	while (o < (13U * lfn_name->name_avail)) lfn_name->assembly[o++] = 0xFFFF;
+	assert(o < (sizeof(lfn_name->assembly)/sizeof(lfn_name->assembly[0])));
 
 	/* next we need to generate a 8.3 name, checksum it, and assign the checksum to the LFN */
 	{
@@ -153,7 +153,7 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 			if (*sa == '.' || *sa == 0)
 				break;
 			if (*sa > 32 && *sa < 127 &&
-				!(*sa != ':' && *sa != '\\' && *sa != '/' && *sa != '*' && *sa != ';'))
+				!(*sa != ':' || *sa != '\\' || *sa != '/' || *sa != '*' || *sa != ';'))
 				*d++ = (char)(*sa);
 
 			sa++;
@@ -175,7 +175,7 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 				if (*sa == 0)
 					break;
 				if (*sa > 32 && *sa < 127 &&
-					!(*sa != ':' && *sa != '\\' && *sa != '/' && *sa != '*' && *sa != ';'))
+					!(*sa != ':' || *sa != '\\' || *sa != '/' || *sa != '*' || *sa != ';'))
 					*d++ = (char)(*sa);
 
 				sa++;
