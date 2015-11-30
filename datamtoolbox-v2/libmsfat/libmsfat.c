@@ -1787,3 +1787,12 @@ int libmsfat_context_update_fat32_free_cluster_count(struct libmsfat_context_t *
 	return 0;
 }
 
+int libmsfat_file_io_ctx_update_dirent_from_context(struct libmsfat_dirent_t *dirent,struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,struct libmsfat_context_t *msfatctx) {
+	if (dirent == NULL || fioctx == NULL || msfatctx == NULL) return -1;
+
+	dirent->a.n.DIR_FileSize = htole32(fioctx->file_size);
+	dirent->a.n.DIR_FstClusLO = (uint16_t)(fioctx->first_cluster & 0xFFFF);
+	if (msfatctx->fatinfo.FAT_size == 32) dirent->a.n.DIR_FstClusHI = (uint16_t)(fioctx->first_cluster >> 16);
+	return 0;
+}
+
