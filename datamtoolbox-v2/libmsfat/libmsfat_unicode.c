@@ -268,6 +268,23 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 		if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != (uint32_t)0)
 			return -1;
 
+		/* form the file name, 8.3 and LFN. this is also where we determine the number of dirents
+		 * we need to hold the LFN and the 8.3 name. */
+		memset(dirent,0,sizeof(*dirent));
+		if (lfn_name != NULL && libmsfat_name_needs_lfn_utf8(name)) {
+			if (libmsfat_dirent_utf8_str_to_lfn(dirent,lfn_name,name,ent_start / (uint32_t)32UL)/*failed*/ || lfn_name->name_avail == 0) {
+				if (libmsfat_dirent_str_to_filename(dirent,name))/*give up and make 8.3 version */
+					return -1;
+			}
+		}
+		else {
+			if (libmsfat_dirent_str_to_filename(dirent,name))
+				return -1;
+		}
+
+		if (flags & libmsfat_path_lookup_DIRECTORY)
+			dirent->a.n.DIR_Attr |= libmsfat_DIR_ATTR_DIRECTORY;
+
 		/* look for an empty spot large enough to fit it */
 		{
 			struct libmsfat_dirent_t scandirent;
@@ -316,23 +333,6 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 		}
 		if (found) {
 			uint32_t written_ent = 0;
-
-			/* we either found an empty slot big enough or we decided to append to the
-			 * directory to make the entry */
-			memset(dirent,0,sizeof(*dirent));
-			if (lfn_name != NULL && libmsfat_name_needs_lfn_utf8(name)) {
-				if (libmsfat_dirent_utf8_str_to_lfn(dirent,lfn_name,name,ent_start / (uint32_t)32UL)/*failed*/ || lfn_name->name_avail == 0) {
-					if (libmsfat_dirent_str_to_filename(dirent,name))/*give up and make 8.3 version */
-						return -1;
-				}
-			}
-			else {
-				if (libmsfat_dirent_str_to_filename(dirent,name))
-					return -1;
-			}
-
-			if (flags & libmsfat_path_lookup_DIRECTORY)
-				dirent->a.n.DIR_Attr |= libmsfat_DIR_ATTR_DIRECTORY;
 
 			/* go and write it. LFN first, 8.3 name last. */
 			if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,ent_start,libmsfat_lseek_FLAG_IGNORE_FILE_SIZE|libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) == 0 &&
