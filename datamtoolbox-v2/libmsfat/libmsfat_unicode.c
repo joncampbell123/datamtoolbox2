@@ -310,6 +310,9 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 			if (ent_start == 0) ent_start = fioctx->position;
 			empty = (uint32_t)est_entries;
 			found = 1;
+
+			/* we need to enable extending the allocation chain on write */
+			fioctx->allow_extend_allocation_chain = 1;
 		}
 		if (found) {
 			uint32_t written_ent = 0;
