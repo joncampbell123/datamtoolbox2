@@ -104,8 +104,6 @@ void libmsfat_dirent_lfn_to_str_utf16le(char *buf,size_t buflen,const struct lib
 	assert(d <= de);
 }
 
-///////////////////////////////////////////
-
 int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,const char *name,unsigned int hash) {
 	unicode_char_t uc;
 	unsigned int o;
@@ -220,8 +218,6 @@ int libmsfat_name_needs_lfn_utf8(const char *name) {
 
 	return (namelen > 8 || extlen > 3)?1:0;
 }
-
-///////////////////////////////////////////
 
 int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,const char *name,unsigned int flags) {
 	char tmp[512];
