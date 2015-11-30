@@ -892,7 +892,7 @@ int libmsfat_lfn_dirent_assemble(struct libmsfat_lfn_assembly_t *lfna,const stru
 int libmsfat_lfn_dirent_is_lfn(const struct libmsfat_dirent_t *dir) {
 	if (dir == NULL) return 0;
 
-	if (dir->a.n.DIR_Name[0] == 0x00 || dir->a.n.DIR_Name[0] == 0xE5)
+	if (dir->a.n.DIR_Name[0] == 0x00 || dir->a.n.DIR_Name[0] == (char)0xE5)
 		return 0;
 	if ((dir->a.n.DIR_Attr & libmsfat_DIR_ATTR_MASK) == libmsfat_DIR_ATTR_LONG_NAME)
 		return 1;
