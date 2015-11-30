@@ -1055,6 +1055,12 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 
 			if (libmsfat_context_fat_is_end_of_chain(msfatctx,next_cluster)) {
 				if (flags & libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) {
+					/* allow lseeking to the first byte past a cluster, but do not extend
+					 * the allocation chain, IF, this is the last step to meet the caller's
+					 * requirements and the seek operation puts it directly at the first
+					 * byte of the next cluster. Most OSes do not allocate an extra cluster
+					 * if you write up to the end of a cluster but not into the next. */
+					if ((c->cluster_position_start + c->cluster_size) == offset_cluster_round && offset_cluster_offset == 0) break;
 					/* the caller wants us to extend the allocation chain if necessary to
 					 * satisfy the request. find a free cluster and take it, or give up.
 					 * if for any reason we can't write the FAT table, then give up. */
@@ -1201,7 +1207,7 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			 * Lseek keeps cluster_position somewhere within the chain, always. */
 			if ((flags & libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) && c->cluster_position < (uint32_t)2UL &&
 				c->position == (uint32_t)0UL && c->file_size == (uint32_t)0UL) {
-				/* lseek to cluster size, to start the allocation chain */
+				/* lseek to start the allocation chain */
 				if (libmsfat_file_io_ctx_lseek(c,msfatctx,c->cluster_size,flags))
 					break;
 				if (libmsfat_file_io_ctx_tell(c,msfatctx) != c->cluster_size)
