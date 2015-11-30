@@ -369,6 +369,7 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 int libmsfat_file_io_ctx_path_lookup(struct libmsfat_file_io_ctx_t *fioctx,struct libmsfat_file_io_ctx_t *fioctx_parent,
 	struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,
 	const char *path,unsigned int flags) {
+	unsigned int tmp_flags;
 	char tmp[320],*d,*df;
 
 	// requires fioctx to set up target file/dir
@@ -405,8 +406,12 @@ int libmsfat_file_io_ctx_path_lookup(struct libmsfat_file_io_ctx_t *fioctx,struc
 		*d = 0;
 		if (d >= df) return -1;
 
+		/* only allow CREATE if last element */
+		tmp_flags = flags;
+		if (*path != 0) tmp_flags &= ~libmsfat_path_lookup_CREATE;
+
 		/* use parent fioctx to scan for path element */
-		if (libmsfat_file_io_ctx_find_in_dir(fioctx,msfatctx,dirent,lfn_name,tmp,flags))
+		if (libmsfat_file_io_ctx_find_in_dir(fioctx,msfatctx,dirent,lfn_name,tmp,tmp_flags))
 			return -1;
 
 		/* fioctx becomes parent, start a new one */
