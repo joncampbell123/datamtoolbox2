@@ -177,7 +177,7 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 				if (c == 0)
 					break;
 				if (c > 32 && c < 127 &&
-					!(c == ':' || c == '\\' || c == '/' || c == '*' || c == ';'))
+					!(c == ':' || c == '\\' || c == '/' || c == '*' || c == ';' || c == '.'))
 					*d++ = (char)(c);
 
 				sa++;
