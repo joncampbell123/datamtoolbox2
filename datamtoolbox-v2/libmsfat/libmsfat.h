@@ -204,7 +204,8 @@ struct libmsfat_file_io_ctx_t {
 	unsigned int			allow_extend_to_cluster_tip:1; // if set, allow writing past EOF to the end of the cluster tip
 	unsigned int			allow_extend_allocation_chain:1; // if set, extend allocation chain to satisfy lseek
 	unsigned int			should_update_dirent:1;	// if set, the dirent this file came from should be updated
-	unsigned int			_padding_:26;
+	unsigned int			zero_cluster_on_alloc:1;// if set, newly allocated clusters must be zeroed (strongly recommended for directories)
+	unsigned int			_padding_:24;
 	uint64_t			non_cluster_offset;	// if root dir (non-cluster), byte offset
 	libmsfat_cluster_t		first_cluster;		// if not root dir, then starting cluster
 	uint32_t			file_size;		// file size, in bytes
@@ -481,6 +482,10 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
  * another cluster and update the FAT table to extend the file by one cluster. this
  * may require the dirent for the file to be updated to reflect size and cluster number */
 #define libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN	(1U << 1U)
+/* zero clusters when extending the allocation chain. STRONGLY RECOMMENDED for directories */
+#define libmsfat_lseek_FLAG_ZERO_CLUSTER_ON_ALLOC	(1U << 2U)
+
+int libmsfat_file_io_ctx_zero_cluster(libmsfat_cluster_t cluster,struct libmsfat_context_t *msfatctx);
 
 #endif // __DATAMTOOLBOX_LIBMSFAT_LIBMSFAT_H
 

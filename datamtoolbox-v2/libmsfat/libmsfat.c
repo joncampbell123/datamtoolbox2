@@ -1015,6 +1015,9 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 					c->cluster_position_start = 0;
 					c->should_update_dirent = 1;
 					c->position = 0;
+
+					if (flags & libmsfat_lseek_FLAG_ZERO_CLUSTER_ON_ALLOC)
+						libmsfat_file_io_ctx_zero_cluster(next_cluster,msfatctx);
 				}
 			}
 		}
@@ -1070,6 +1073,9 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 					if (libmsfat_context_write_FAT(msfatctx,next_cluster,c->cluster_position,0)) break;
 					/* rewrite the new cluster to be the end of the chain */
 					if (libmsfat_context_write_FAT(msfatctx,(libmsfat_FAT_entry_t)0xFFFFFFFFUL,next_cluster,0)) break;
+
+					if (flags & libmsfat_lseek_FLAG_ZERO_CLUSTER_ON_ALLOC)
+						libmsfat_file_io_ctx_zero_cluster(next_cluster,msfatctx);
 				}
 				else {
 					break;
@@ -1142,6 +1148,7 @@ int libmsfat_file_io_ctx_assign_root_directory(struct libmsfat_file_io_ctx_t *c,
 		c->is_root_dir = 1;
 	}
 
+	c->zero_cluster_on_alloc = c->is_directory;
 	if (libmsfat_file_io_ctx_lseek(c,msfatctx,(uint32_t)0UL,/*flags*/0) || libmsfat_file_io_ctx_tell(c,msfatctx) != (uint32_t)0UL) {
 		libmsfat_file_io_ctx_close(c);
 		return -1;
@@ -1199,6 +1206,8 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			flags |= libmsfat_lseek_FLAG_IGNORE_FILE_SIZE;
 		if (c->allow_extend_allocation_chain)
 			flags |= libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN;
+		if (c->zero_cluster_on_alloc)
+			flags |= libmsfat_lseek_FLAG_ZERO_CLUSTER_ON_ALLOC;
 
 		while (canwrite > (size_t)0) {
 			/* If the file has no allocation chain, then no writing happens.
@@ -1487,6 +1496,7 @@ int libmsfat_file_io_ctx_assign_from_dirent(struct libmsfat_file_io_ctx_t *fioct
 	else
 		fioctx->file_size = dirent->a.n.DIR_FileSize;
 
+	fioctx->zero_cluster_on_alloc = fioctx->is_directory;
 	return 0;
 }
 
@@ -1876,6 +1886,31 @@ int libmsfat_dirent_lfn_to_dirent_piece(struct libmsfat_dirent_t *dirent,struct 
 	for (i=0;i < 5;i++) dirent->a.lfn.LDIR_Name1[i] = *s++;
 	for (i=0;i < 6;i++) dirent->a.lfn.LDIR_Name2[i] = *s++;
 	for (i=0;i < 2;i++) dirent->a.lfn.LDIR_Name3[i] = *s++;
+
+	return 0;
+}
+
+int libmsfat_file_io_ctx_zero_cluster(libmsfat_cluster_t cluster,struct libmsfat_context_t *msfatctx) {
+	uint8_t tmp[512];
+	uint64_t offset;
+	uint32_t sz,wr;
+
+	if (msfatctx == NULL) return -1;
+	if (cluster < (libmsfat_cluster_t)2UL) return -1;
+	if (libmsfat_context_get_cluster_offset(msfatctx,&offset,cluster)) return -1;
+
+	sz = libmsfat_context_get_cluster_size(msfatctx);
+	memset(tmp,0,512);
+	while (sz > 0) {
+		wr = sz;
+		if (wr > sizeof(tmp)) wr = sizeof(tmp);
+
+		if (msfatctx->write(msfatctx,tmp,offset,wr))
+			return -1;
+
+		offset += wr;
+		sz -= wr;
+	}
 
 	return 0;
 }
