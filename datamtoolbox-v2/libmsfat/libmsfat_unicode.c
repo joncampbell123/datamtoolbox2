@@ -124,18 +124,18 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 
 		lfn_name->assembly[o++] = (uint16_t)htole16(uc);
 	}
-
-	/* NUL */
-	assert(o < (sizeof(lfn_name->assembly)/sizeof(lfn_name->assembly[0])));
-	lfn_name->assembly[o++] = 0;
+	assert((o+1U) < (sizeof(lfn_name->assembly)/sizeof(lfn_name->assembly[0])));
 
 	/* how many dirents needed? */
 	lfn_name->name_avail = (o + 12) / 13;
 	if (lfn_name->name_avail > 32) return -1;
 
-	/* pad fill 0xFFFF (noted Win9x behavior) */
-	while (o < (13U * lfn_name->name_avail)) lfn_name->assembly[o++] = 0xFFFF;
-	assert(o < (sizeof(lfn_name->assembly)/sizeof(lfn_name->assembly[0])));
+	/* LFNs are padded with NUL, then 0xFFFF.
+	 * If the LFN is a multiple of 13 (fits perfectly) then no NUL or padding is added */
+	if ((o % 13) != 0) {
+		lfn_name->assembly[o++] = 0;
+		while (o < (13U * lfn_name->name_avail)) lfn_name->assembly[o++] = 0xFFFF;
+	}
 
 	/* next we need to generate a 8.3 name, checksum it, and assign the checksum to the LFN */
 	{
