@@ -12,4 +12,5 @@ int libmsfat_file_io_ctx_path_lookup(struct libmsfat_file_io_ctx_t *fioctx,struc
 	struct libmsfat_context_t *msfatctx,struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,
 	const char *path,unsigned int flags);
 #define libmsfat_path_lookup_CREATE		(1U << 0U)
+#define libmsfat_path_lookup_DIRECTORY		(1U << 1U)
 

@@ -325,6 +325,9 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 					return -1;
 			}
 
+			if (flags & libmsfat_path_lookup_DIRECTORY)
+				dirent->a.n.DIR_Attr |= libmsfat_DIR_ATTR_DIRECTORY;
+
 			/* go and write it. LFN first, 8.3 name last. */
 			if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,ent_start,libmsfat_lseek_FLAG_IGNORE_FILE_SIZE|libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) == 0 &&
 				libmsfat_file_io_ctx_tell(fioctx,msfatctx) == ent_start) {
@@ -414,6 +417,64 @@ int libmsfat_file_io_ctx_path_lookup(struct libmsfat_file_io_ctx_t *fioctx,struc
 		if (libmsfat_file_io_ctx_assign_from_dirent(fioctx,msfatctx,dirent) ||
 			libmsfat_file_io_ctx_rewinddir(fioctx,msfatctx,lfn_name))
 			return -1;
+
+		/* if we created a directory, then we need to create . and .. directories */
+		if ((flags & (libmsfat_path_lookup_DIRECTORY|libmsfat_path_lookup_CREATE)) == (libmsfat_path_lookup_DIRECTORY|libmsfat_path_lookup_CREATE)) {
+			if (fioctx->first_cluster < (uint32_t)2UL) {
+				struct libmsfat_dirent_t dotdirent;
+				unsigned int count;
+
+				memset(&dotdirent,0,sizeof(dotdirent));
+				if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->cluster_size,
+					libmsfat_lseek_FLAG_IGNORE_FILE_SIZE|libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN))
+					return -1;
+				if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != fioctx->cluster_size)
+					return -1;
+
+				/* need to fill the directory with zeros */
+				if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,0,0))
+					return -1;
+				if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != (uint32_t)0)
+					return -1;
+				count = (unsigned int)(fioctx->cluster_size / (uint32_t)32UL);
+				while (count > 0) {
+					if (libmsfat_file_io_ctx_write(fioctx,msfatctx,&dotdirent,sizeof(dotdirent)) != sizeof(dotdirent))
+						return -1;
+
+					count--;
+				}
+				if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,0,0))
+					return -1;
+				if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != (uint32_t)0)
+					return -1;
+
+				/* if we still don't have a starting cluster, then bail */
+				if (fioctx->first_cluster < (uint32_t)2UL)
+					return -1;
+
+				/* . directory refers to this directory */
+				dotdirent.a.n.DIR_Name[0] = '.';
+				dotdirent.a.n.DIR_Attr = libmsfat_DIR_ATTR_DIRECTORY;
+				dotdirent.a.n.DIR_FstClusLO = (uint16_t)(fioctx->first_cluster & 0xFFFF);
+				if (msfatctx->fatinfo.FAT_size == 32)
+					dotdirent.a.n.DIR_FstClusHI = (uint16_t)(fioctx->first_cluster >> 16);
+				if (libmsfat_file_io_ctx_write(fioctx,msfatctx,&dotdirent,sizeof(dotdirent)) != sizeof(dotdirent))
+					return -1;
+
+				/* .. directory refers to parent directory. cluster == 0 is valid for root directory */
+				dotdirent.a.n.DIR_Name[1] = '.';
+				dotdirent.a.n.DIR_FstClusLO = (uint16_t)(fioctx_parent->first_cluster & 0xFFFF);
+				if (msfatctx->fatinfo.FAT_size == 32)
+					dotdirent.a.n.DIR_FstClusHI = (uint16_t)(fioctx_parent->first_cluster >> 16);
+				if (libmsfat_file_io_ctx_write(fioctx,msfatctx,&dotdirent,sizeof(dotdirent)) != sizeof(dotdirent))
+					return -1;
+
+				/* update parent dirent */
+				libmsfat_file_io_ctx_update_dirent_from_context(dirent,fioctx,fioctx_parent,msfatctx);
+				if (libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,dirent,lfn_name))
+					return -1;
+			}
+		}
 	}
 
 	return 0;

@@ -27,6 +27,7 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
+static int				do_mkdir = 0;
 static unsigned char			sectorbuf[512];
 static const char*			msg_add = NULL;
 static int				msg_rep = 1;
@@ -65,6 +66,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"c")) {
 				msg_rep = atoi(argv[i++]);
 			}
+			else if (!strcmp(a,"dir")) {
+				do_mkdir = 1;
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -85,6 +89,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"fappend --image <image> -m <message> ...\n");
 		fprintf(stderr,"zero out all areas of the disk/partition that are not allocated by the filesystem.\n");
 		fprintf(stderr,"\n");
+		fprintf(stderr,"--dir                    Create a directory, not a file\n");
 		fprintf(stderr,"--partition <n>          Hard disk image, use partition N from the MBR\n");
 		fprintf(stderr,"-c <N>                   Number of times to write the message\n");
 		return 1;
@@ -261,70 +266,79 @@ int main(int argc,char **argv) {
 	}
 
 	/* do it */
-	if (libmsfat_file_io_ctx_path_lookup(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,s_path,libmsfat_path_lookup_CREATE)) {
+	if (libmsfat_file_io_ctx_path_lookup(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name,s_path,
+		libmsfat_path_lookup_CREATE | (do_mkdir?libmsfat_path_lookup_DIRECTORY:0))) {
 		fprintf(stderr,"Path lookup failed\n");
 		return 1;
 	}
 
-	/* no directories! */
-	if (fioctx->is_directory || fioctx->is_root_parent) {
-		fprintf(stderr,"Cannot append to directories\n");
-		return 1;
-	}
-
-	/* please allow extending the file (TODO: there should be library functions to enable this!) */
-	if (libmsfat_file_io_ctx_enable_write_extend(fioctx,fioctx_parent,msfatctx)) {
-		fprintf(stderr,"Cannot make file write-extendable\n");
-		return 1;
-	}
-
-	/* seek to the end */
-	if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size,/*flags*/0)) {
-		fprintf(stderr,"Cannot lseek to end\n");
-		return 1;
-	}
-	if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != fioctx->file_size) {
-		fprintf(stderr,"lseek didn't reach end\n");
-		return 1;
-	}
-
-	/* SANITY CHECK: the libmsfat library currently clears the cluster position to zero when hitting the end of the chain */
-	if (fioctx->position != (uint32_t)0UL && fioctx->cluster_position == (uint32_t)0UL) {
-		fprintf(stderr,"lseek hit the end of the cluster, position lost (BUG)\n");
-		return 1;
-	}
-
-	/* write it */
-	{
-		size_t len = strlen(msg_add);
-		int wr;
-
-		while (msg_rep > 0) {
-			wr = libmsfat_file_io_ctx_write(fioctx,msfatctx,msg_add,len);
-			if (wr < 0) {
-				fprintf(stderr,"Write failed\n");
-				break;
-			}
-			else if (wr == 0) {
-				fprintf(stderr,"Write hit EOF\n");
-				break;
-			}
-			else if (wr < (int)len) {
-				fprintf(stderr,"Write was incomplete (%d < %d)\n",
-					wr,(int)len);
-				break;
-			}
-
-			msg_rep--;
+	if (do_mkdir) {
+		if (!fioctx->is_directory || fioctx->is_root_dir || fioctx->is_root_parent) {
+			fprintf(stderr,"Not a directory\n");
+			return 1;
 		}
 	}
+	else {
+		/* no directories! */
+		if (fioctx->is_directory || fioctx->is_root_parent) {
+			fprintf(stderr,"Cannot append to directories\n");
+			return 1;
+		}
 
-	/* if we need to update the dirent, then do so */
-	if (fioctx->should_update_dirent) {
-		/* write it back to disk */
-		libmsfat_file_io_ctx_update_dirent_from_context(&dirent,fioctx,fioctx_parent,msfatctx);
-		if (libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name))
-			fprintf(stderr,"Failed to update dirent\n");
+		/* please allow extending the file (TODO: there should be library functions to enable this!) */
+		if (libmsfat_file_io_ctx_enable_write_extend(fioctx,fioctx_parent,msfatctx)) {
+			fprintf(stderr,"Cannot make file write-extendable\n");
+			return 1;
+		}
+
+		/* seek to the end */
+		if (libmsfat_file_io_ctx_lseek(fioctx,msfatctx,fioctx->file_size,/*flags*/0)) {
+			fprintf(stderr,"Cannot lseek to end\n");
+			return 1;
+		}
+		if (libmsfat_file_io_ctx_tell(fioctx,msfatctx) != fioctx->file_size) {
+			fprintf(stderr,"lseek didn't reach end\n");
+			return 1;
+		}
+
+		/* SANITY CHECK: the libmsfat library currently clears the cluster position to zero when hitting the end of the chain */
+		if (fioctx->position != (uint32_t)0UL && fioctx->cluster_position == (uint32_t)0UL) {
+			fprintf(stderr,"lseek hit the end of the cluster, position lost (BUG)\n");
+			return 1;
+		}
+
+		/* write it */
+		{
+			size_t len = strlen(msg_add);
+			int wr;
+
+			while (msg_rep > 0) {
+				wr = libmsfat_file_io_ctx_write(fioctx,msfatctx,msg_add,len);
+				if (wr < 0) {
+					fprintf(stderr,"Write failed\n");
+					break;
+				}
+				else if (wr == 0) {
+					fprintf(stderr,"Write hit EOF\n");
+					break;
+				}
+				else if (wr < (int)len) {
+					fprintf(stderr,"Write was incomplete (%d < %d)\n",
+							wr,(int)len);
+					break;
+				}
+
+				msg_rep--;
+			}
+		}
+
+		/* if we need to update the dirent, then do so */
+		if (fioctx->should_update_dirent) {
+			/* write it back to disk */
+			libmsfat_file_io_ctx_update_dirent_from_context(&dirent,fioctx,fioctx_parent,msfatctx);
+			if (libmsfat_file_io_ctx_write_dirent(fioctx,fioctx_parent,msfatctx,&dirent,&lfn_name))
+				fprintf(stderr,"Failed to update dirent\n");
+		}
 	}
 
 	/* this code focuses on FAT table #0. make sure to copy FAT 0 to FAT 1/2/3 etc. */
