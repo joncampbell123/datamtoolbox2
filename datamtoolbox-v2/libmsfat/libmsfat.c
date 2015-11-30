@@ -1256,7 +1256,7 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			canwrite -= dowrite;
 
 			/* advance the file pointer */
-			npos = c->position + dowrite;
+			npos = (uint32_t)c->position + (uint32_t)dowrite;
 			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,flags))
 				break;
 			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
@@ -1343,7 +1343,7 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 			canread -= doread;
 
 			/* advance the file pointer */
-			npos = c->position + doread;
+			npos = (uint32_t)c->position + (uint32_t)doread;
 			if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,/*flags*/0))
 				return -1;
 			if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)

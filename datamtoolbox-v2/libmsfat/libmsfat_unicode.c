@@ -305,7 +305,7 @@ int libmsfat_file_io_ctx_find_in_dir(struct libmsfat_file_io_ctx_t *fioctx,struc
 			 * note that we depend on the write being all or nothing. partial writes are
 			 * something to avoid. */
 			ent_start = fioctx->position;
-			empty = est_entries;
+			empty = (uint32_t)est_entries;
 			found = 1;
 		}
 		if (found) {
