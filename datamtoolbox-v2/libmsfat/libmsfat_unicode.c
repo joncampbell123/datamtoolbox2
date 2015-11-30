@@ -190,65 +190,6 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 	return 0;
 }
 
-int libmsfat_dirent_str_to_filename(struct libmsfat_dirent_t *dirent,const char *name) {
-	unsigned int i;
-
-	if (dirent == NULL || name == NULL) return -1;
-
-	/* init */
-	memset(dirent,0,sizeof(*dirent));
-	while (*name == '.' || *name == ' ') return -1;
-	if (*name == 0) return -1;
-
-	/* name */
-	i = 0;
-	while (*name != 0 && *name != '.') {
-		if (i >= 8) return -1;
-		if (*name < 32) return -1;
-		dirent->a.n.DIR_Name[i++] = toupper(*name);
-		name++;
-	}
-	while (i < 8) dirent->a.n.DIR_Name[i++] = ' ';
-
-	/* extension */
-	if (*name == '.') {
-		i = 0;
-		name++;
-		while (*name != 0) {
-			if (*name == '.') return -1;
-			if (*name < 32) return -1;
-			if (i >= 3) return -1;
-			dirent->a.n.DIR_Ext[i++] = toupper(*name);
-			name++;
-		}
-		while (i < 3) dirent->a.n.DIR_Ext[i++] = ' ';
-	}
-
-	return 0;
-}
-
-int libmsfat_dirent_lfn_to_dirent_piece(struct libmsfat_dirent_t *dirent,struct libmsfat_lfn_assembly_t *lfn_name,unsigned int segment) {
-	unsigned int i;
-	uint16_t *s;
-
-	if (dirent == NULL || lfn_name == NULL) return -1;
-	if (segment >= lfn_name->name_avail || segment >= 32U) return -1;
-
-	memset(dirent,0,sizeof(*dirent));
-	dirent->a.lfn.LDIR_Ord = segment + 1;
-	if ((segment + 1) == lfn_name->name_avail) dirent->a.lfn.LDIR_Ord |= 0x40; /* last entry */
-
-	dirent->a.lfn.LDIR_Attr = 0x0F;
-	dirent->a.lfn.LDIR_Chksum = lfn_name->chksum[segment];
-
-	s = lfn_name->assembly + (segment * 13);
-	for (i=0;i < 5;i++) dirent->a.lfn.LDIR_Name1[i] = *s++;
-	for (i=0;i < 6;i++) dirent->a.lfn.LDIR_Name2[i] = *s++;
-	for (i=0;i < 2;i++) dirent->a.lfn.LDIR_Name3[i] = *s++;
-
-	return 0;
-}
-
 int libmsfat_name_needs_lfn_utf8(const char *name) {
 	unicode_char_t uc;
 	int namelen = 0;
