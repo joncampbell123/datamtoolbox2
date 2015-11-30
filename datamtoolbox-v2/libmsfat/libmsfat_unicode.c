@@ -177,13 +177,13 @@ int libmsfat_file_io_ctx_path_lookup(struct libmsfat_file_io_ctx_t *fioctx,struc
 		*d = 0;
 		if (d >= df) return -1;
 
+		/* use parent fioctx to scan for path element */
+		if (libmsfat_file_io_ctx_find_in_dir(fioctx,msfatctx,dirent,lfn_name,tmp,flags))
+			return -1;
+
 		/* fioctx becomes parent, start a new one */
 		*fioctx_parent = *fioctx;
 		memset(fioctx,0,sizeof(*fioctx));
-
-		/* use parent fioctx to scan for path element */
-		if (libmsfat_file_io_ctx_find_in_dir(fioctx_parent,msfatctx,dirent,lfn_name,tmp,flags))
-			return -1;
 
 		/* got it. assign to fioctx (child) */
 		if (libmsfat_file_io_ctx_assign_from_dirent(fioctx,msfatctx,dirent) ||
