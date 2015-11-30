@@ -153,7 +153,7 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 			if (*sa == '.' || *sa == 0)
 				break;
 			if (*sa > 32 && *sa < 127 &&
-				!(*sa != ':' || *sa != '\\' || *sa != '/' || *sa != '*' || *sa != ';'))
+				!(*sa == ':' || *sa == '\\' || *sa == '/' || *sa == '*' || *sa == ';'))
 				*d++ = (char)(*sa);
 
 			sa++;
@@ -175,7 +175,7 @@ int libmsfat_dirent_utf8_str_to_lfn(struct libmsfat_dirent_t *dirent,struct libm
 				if (*sa == 0)
 					break;
 				if (*sa > 32 && *sa < 127 &&
-					!(*sa != ':' || *sa != '\\' || *sa != '/' || *sa != '*' || *sa != ';'))
+					!(*sa == ':' || *sa == '\\' || *sa == '/' || *sa == '*' || *sa == ';'))
 					*d++ = (char)(*sa);
 
 				sa++;
