@@ -1244,13 +1244,13 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			 * us to lseek to the target offset. */
 			if ((flags & libmsfat_lseek_FLAG_EXTEND_CLUSTER_CHAIN) && ofs == (uint32_t)0UL &&
 				c->position == (c->cluster_position_start + c->cluster_size)) {
-				npos = c->position + dowrite;
+				npos = (uint32_t)c->position + (uint32_t)dowrite;
 				if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,flags))
 					break;
 				if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
 					break;
 
-				npos -= dowrite;
+				npos -= (uint32_t)dowrite;
 				if (libmsfat_file_io_ctx_lseek(c,msfatctx,npos,flags))
 					break;
 				if (libmsfat_file_io_ctx_tell(c,msfatctx) != npos)
