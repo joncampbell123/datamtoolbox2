@@ -1198,7 +1198,9 @@ int libmsfat_file_io_ctx_write(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 			if (canwrite > len) canwrite = len;
 		}
 		else {
-			canwrite = len;
+			if (c->position > (uint32_t)0xFFFFFFFFUL) return 0;
+			canwrite = (size_t)((uint32_t)0xFFFFFFFFUL - c->position);
+			if (canwrite > len) canwrite = len;
 		}
 
 		/* if the fioctx indicates extending the file is permissible, then update flags to tell lseek */
@@ -1322,7 +1324,9 @@ int libmsfat_file_io_ctx_read(struct libmsfat_file_io_ctx_t *c,struct libmsfat_c
 			if (canread > len) canread = len;
 		}
 		else {
-			canread = len;
+			if (c->position > (uint32_t)0xFFFFFFFFUL) return 0;
+			canread = (size_t)((uint32_t)0xFFFFFFFFUL - c->position);
+			if (canread > len) canread = len;
 		}
 
 		while (canread > (size_t)0) {
