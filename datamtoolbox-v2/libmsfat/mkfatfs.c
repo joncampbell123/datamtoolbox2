@@ -700,12 +700,13 @@ int libmsfat_formatting_params_set_partition_type(struct libmsfat_formatting_par
 
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
+	struct libmsfat_context_t *msfatctx = NULL;
 	const char *s_partition_offset = NULL;
 	const char *s_partition_size = NULL;
 	const char *s_media_type = NULL;
 	const char *s_geometry = NULL;
 	const char *s_image = NULL;
-	int i,fd;
+	int i,fd,dfd;
 
 	if ((fmtparam=libmsfat_formatting_params_create()) == NULL) {
 		fprintf(stderr,"Cannot alloc format params\n");
@@ -1055,6 +1056,23 @@ int main(int argc,char **argv) {
 	}
 #endif
 
+	// good. we need to work on it a a bit.
+	msfatctx = libmsfat_context_create();
+	if (msfatctx == NULL) {
+		fprintf(stderr,"Failed to create msfat context\n");
+		return 1;
+	}
+	dfd = dup(fd);
+	if (libmsfat_context_assign_fd(msfatctx,dfd)) {
+		fprintf(stderr,"Failed to assign file descriptor to msfat\n");
+		close(dfd);
+		return 1;
+	}
+	dfd = -1; /* takes ownership, drop it */
+
+	if (make_partition)
+		msfatctx->partition_byte_offset = (uint64_t)fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
+
 	if (make_partition) {
 		struct libpartmbr_state_t diskimage_state;
 		struct libpartmbr_entry_t ent;
@@ -1108,9 +1126,7 @@ int main(int argc,char **argv) {
 		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
 		struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
 		struct libmsfat_file_io_ctx_t *fioctx = NULL;
-		struct libmsfat_context_t *msfatctx = NULL;
 		unsigned int bs_sz;
-		int dfd;
 
 		if (make_partition)
 			offset = fmtparam->partition_offset;
@@ -1267,23 +1283,6 @@ int main(int argc,char **argv) {
 			}
 		}
 
-		// good. we need to work on it a a bit.
-		msfatctx = libmsfat_context_create();
-		if (msfatctx == NULL) {
-			fprintf(stderr,"Failed to create msfat context\n");
-			return 1;
-		}
-		dfd = dup(fd);
-		if (libmsfat_context_assign_fd(msfatctx,dfd)) {
-			fprintf(stderr,"Failed to assign file descriptor to msfat\n");
-			close(dfd);
-			return 1;
-		}
-		dfd = -1; /* takes ownership, drop it */
-
-		if (make_partition)
-			msfatctx->partition_byte_offset = (uint64_t)fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
-
 		if (libmsfat_bs_compute_disk_locations(&fmtparam->final_info,bs)) {
 			printf("Unable to locate disk locations.\n");
 			return 1;
@@ -1402,10 +1401,10 @@ int main(int argc,char **argv) {
 
 		fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
 		fioctx = libmsfat_file_io_ctx_destroy(fioctx);
-		msfatctx = libmsfat_context_destroy(msfatctx);
 	}
 
 	fmtparam = libmsfat_formatting_params_destroy(fmtparam);
+	msfatctx = libmsfat_context_destroy(msfatctx);
 	close(fd);
 	fd = -1;
 	return 0;
