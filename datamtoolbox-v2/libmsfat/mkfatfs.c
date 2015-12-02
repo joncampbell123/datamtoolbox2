@@ -105,6 +105,7 @@ uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 
 int main(int argc,char **argv) {
 	struct libmsfat_disk_locations_and_info base_info,final_info;
+	struct libmsfat_context_t *msfatctx = NULL;
 	const char *s_partition_offset = NULL;
 	const char *s_partition_size = NULL;
 	const char *s_partition_type = NULL;
@@ -876,6 +877,7 @@ int main(int argc,char **argv) {
 		unsigned char sector[512];
 		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
 		unsigned int bs_sz;
+		int dfd;
 
 		if (make_partition)
 			offset = partition_offset;
@@ -1017,8 +1019,82 @@ int main(int argc,char **argv) {
 				return 1;
 			}
 		}
+
+		// good. we need to work on it a a bit.
+		msfatctx = libmsfat_context_create();
+		if (msfatctx == NULL) {
+			fprintf(stderr,"Failed to create msfat context\n");
+			return 1;
+		}
+		dfd = dup(fd);
+		if (libmsfat_context_assign_fd(msfatctx,dfd)) {
+			fprintf(stderr,"Failed to assign file descriptor to msfat\n");
+			close(dfd);
+			return 1;
+		}
+		dfd = -1; /* takes ownership, drop it */
+
+		msfatctx->partition_byte_offset = (uint64_t)partition_offset * (uint64_t)disk_bytes_per_sector;
+		if (libmsfat_bs_compute_disk_locations(&final_info,bs)) {
+			printf("Unable to locate disk locations.\n");
+			return 1;
+		}
+		if (libmsfat_context_set_fat_info(msfatctx,&final_info)) {
+			fprintf(stderr,"msfat library rejected disk location info\n");
+			return 1;
+		}
+
+		printf("Disk location and FAT info:\n");
+		printf("    FAT format:        FAT%u\n",
+			final_info.FAT_size);
+		printf("    FAT tables:        %u\n",
+			final_info.FAT_tables);
+		printf("    FAT table size:    %lu sectors\n",
+			(unsigned long)final_info.FAT_table_size);
+		printf("    FAT offset:        %lu sectors\n",
+			(unsigned long)final_info.FAT_offset);
+		printf("    Root directory:    %lu sectors\n",
+			(unsigned long)final_info.RootDirectory_offset);
+		printf("    Root dir size:     %lu sectors\n",
+			(unsigned long)final_info.RootDirectory_size);
+		printf("    Data offset:       %lu sectors\n",
+			(unsigned long)final_info.Data_offset);
+		printf("    Data size:         %lu sectors\n",
+			(unsigned long)final_info.Data_size);
+		printf("    Sectors/cluster:   %u\n",
+			(unsigned int)final_info.Sectors_Per_Cluster);
+		printf("    Bytes per sector:  %u\n",
+			(unsigned int)final_info.BytesPerSector);
+		printf("    Total clusters:    %lu\n",
+			(unsigned long)final_info.Total_clusters);
+		printf("    Total data clusts: %lu\n",
+			(unsigned long)final_info.Total_data_clusters);
+		printf("    Max clusters psbl: %lu\n",
+			(unsigned long)final_info.Max_possible_clusters);
+		printf("    Max data clus psbl:%lu\n",
+			(unsigned long)final_info.Max_possible_data_clusters);
+		printf("    Total sectors:     %lu sectors\n",
+			(unsigned long)final_info.TotalSectors);
+		if (final_info.FAT_size >= 32) {
+			printf("    FAT32 FSInfo:      %lu sector\n",
+				(unsigned long)final_info.fat32.BPB_FSInfo);
+			printf("    Root dir cluster:  %lu\n",
+				(unsigned long)final_info.fat32.RootDirectory_cluster);
+		}
+
+		for (i=0;i < final_info.FAT_tables;i++) {
+			if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFF00UL + (uint32_t)disk_media_type_byte,libmsfat_CLUSTER_0_MEDIA_TYPE,i)) {
+				fprintf(stderr,"Cannot write cluster 1\n");
+				return 1;
+			}
+			if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFFFFUL,libmsfat_CLUSTER_1_DIRTY_FLAGS,i)) {
+				fprintf(stderr,"Cannot write cluster 1\n");
+				return 1;
+			}
+		}
 	}
 
+	msfatctx = libmsfat_context_destroy(msfatctx);
 	close(fd);
 	fd = -1;
 	return 0;
