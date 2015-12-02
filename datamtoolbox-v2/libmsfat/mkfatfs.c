@@ -30,7 +30,6 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
 static uint64_t					disk_sectors = 0;
-static unsigned int				disk_bytes_per_sector = 0;
 static uint64_t					disk_size_bytes = 0;
 static uint8_t					disk_media_type_byte = 0;
 static uint8_t					make_partition = 0;
@@ -66,6 +65,9 @@ struct libmsfat_formatting_params {
 	struct libmsfat_disk_locations_and_info		final_info;
 	struct chs_geometry_t				disk_geo;
 	libpartmbr_sector_t				diskimage_sector;
+	unsigned int					disk_bytes_per_sector;
+
+	unsigned int					disk_bytes_per_sector_set:1;
 };
 
 void libmsfat_formatting_params_free(struct libmsfat_formatting_params *f) {
@@ -73,6 +75,7 @@ void libmsfat_formatting_params_free(struct libmsfat_formatting_params *f) {
 
 int libmsfat_formatting_params_init(struct libmsfat_formatting_params *f) {
 	memset(f,0,sizeof(*f));
+	f->disk_bytes_per_sector = 512U;
 	return 0;
 }
 
@@ -99,12 +102,38 @@ struct libmsfat_formatting_params *libmsfat_formatting_params_create() {
 	return f;
 }
 
+int libmsfat_formatting_params_set_FAT_width(struct libmsfat_formatting_params *f,unsigned int width) {
+	if (f == NULL) return -1;
+
+	if (width == 0 || width == 12 || width == 16 || width == 32)
+		f->force_fat = (uint8_t)width;
+	else
+		return -1;
+
+	return 0;
+}
+
+int libmsfat_formatting_params_set_sector_size(struct libmsfat_formatting_params *f,unsigned int sz) {
+	if (f == NULL) return -1;
+
+	if (sz == 0) {
+		f->disk_bytes_per_sector = 512U;
+		f->disk_bytes_per_sector_set = 0;
+	}
+	else {
+		if (sz < 128U || sz > 16384U || (sz % 32U) != 0U) return -1;
+		f->disk_bytes_per_sector = sz;
+		f->disk_bytes_per_sector_set = 1;
+	}
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
 	const char *s_partition_size = NULL;
 	const char *s_partition_type = NULL;
-	const char *s_sectorsize = NULL;
 	const char *s_media_type = NULL;
 	const char *s_geometry = NULL;
 	const char *s_image = NULL;
@@ -132,7 +161,10 @@ int main(int argc,char **argv) {
 				s_size = argv[i++];
 			}
 			else if (!strcmp(a,"sectorsize")) {
-				s_sectorsize = argv[i++];
+				if (libmsfat_formatting_params_set_sector_size(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
+					fprintf(stderr,"--fat: Invalid FAT bit width\n");
+					return 1;
+				}
 			}
 			else if (!strcmp(a,"media-type")) {
 				s_media_type = argv[i++];
@@ -174,7 +206,10 @@ int main(int argc,char **argv) {
 				allow_fat12 = 1;
 			}
 			else if (!strcmp(a,"fat")) {
-				fmtparam->force_fat = (int)strtoul(argv[i++],NULL,0);
+				if (libmsfat_formatting_params_set_FAT_width(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
+					fprintf(stderr,"--fat: Invalid FAT bit width\n");
+					return 1;
+				}
 			}
 			else if (!strcmp(a,"cluster-size")) {
 				set_cluster_size = (uint16_t)strtoul(argv[i++],NULL,0);
@@ -262,18 +297,6 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	if (fmtparam->force_fat != 0 && !(fmtparam->force_fat == 12 || fmtparam->force_fat == 16 || fmtparam->force_fat == 32)) {
-		fprintf(stderr,"Invalid FAT bit width\n");
-		return 1;
-	}
-
-	if (s_sectorsize != NULL)
-		disk_bytes_per_sector = (unsigned int)strtoul(s_sectorsize,NULL,0);
-	else
-		disk_bytes_per_sector = 512U;
-
-	if ((disk_bytes_per_sector % 32) != 0 || disk_bytes_per_sector < 128 || disk_bytes_per_sector > 4096) return 1;
-
 	if (s_geometry != NULL) {
 		if (int13cnv_parse_chs_geometry(&fmtparam->disk_geo,s_geometry)) {
 			fprintf(stderr,"Failed to parse geometry\n");
@@ -329,11 +352,11 @@ int main(int argc,char **argv) {
 				chs_mode = 1;
 		}
 
-		disk_sectors = disk_size_bytes / (uint64_t)disk_bytes_per_sector;
-		if (s_sectorsize == NULL) {
+		disk_sectors = disk_size_bytes / (uint64_t)fmtparam->disk_bytes_per_sector;
+		if (!fmtparam->disk_bytes_per_sector_set) {
 			while (disk_sectors >= (uint64_t)0xFFFFFFF0UL) {
-				disk_bytes_per_sector *= (uint64_t)2UL;
-				disk_sectors = disk_size_bytes / (uint64_t)disk_bytes_per_sector;
+				fmtparam->disk_bytes_per_sector *= (uint64_t)2UL;
+				disk_sectors = disk_size_bytes / (uint64_t)fmtparam->disk_bytes_per_sector;
 			}
 		}
 
@@ -360,7 +383,7 @@ int main(int argc,char **argv) {
 			disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
 				(uint64_t)fmtparam->disk_geo.sectors *
 				(uint64_t)fmtparam->disk_geo.cylinders;
-			disk_size_bytes = disk_sectors * (uint64_t)disk_bytes_per_sector;
+			disk_size_bytes = disk_sectors * (uint64_t)fmtparam->disk_bytes_per_sector;
 		}
 	}
 	else {
@@ -369,7 +392,7 @@ int main(int argc,char **argv) {
 		disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
 			(uint64_t)fmtparam->disk_geo.sectors *
 			(uint64_t)fmtparam->disk_geo.cylinders;
-		disk_size_bytes = disk_sectors * (uint64_t)disk_bytes_per_sector;
+		disk_size_bytes = disk_sectors * (uint64_t)fmtparam->disk_bytes_per_sector;
 	}
 
 	if (!lba_mode && !chs_mode) {
@@ -398,7 +421,7 @@ int main(int argc,char **argv) {
 				partition_size <<= (uint64_t)40;	// TB
 		}
 
-		partition_size /= (uint64_t)disk_bytes_per_sector;
+		partition_size /= (uint64_t)fmtparam->disk_bytes_per_sector;
 	}
 
 	// automatically default to a partition starting on a track boundary.
@@ -423,7 +446,7 @@ int main(int argc,char **argv) {
 		partition_size = diskrnd - partition_offset;
 	}
 
-	fmtparam->base_info.BytesPerSector = disk_bytes_per_sector;
+	fmtparam->base_info.BytesPerSector = fmtparam->disk_bytes_per_sector;
 	if (make_partition)
 		fmtparam->base_info.TotalSectors = (uint32_t)partition_size;
 	else
@@ -689,14 +712,14 @@ int main(int argc,char **argv) {
 	}
 	else {
 		// resides in the first 32MB. this is the only case that disregards LBA mode
-		if ((partition_offset+partition_size)*((uint64_t)disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
+		if ((partition_offset+partition_size)*((uint64_t)fmtparam->disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
 			if (fmtparam->base_info.FAT_size == 16)
 				partition_type = 0x04; // FAT16 with less than 65536 sectors
 			else
 				partition_type = 0x01; // FAT12 as primary partition in the first 32MB
 		}
 		// resides in the first 8GB.
-		else if ((partition_offset+partition_size)*((uint64_t)disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
+		else if ((partition_offset+partition_size)*((uint64_t)fmtparam->disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
 			if (fmtparam->base_info.FAT_size == 32)
 				partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
 			else if (fmtparam->base_info.FAT_size == 16)
@@ -726,8 +749,8 @@ int main(int argc,char **argv) {
 	assert(lba_mode || chs_mode);
 	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x %s\n",
 		(unsigned long long)disk_sectors,
-		(unsigned int)disk_bytes_per_sector,
-		(unsigned long long)disk_sectors * (unsigned long long)disk_bytes_per_sector,
+		(unsigned int)fmtparam->disk_bytes_per_sector,
+		(unsigned long long)disk_sectors * (unsigned long long)fmtparam->disk_bytes_per_sector,
 		(unsigned int)fmtparam->disk_geo.cylinders,
 		(unsigned int)fmtparam->disk_geo.heads,
 		(unsigned int)fmtparam->disk_geo.sectors,
@@ -915,7 +938,7 @@ int main(int argc,char **argv) {
 			offset = partition_offset;
 		else
 			offset = 0;
-		offset *= (uint64_t)disk_bytes_per_sector;
+		offset *= (uint64_t)fmtparam->disk_bytes_per_sector;
 
 		// TODO: options to emulate various DOS versions of the BPB
 		if (set_boot_sector_bpb_size != 0)
@@ -949,7 +972,7 @@ int main(int argc,char **argv) {
 		strcpy((char*)sector+bs_sz+2,"Not bootable, data only");
 
 		// common BPB
-		bs->BPB_common.BPB_BytsPerSec = htole16(disk_bytes_per_sector);
+		bs->BPB_common.BPB_BytsPerSec = htole16(fmtparam->disk_bytes_per_sector);
 		bs->BPB_common.BPB_SecPerClus = fmtparam->base_info.Sectors_Per_Cluster;
 		bs->BPB_common.BPB_RsvdSecCnt = htole16(reserved_sectors);
 		bs->BPB_common.BPB_NumFATs = fmtparam->base_info.FAT_tables;
@@ -1036,7 +1059,7 @@ int main(int argc,char **argv) {
 				offset = 0;
 
 			offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_BkBootSec);
-			offset *= (uint64_t)disk_bytes_per_sector;
+			offset *= (uint64_t)fmtparam->disk_bytes_per_sector;
 
 			if (lseek(fd,(off_t)offset,SEEK_SET) != (off_t)offset || write(fd,sector,512) != 512) {
 				fprintf(stderr,"Failed to write BPB back\n");
@@ -1054,7 +1077,7 @@ int main(int argc,char **argv) {
 				offset = 0;
 
 			offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_FSInfo);
-			offset *= (uint64_t)disk_bytes_per_sector;
+			offset *= (uint64_t)fmtparam->disk_bytes_per_sector;
 
 			memset(&fsinfo,0,sizeof(fsinfo));
 			fsinfo.FSI_LeadSig = htole32((uint32_t)0x41615252UL);
@@ -1084,7 +1107,7 @@ int main(int argc,char **argv) {
 		dfd = -1; /* takes ownership, drop it */
 
 		if (make_partition)
-			msfatctx->partition_byte_offset = (uint64_t)partition_offset * (uint64_t)disk_bytes_per_sector;
+			msfatctx->partition_byte_offset = (uint64_t)partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
 
 		if (libmsfat_bs_compute_disk_locations(&fmtparam->final_info,bs)) {
 			printf("Unable to locate disk locations.\n");
