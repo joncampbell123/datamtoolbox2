@@ -556,7 +556,6 @@ int main(int argc,char **argv) {
 			return 1;
 	}
 
-	fmtparam->base_info.BytesPerSector = fmtparam->disk_bytes_per_sector;
 	if (make_partition)
 		fmtparam->base_info.TotalSectors = (uint32_t)fmtparam->partition_size;
 	else
@@ -580,16 +579,16 @@ int main(int argc,char **argv) {
 	}
 	if (fmtparam->base_info.FAT_size == 0) {
 		// if FAT32 allowed, and 2GB or larger, then do FAT32
-		if (allow_fat32 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->base_info.BytesPerSector) >= ((uint64_t)(2000ULL << 20ULL)))
+		if (allow_fat32 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->disk_bytes_per_sector) >= ((uint64_t)(2000ULL << 20ULL)))
 			fmtparam->base_info.FAT_size = 32;
 		// if FAT16 allowed, and 32MB or larger, then do FAT16
-		else if (allow_fat16 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->base_info.BytesPerSector) >= ((uint64_t)(30ULL << 20ULL)))
+		else if (allow_fat16 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->disk_bytes_per_sector) >= ((uint64_t)(30ULL << 20ULL)))
 			fmtparam->base_info.FAT_size = 16;
 		// if FAT12 allowed, then do it
-		else if (allow_fat12 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->base_info.BytesPerSector) < ((uint64_t)(31ULL << 20ULL)))
+		else if (allow_fat12 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->disk_bytes_per_sector) < ((uint64_t)(31ULL << 20ULL)))
 			fmtparam->base_info.FAT_size = 12;
 		// maybe we can do FAT32?
-		else if (allow_fat32 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->base_info.BytesPerSector) >= ((uint64_t)(200ULL << 20ULL)))
+		else if (allow_fat32 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->disk_bytes_per_sector) >= ((uint64_t)(200ULL << 20ULL)))
 			fmtparam->base_info.FAT_size = 32;
 		else if (allow_fat16)
 			fmtparam->base_info.FAT_size = 16;
@@ -611,8 +610,8 @@ int main(int argc,char **argv) {
 	if (set_cluster_size != 0) {
 		unsigned long x;
 
-		x = ((unsigned long)set_cluster_size + ((unsigned long)fmtparam->base_info.BytesPerSector / 2UL)) / (unsigned long)fmtparam->base_info.BytesPerSector;
-		if (x == 0) x = fmtparam->base_info.BytesPerSector;
+		x = ((unsigned long)set_cluster_size + ((unsigned long)fmtparam->disk_bytes_per_sector / 2UL)) / (unsigned long)fmtparam->disk_bytes_per_sector;
+		if (x == 0) x = fmtparam->disk_bytes_per_sector;
 		if (x > 255UL) x = 255UL;
 		fmtparam->base_info.Sectors_Per_Cluster = (uint8_t)x;
 	}
@@ -717,16 +716,16 @@ int main(int argc,char **argv) {
 	if (!allow_64kb_or_larger_clusters) {
 		uint32_t sz;
 
-		sz = (uint32_t)fmtparam->base_info.Sectors_Per_Cluster * (uint32_t)fmtparam->base_info.BytesPerSector;
+		sz = (uint32_t)fmtparam->base_info.Sectors_Per_Cluster * (uint32_t)fmtparam->disk_bytes_per_sector;
 		if (sz >= (uint32_t)0x10000UL) {
 			fprintf(stderr,"WARNING: cluster size choice means cluster is 64KB or larger. choosing smaller cluster size.\n");
 
 			if (allow_non_power_of_2_cluster_size)
-				fmtparam->base_info.Sectors_Per_Cluster = (uint32_t)0xFFFFUL / (uint32_t)fmtparam->base_info.BytesPerSector;
+				fmtparam->base_info.Sectors_Per_Cluster = (uint32_t)0xFFFFUL / (uint32_t)fmtparam->disk_bytes_per_sector;
 			else {
 				while (sz >= (uint32_t)0x10000UL && fmtparam->base_info.Sectors_Per_Cluster >= 2U) {
 					fmtparam->base_info.Sectors_Per_Cluster /= 2U;
-					sz = (uint32_t)fmtparam->base_info.Sectors_Per_Cluster * (uint32_t)fmtparam->base_info.BytesPerSector;
+					sz = (uint32_t)fmtparam->base_info.Sectors_Per_Cluster * (uint32_t)fmtparam->disk_bytes_per_sector;
 				}
 			}
 		}
@@ -765,7 +764,7 @@ int main(int argc,char **argv) {
 			t = ((x + (uint32_t)1UL) / (uint32_t)2UL) * (uint32_t)3UL; // 1/2x * 3 = number of 24-bit doubles
 		else
 			t = x * (fmtparam->base_info.FAT_size / (uint32_t)8UL);
-		t = (t + (uint32_t)fmtparam->base_info.BytesPerSector - (uint32_t)1UL) / (uint32_t)fmtparam->base_info.BytesPerSector;
+		t = (t + (uint32_t)fmtparam->disk_bytes_per_sector - (uint32_t)1UL) / (uint32_t)fmtparam->disk_bytes_per_sector;
 		fmtparam->base_info.FAT_table_size = t;
 
 		/* do it again */
@@ -802,7 +801,7 @@ int main(int argc,char **argv) {
 				t = ((x + (uint32_t)1UL) / (uint32_t)2UL) * (uint32_t)3UL; // 1/2x * 3 = number of 24-bit doubles
 			else
 				t = x * (fmtparam->base_info.FAT_size / (uint32_t)8UL);
-			t = (t + (uint32_t)fmtparam->base_info.BytesPerSector - (uint32_t)1UL) / (uint32_t)fmtparam->base_info.BytesPerSector;
+			t = (t + (uint32_t)fmtparam->disk_bytes_per_sector - (uint32_t)1UL) / (uint32_t)fmtparam->disk_bytes_per_sector;
 			fmtparam->base_info.FAT_table_size = t;
 
 			fmtparam->base_info.TotalSectors =
@@ -894,8 +893,8 @@ int main(int argc,char **argv) {
 	printf("   FAT filesystem FAT%u. %lu x %lu (%lu bytes) per cluster. %lu sectors => %lu clusters (%lu)\n",
 		fmtparam->base_info.FAT_size,
 		(unsigned long)fmtparam->base_info.Sectors_Per_Cluster,
-		(unsigned long)fmtparam->base_info.BytesPerSector,
-		(unsigned long)fmtparam->base_info.Sectors_Per_Cluster * (unsigned long)fmtparam->base_info.BytesPerSector,
+		(unsigned long)fmtparam->disk_bytes_per_sector,
+		(unsigned long)fmtparam->base_info.Sectors_Per_Cluster * (unsigned long)fmtparam->disk_bytes_per_sector,
 		(unsigned long)fmtparam->base_info.TotalSectors,
 		(unsigned long)fmtparam->base_info.Total_data_clusters,
 		(unsigned long)fmtparam->base_info.Total_clusters);
