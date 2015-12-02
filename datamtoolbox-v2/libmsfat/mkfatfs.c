@@ -362,6 +362,56 @@ int libmsfat_formatting_params_update_total_sectors(struct libmsfat_formatting_p
 	return 0;
 }
 
+int libmsfat_formatting_params_auto_choose_FAT_size(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (f->force_fat != 0) {
+		if (f->force_fat == 12 && !allow_fat12)
+			return -1;
+		else if (f->force_fat == 16 && !allow_fat16)
+			return -1;
+		else if (f->force_fat == 32 && !allow_fat32)
+			return -1;
+
+		f->base_info.FAT_size = f->force_fat;
+	}
+	if (f->base_info.FAT_size == 0) {
+		// if FAT32 allowed, and 2GB or larger, then do FAT32
+		if (allow_fat32 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) >= ((uint64_t)(2000ULL << 20ULL)))
+			f->base_info.FAT_size = 32;
+		// if FAT16 allowed, and 32MB or larger, then do FAT16
+		else if (allow_fat16 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) >= ((uint64_t)(30ULL << 20ULL)))
+			f->base_info.FAT_size = 16;
+		// if FAT12 allowed, then do it
+		else if (allow_fat12 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) < ((uint64_t)(31ULL << 20ULL)))
+			f->base_info.FAT_size = 12;
+		// maybe we can do FAT32?
+		else if (allow_fat32 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) >= ((uint64_t)(200ULL << 20ULL)))
+			f->base_info.FAT_size = 32;
+		else if (allow_fat16)
+			f->base_info.FAT_size = 16;
+		else if (allow_fat12)
+			f->base_info.FAT_size = 12;
+		else if (allow_fat32)
+			f->base_info.FAT_size = 32;
+	}
+	if (f->base_info.FAT_size == 0)
+		return -1;
+
+	return 0;
+}
+
+int libmsfat_formatting_params_auto_choose_FAT_tables(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (set_fat_tables)
+		f->base_info.FAT_tables = set_fat_tables;
+	else if (f->base_info.FAT_tables == 0)
+		f->base_info.FAT_tables = 2;
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
@@ -568,52 +618,8 @@ int main(int argc,char **argv) {
 	}
 
 	if (libmsfat_formatting_params_update_total_sectors(fmtparam)) return 1;
-
-	if (fmtparam->force_fat != 0) {
-		if (fmtparam->force_fat == 12 && !allow_fat12) {
-			fprintf(stderr,"--no-fat12 and FAT12 forced does not make sense\n");
-			return 1;
-		}
-		else if (fmtparam->force_fat == 16 && !allow_fat16) {
-			fprintf(stderr,"--no-fat16 and FAT16 forced does not make sense\n");
-			return 1;
-		}
-		else if (fmtparam->force_fat == 32 && !allow_fat32) {
-			fprintf(stderr,"--no-fat32 and FAT32 forced does not make sense\n");
-			return 1;
-		}
-
-		fmtparam->base_info.FAT_size = fmtparam->force_fat;
-	}
-	if (fmtparam->base_info.FAT_size == 0) {
-		// if FAT32 allowed, and 2GB or larger, then do FAT32
-		if (allow_fat32 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->disk_bytes_per_sector) >= ((uint64_t)(2000ULL << 20ULL)))
-			fmtparam->base_info.FAT_size = 32;
-		// if FAT16 allowed, and 32MB or larger, then do FAT16
-		else if (allow_fat16 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->disk_bytes_per_sector) >= ((uint64_t)(30ULL << 20ULL)))
-			fmtparam->base_info.FAT_size = 16;
-		// if FAT12 allowed, then do it
-		else if (allow_fat12 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->disk_bytes_per_sector) < ((uint64_t)(31ULL << 20ULL)))
-			fmtparam->base_info.FAT_size = 12;
-		// maybe we can do FAT32?
-		else if (allow_fat32 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->disk_bytes_per_sector) >= ((uint64_t)(200ULL << 20ULL)))
-			fmtparam->base_info.FAT_size = 32;
-		else if (allow_fat16)
-			fmtparam->base_info.FAT_size = 16;
-		else if (allow_fat12)
-			fmtparam->base_info.FAT_size = 12;
-		else if (allow_fat32)
-			fmtparam->base_info.FAT_size = 32;
-	}
-	if (fmtparam->base_info.FAT_size == 0) {
-		fprintf(stderr,"FAT size not determinated\n");
-		return 1;
-	}
-
-	if (set_fat_tables)
-		fmtparam->base_info.FAT_tables = set_fat_tables;
-	else if (fmtparam->base_info.FAT_tables == 0)
-		fmtparam->base_info.FAT_tables = 2;
+	if (libmsfat_formatting_params_auto_choose_FAT_size(fmtparam)) return 1;
+	if (libmsfat_formatting_params_auto_choose_FAT_tables(fmtparam)) return 1;
 
 	if (set_cluster_size != 0) {
 		unsigned long x;
