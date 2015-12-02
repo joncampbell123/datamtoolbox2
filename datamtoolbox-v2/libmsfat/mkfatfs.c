@@ -66,6 +66,8 @@ static uint8_t					set_boot_sector_bpb_size = 0;
 
 int main(int argc,char **argv) {
 	struct libmsfat_disk_locations_and_info base_info,final_info;
+	struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
+	struct libmsfat_file_io_ctx_t *fioctx = NULL;
 	struct libmsfat_context_t *msfatctx = NULL;
 	const char *s_partition_offset = NULL;
 	const char *s_partition_size = NULL;
@@ -1123,8 +1125,48 @@ int main(int argc,char **argv) {
 			if (libmsfat_file_io_ctx_zero_cluster(rootclus,msfatctx))
 				fprintf(stderr,"WARNING: failed to zero root cluster\n");
 		}
+
+		fioctx_parent = libmsfat_file_io_ctx_create();
+		if (fioctx_parent == NULL) {
+			fprintf(stderr,"Cannot alloc FIO ctx\n");
+			return 1;
+		}
+
+		fioctx = libmsfat_file_io_ctx_create();
+		if (fioctx == NULL) {
+			fprintf(stderr,"Cannot alloc FIO ctx\n");
+			return 1;
+		}
+
+		if (libmsfat_file_io_ctx_assign_root_directory_with_parent(fioctx,fioctx_parent,msfatctx)) {
+			fprintf(stderr,"Cannot assign root dir\n");
+			return 1;
+		}
+
+		if (*volume_label != 0) {
+			struct libmsfat_dirent_t dirent;
+
+			memset(&dirent,0,sizeof(dirent));
+
+			{
+				const char *s = volume_label;
+				char *d = dirent.a.n.DIR_Name;
+				char *df = d + 11;
+
+				while (*s && d < df) *d++ = *s++;
+				while (d < df) *d++ = ' ';
+			}
+			dirent.a.n.DIR_Attr = libmsfat_DIR_ATTR_VOLUME_ID;
+
+			if (libmsfat_file_io_ctx_write(fioctx,msfatctx,&dirent,sizeof(dirent)) != sizeof(dirent)) {
+				fprintf(stderr,"Cannot write root dir volume label\n");
+				return 1;
+			}
+		}
 	}
 
+	fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
+	fioctx = libmsfat_file_io_ctx_destroy(fioctx);
 	msfatctx = libmsfat_context_destroy(msfatctx);
 	close(fd);
 	fd = -1;
