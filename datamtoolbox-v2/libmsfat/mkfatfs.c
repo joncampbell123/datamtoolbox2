@@ -480,6 +480,44 @@ int libmsfat_formatting_params_auto_choose_cluster_size(struct libmsfat_formatti
 			f->base_info.Sectors_Per_Cluster++;
 	}
 
+	if (!allow_non_power_of_2_cluster_size) {
+		/* need to round to a power of 2 */
+		if (f->base_info.Sectors_Per_Cluster >= (64+1)/*65*/)
+			f->base_info.Sectors_Per_Cluster = 128;
+		else if (f->base_info.Sectors_Per_Cluster >= (32+1)/*33*/)
+			f->base_info.Sectors_Per_Cluster = 64;
+		else if (f->base_info.Sectors_Per_Cluster >= (16+1)/*17*/)
+			f->base_info.Sectors_Per_Cluster = 32;
+		else if (f->base_info.Sectors_Per_Cluster >= (8+1)/*9*/)
+			f->base_info.Sectors_Per_Cluster = 16;
+		else if (f->base_info.Sectors_Per_Cluster >= (4+1)/*5*/)
+			f->base_info.Sectors_Per_Cluster = 8;
+		else if (f->base_info.Sectors_Per_Cluster >= (2+1)/*3*/)
+			f->base_info.Sectors_Per_Cluster = 4;
+		else if (f->base_info.Sectors_Per_Cluster >= 2)
+			f->base_info.Sectors_Per_Cluster = 2;
+		else
+			f->base_info.Sectors_Per_Cluster = 1;
+	}
+
+	if (!allow_64kb_or_larger_clusters) {
+		uint32_t sz;
+
+		sz = (uint32_t)f->base_info.Sectors_Per_Cluster * (uint32_t)f->disk_bytes_per_sector;
+		if (sz >= (uint32_t)0x10000UL) {
+			fprintf(stderr,"WARNING: cluster size choice means cluster is 64KB or larger. choosing smaller cluster size.\n");
+
+			if (allow_non_power_of_2_cluster_size)
+				f->base_info.Sectors_Per_Cluster = (uint32_t)0xFFFFUL / (uint32_t)f->disk_bytes_per_sector;
+			else {
+				while (sz >= (uint32_t)0x10000UL && f->base_info.Sectors_Per_Cluster >= 2U) {
+					f->base_info.Sectors_Per_Cluster /= 2U;
+					sz = (uint32_t)f->base_info.Sectors_Per_Cluster * (uint32_t)f->disk_bytes_per_sector;
+				}
+			}
+		}
+	}
+
 	return 0;
 }
 
@@ -758,44 +796,6 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_auto_choose_reserved_sectors(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_fat32_bpb_fsinfo_location(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(fmtparam)) return 1;
-
-	if (!allow_non_power_of_2_cluster_size) {
-		/* need to round to a power of 2 */
-		if (fmtparam->base_info.Sectors_Per_Cluster >= (64+1)/*65*/)
-			fmtparam->base_info.Sectors_Per_Cluster = 128;
-		else if (fmtparam->base_info.Sectors_Per_Cluster >= (32+1)/*33*/)
-			fmtparam->base_info.Sectors_Per_Cluster = 64;
-		else if (fmtparam->base_info.Sectors_Per_Cluster >= (16+1)/*17*/)
-			fmtparam->base_info.Sectors_Per_Cluster = 32;
-		else if (fmtparam->base_info.Sectors_Per_Cluster >= (8+1)/*9*/)
-			fmtparam->base_info.Sectors_Per_Cluster = 16;
-		else if (fmtparam->base_info.Sectors_Per_Cluster >= (4+1)/*5*/)
-			fmtparam->base_info.Sectors_Per_Cluster = 8;
-		else if (fmtparam->base_info.Sectors_Per_Cluster >= (2+1)/*3*/)
-			fmtparam->base_info.Sectors_Per_Cluster = 4;
-		else if (fmtparam->base_info.Sectors_Per_Cluster >= 2)
-			fmtparam->base_info.Sectors_Per_Cluster = 2;
-		else
-			fmtparam->base_info.Sectors_Per_Cluster = 1;
-	}
-
-	if (!allow_64kb_or_larger_clusters) {
-		uint32_t sz;
-
-		sz = (uint32_t)fmtparam->base_info.Sectors_Per_Cluster * (uint32_t)fmtparam->disk_bytes_per_sector;
-		if (sz >= (uint32_t)0x10000UL) {
-			fprintf(stderr,"WARNING: cluster size choice means cluster is 64KB or larger. choosing smaller cluster size.\n");
-
-			if (allow_non_power_of_2_cluster_size)
-				fmtparam->base_info.Sectors_Per_Cluster = (uint32_t)0xFFFFUL / (uint32_t)fmtparam->disk_bytes_per_sector;
-			else {
-				while (sz >= (uint32_t)0x10000UL && fmtparam->base_info.Sectors_Per_Cluster >= 2U) {
-					fmtparam->base_info.Sectors_Per_Cluster /= 2U;
-					sz = (uint32_t)fmtparam->base_info.Sectors_Per_Cluster * (uint32_t)fmtparam->disk_bytes_per_sector;
-				}
-			}
-		}
-	}
 
 	// now we need to figure out number of clusters.
 	{
