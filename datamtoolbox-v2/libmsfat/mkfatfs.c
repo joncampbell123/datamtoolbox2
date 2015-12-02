@@ -524,6 +524,27 @@ int libmsfat_formatting_params_auto_choose_fat32_bpb_fsinfo_location(struct libm
 	return 0;
 }
 
+int libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (f->base_info.FAT_size == 32) {
+		if (set_backup_boot_sector != 0) backup_boot_sector = set_backup_boot_sector;
+		else backup_boot_sector = 1;
+
+		if (backup_boot_sector >= reserved_sectors)
+			backup_boot_sector = reserved_sectors - 1;
+		if (backup_boot_sector > 1 && backup_boot_sector == f->base_info.fat32.BPB_FSInfo)
+			backup_boot_sector--;
+		if (backup_boot_sector == f->base_info.fat32.BPB_FSInfo)
+			return 1;
+	}
+	else {
+		backup_boot_sector = 0;
+	}
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
@@ -736,21 +757,7 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_auto_choose_root_directory_size(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_reserved_sectors(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_fat32_bpb_fsinfo_location(fmtparam)) return 1;
-
-	if (fmtparam->base_info.FAT_size == 32) {
-		if (set_backup_boot_sector != 0) backup_boot_sector = set_backup_boot_sector;
-		else backup_boot_sector = 1;
-
-		if (backup_boot_sector >= reserved_sectors)
-			backup_boot_sector = reserved_sectors - 1;
-		if (backup_boot_sector > 1 && backup_boot_sector == fmtparam->base_info.fat32.BPB_FSInfo)
-			backup_boot_sector--;
-		if (backup_boot_sector == fmtparam->base_info.fat32.BPB_FSInfo)
-			return 1;
-	}
-	else {
-		backup_boot_sector = 0;
-	}
+	if (libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(fmtparam)) return 1;
 
 	if (!allow_non_power_of_2_cluster_size) {
 		/* need to round to a power of 2 */
