@@ -47,6 +47,8 @@ static uint8_t					allow_fat12 = 1;
 static uint8_t					force_fat = 0;
 static uint16_t					set_cluster_size = 0;
 static uint8_t					allow_non_power_of_2_cluster_size = 0;
+static uint32_t					root_directory_entries = 0;
+static uint32_t					reserved_sectors = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -457,6 +459,28 @@ int main(int argc,char **argv) {
 			base_info.Sectors_Per_Cluster++;
 	}
 
+	if (base_info.FAT_size == 32) {
+		base_info.RootDirectory_size = 0;
+		root_directory_entries = 0; // FAT32 makes the root directory an allocation chain
+		reserved_sectors = 32; // typical FAT32 value, allowing FSInfo at sector 6
+	}
+	else {
+		// TODO: allow user to override
+		if (disk_size_bytes >= (uint64_t)(100ULL << 20ULL)) // 100MB
+			root_directory_entries = 512; // 16KB
+		else if (disk_size_bytes >= (uint64_t)(60ULL << 20ULL)) // 60MB
+			root_directory_entries = 256; // 8KB
+		else if (disk_size_bytes >= (uint64_t)(32ULL << 20ULL)) // 32MB
+			root_directory_entries = 128; // 4KB
+		else if (disk_size_bytes >= (uint64_t)(26ULL << 20ULL)) // 26MB
+			root_directory_entries = 64; // 2KB
+		else
+			root_directory_entries = 32; // 1KB
+
+		base_info.RootDirectory_size = ((root_directory_entries * 32) + 511) / 512;
+		reserved_sectors = 1;
+	}
+
 	if (!allow_non_power_of_2_cluster_size) {
 		/* need to round to a power of 2 */
 		if (base_info.Sectors_Per_Cluster >= (64+32)/*96*/)
@@ -475,6 +499,15 @@ int main(int argc,char **argv) {
 			base_info.Sectors_Per_Cluster = 2;
 		else
 			base_info.Sectors_Per_Cluster = 1;
+	}
+
+	// now we need to figure out number of clusters.
+	{
+		// initial estimate. doesn't factor in root directory, root directory, boot sector...
+		// estimate will be a little large compared to the final value.
+		uint32_t x = base_info.TotalSectors / (uint32_t)base_info.Sectors_Per_Cluster;
+
+
 	}
 
 	if (s_partition_type != NULL) {
@@ -542,11 +575,16 @@ int main(int argc,char **argv) {
 		if (partition_offset == 0 || partition_size == 0) return 1;
 	}
 
-	printf("   FAT filesystem FAT%u. %lu x %lu (%lu bytes) per cluster\n",
+	printf("   FAT filesystem FAT%u. %lu x %lu (%lu bytes) per cluster. %lu sectors => %lu clusters\n",
 		base_info.FAT_size,
 		(unsigned long)base_info.Sectors_Per_Cluster,
 		(unsigned long)base_info.BytesPerSector,
-		(unsigned long)base_info.Sectors_Per_Cluster * (unsigned long)base_info.BytesPerSector);
+		(unsigned long)base_info.Sectors_Per_Cluster * (unsigned long)base_info.BytesPerSector,
+		(unsigned long)base_info.TotalSectors,
+		(unsigned long)base_info.Total_clusters);
+	printf("   Root directory entries: %lu (%lu sectors)\n",
+		(unsigned long)root_directory_entries,
+		(unsigned long)base_info.RootDirectory_size);
 
 	if (base_info.FAT_size == 0) {
 		fprintf(stderr,"Unable to decide on a FAT bit width\n");
