@@ -434,7 +434,7 @@ int main(int argc,char **argv) {
 	if (set_cluster_size != 0) {
 		unsigned long x;
 
-		x = ((unsigned long)set_cluster_size + ((unsigned long)set_cluster_size / 2UL)) / (unsigned long)base_info.BytesPerSector;
+		x = ((unsigned long)set_cluster_size + ((unsigned long)base_info.BytesPerSector / 2UL)) / (unsigned long)base_info.BytesPerSector;
 		if (x == 0) x = base_info.BytesPerSector;
 		if (x > 255UL) x = 255UL;
 		base_info.Sectors_Per_Cluster = (uint8_t)x;
