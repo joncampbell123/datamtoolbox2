@@ -62,6 +62,7 @@ static const char*				set_volume_label = NULL;
 static uint8_t					set_volume_id_flag = 0;
 static uint32_t					set_root_cluster = 0;
 static uint32_t					set_backup_boot_sector = 0;
+static uint8_t					set_boot_sector_bpb_size = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -219,6 +220,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"backup-boot-sector")) {
 				set_backup_boot_sector = (uint32_t)strtoul(argv[i++],NULL,0);
 			}
+			else if (!strcmp(a,"bpb-size")) {
+				set_boot_sector_bpb_size = (uint8_t)strtoul(argv[i++],NULL,0);
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -264,6 +268,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--volume-label <x>          Set volume label to string <x> (max 11 chars)\n");
 		fprintf(stderr,"--root-cluster <x>          Root directory starts at cluster <x> (FAT32 only)\n");
 		fprintf(stderr,"--backup-boot-sector <x>    FAT32 backup boot sector location\n");
+		fprintf(stderr,"--bpb-size <x>              Set the size of the BPB (!!)\n");
 		return 1;
 	}
 
@@ -918,10 +923,21 @@ int main(int argc,char **argv) {
 		offset *= (uint64_t)disk_bytes_per_sector;
 
 		// TODO: options to emulate various DOS versions of the BPB
-		if (base_info.FAT_size == 32)
-			bs_sz = 90;
+		if (set_boot_sector_bpb_size != 0)
+			bs_sz = set_boot_sector_bpb_size;
+		else if (base_info.FAT_size == 32)
+			bs_sz = 90;	// MS-DOS 7.x / Windows 9x FAT32
 		else
-			bs_sz = 62;
+			bs_sz = 62;	// MS-DOS 6.x and earlier, FAT12/FAT16
+
+		if (bs_sz < 40) {
+			fprintf(stderr,"BPB too small\n");
+			return 1;
+		}
+		if (bs_sz < 90 && base_info.FAT_size == 32) {
+			fprintf(stderr,"BPB too small for FAT32\n");
+			return 1;
+		}
 
 		// BEGIN
 		memset(sector,0,sizeof(sector));
