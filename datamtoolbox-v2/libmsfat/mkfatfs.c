@@ -52,8 +52,6 @@ unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned i
 	return res;
 }
 
-static uint64_t					disk_sectors = 0;
-static uint64_t					disk_size_bytes = 0;
 static uint8_t					disk_media_type_byte = 0;
 static uint8_t					make_partition = 0;
 static uint64_t					partition_offset = 0;
@@ -89,6 +87,8 @@ struct libmsfat_formatting_params {
 	struct chs_geometry_t				disk_geo;
 	libpartmbr_sector_t				diskimage_sector;
 	unsigned int					disk_bytes_per_sector;
+	uint64_t					disk_size_bytes;
+	uint64_t					disk_sectors;
 
 	unsigned int					disk_bytes_per_sector_set:1;
 };
@@ -328,10 +328,10 @@ int main(int argc,char **argv) {
 	if (s_size != NULL) {
 		uint64_t cyl;
 
-		disk_size_bytes = (uint64_t)strtoull_with_unit_suffixes(s_size,NULL,0);
-		if (disk_size_bytes == 0) return 1;
+		fmtparam->disk_size_bytes = (uint64_t)strtoull_with_unit_suffixes(s_size,NULL,0);
+		if (fmtparam->disk_size_bytes == 0) return 1;
 
-		if (lba_mode || disk_size_bytes > (uint64_t)(128ULL << 20ULL)) { // 64MB
+		if (lba_mode || fmtparam->disk_size_bytes > (uint64_t)(128ULL << 20ULL)) { // 64MB
 			if (fmtparam->disk_geo.heads == 0)
 				fmtparam->disk_geo.heads = 16;
 		}
@@ -340,11 +340,11 @@ int main(int argc,char **argv) {
 				fmtparam->disk_geo.heads = 8;
 		}
 
-		if (lba_mode || disk_size_bytes > (uint64_t)(96ULL << 20ULL)) { // 96MB
+		if (lba_mode || fmtparam->disk_size_bytes > (uint64_t)(96ULL << 20ULL)) { // 96MB
 			if (fmtparam->disk_geo.sectors == 0)
 				fmtparam->disk_geo.sectors = 63;
 		}
-		else if (disk_size_bytes > (uint64_t)(32ULL << 20ULL)) { // 32MB
+		else if (fmtparam->disk_size_bytes > (uint64_t)(32ULL << 20ULL)) { // 32MB
 			if (fmtparam->disk_geo.sectors == 0)
 				fmtparam->disk_geo.sectors = 32;
 		}
@@ -354,31 +354,31 @@ int main(int argc,char **argv) {
 		}
 
 		if (!lba_mode && !chs_mode) {
-			if (disk_size_bytes >= (uint64_t)(8192ULL << 20ULL))
+			if (fmtparam->disk_size_bytes >= (uint64_t)(8192ULL << 20ULL))
 				lba_mode = 1;
 			else
 				chs_mode = 1;
 		}
 
-		disk_sectors = disk_size_bytes / (uint64_t)fmtparam->disk_bytes_per_sector;
+		fmtparam->disk_sectors = fmtparam->disk_size_bytes / (uint64_t)fmtparam->disk_bytes_per_sector;
 		if (!fmtparam->disk_bytes_per_sector_set) {
-			while (disk_sectors >= (uint64_t)0xFFFFFFF0UL) {
+			while (fmtparam->disk_sectors >= (uint64_t)0xFFFFFFF0UL) {
 				fmtparam->disk_bytes_per_sector *= (uint64_t)2UL;
-				disk_sectors = disk_size_bytes / (uint64_t)fmtparam->disk_bytes_per_sector;
+				fmtparam->disk_sectors = fmtparam->disk_size_bytes / (uint64_t)fmtparam->disk_bytes_per_sector;
 			}
 		}
 
 		/* how many cylinders? */
-		cyl = disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
+		cyl = fmtparam->disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
 
 		/* BIOS CHS translations to exceed 512MB limit */
 		while (cyl > 1023 && fmtparam->disk_geo.heads < 128) {
 			fmtparam->disk_geo.heads *= 2;
-			cyl = disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
+			cyl = fmtparam->disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
 		}
 		if (cyl > 1023 && fmtparam->disk_geo.heads < 255) {
 			fmtparam->disk_geo.heads = 255;
-			cyl = disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
+			cyl = fmtparam->disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
 		}
 
 		/* final limit (16383 at IDE, 1024 at BIOS) */
@@ -388,19 +388,21 @@ int main(int argc,char **argv) {
 		fmtparam->disk_geo.cylinders = (uint16_t)cyl;
 
 		if (chs_mode) {
-			disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
+			fmtparam->disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
 				(uint64_t)fmtparam->disk_geo.sectors *
 				(uint64_t)fmtparam->disk_geo.cylinders;
-			disk_size_bytes = disk_sectors * (uint64_t)fmtparam->disk_bytes_per_sector;
+			fmtparam->disk_size_bytes = fmtparam->disk_sectors *
+				(uint64_t)fmtparam->disk_bytes_per_sector;
 		}
 	}
 	else {
 		if (fmtparam->disk_geo.cylinders == 0 || fmtparam->disk_geo.heads == 0 || fmtparam->disk_geo.sectors == 0) return 1;
 
-		disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
+		fmtparam->disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
 			(uint64_t)fmtparam->disk_geo.sectors *
 			(uint64_t)fmtparam->disk_geo.cylinders;
-		disk_size_bytes = disk_sectors * (uint64_t)fmtparam->disk_bytes_per_sector;
+		fmtparam->disk_size_bytes = fmtparam->disk_sectors *
+			(uint64_t)fmtparam->disk_bytes_per_sector;
 	}
 
 	if (!lba_mode && !chs_mode) {
@@ -423,13 +425,13 @@ int main(int argc,char **argv) {
 	if (partition_offset == (uint64_t)0UL)
 		partition_offset = fmtparam->disk_geo.sectors;
 
-	if (partition_offset >= disk_sectors) {
+	if (partition_offset >= fmtparam->disk_sectors) {
 		fprintf(stderr,"Partition offset >= disk sectors\n");
 		return 1;
 	}
 
 	if (partition_size == (uint64_t)0UL) {
-		uint64_t diskrnd = disk_sectors;
+		uint64_t diskrnd = fmtparam->disk_sectors;
 		diskrnd -= diskrnd % (uint64_t)fmtparam->disk_geo.sectors;
 		if (partition_offset >= diskrnd) {
 			fprintf(stderr,"Partition offset >= disk sectors (rounded down to track)\n");
@@ -443,7 +445,7 @@ int main(int argc,char **argv) {
 	if (make_partition)
 		fmtparam->base_info.TotalSectors = (uint32_t)partition_size;
 	else
-		fmtparam->base_info.TotalSectors = (uint32_t)disk_sectors;
+		fmtparam->base_info.TotalSectors = (uint32_t)fmtparam->disk_sectors;
 
 	if (fmtparam->force_fat != 0) {
 		if (fmtparam->force_fat == 12 && !allow_fat12) {
@@ -542,13 +544,13 @@ int main(int argc,char **argv) {
 	else {
 		if (set_root_directory_entries != 0)
 			root_directory_entries = set_root_directory_entries;
-		else if (disk_size_bytes >= (uint64_t)(100ULL << 20ULL)) // 100MB
+		else if (fmtparam->disk_size_bytes >= (uint64_t)(100ULL << 20ULL)) // 100MB
 			root_directory_entries = 512; // 16KB
-		else if (disk_size_bytes >= (uint64_t)(60ULL << 20ULL)) // 60MB
+		else if (fmtparam->disk_size_bytes >= (uint64_t)(60ULL << 20ULL)) // 60MB
 			root_directory_entries = 256; // 8KB
-		else if (disk_size_bytes >= (uint64_t)(32ULL << 20ULL)) // 32MB
+		else if (fmtparam->disk_size_bytes >= (uint64_t)(32ULL << 20ULL)) // 32MB
 			root_directory_entries = 128; // 4KB
-		else if (disk_size_bytes >= (uint64_t)(26ULL << 20ULL)) // 26MB
+		else if (fmtparam->disk_size_bytes >= (uint64_t)(26ULL << 20ULL)) // 26MB
 			root_directory_entries = 64; // 2KB
 		else
 			root_directory_entries = 32; // 1KB
@@ -741,9 +743,9 @@ int main(int argc,char **argv) {
 
 	assert(lba_mode || chs_mode);
 	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x %s\n",
-		(unsigned long long)disk_sectors,
+		(unsigned long long)fmtparam->disk_sectors,
 		(unsigned int)fmtparam->disk_bytes_per_sector,
-		(unsigned long long)disk_sectors * (unsigned long long)fmtparam->disk_bytes_per_sector,
+		(unsigned long long)fmtparam->disk_sectors * (unsigned long long)fmtparam->disk_bytes_per_sector,
 		(unsigned int)fmtparam->disk_geo.cylinders,
 		(unsigned int)fmtparam->disk_geo.heads,
 		(unsigned int)fmtparam->disk_geo.sectors,
@@ -822,7 +824,7 @@ int main(int argc,char **argv) {
 	/* Linux: we can easily make the file sparse and quickly generate what we want with ftruncate.
 	 * On ext3/ext4 volumes this is a very fast way to create a disk image of any size AND to make
 	 * it sparse so that disk space is allocated only to what we write data to. */
-	if (ftruncate(fd,(off_t)disk_size_bytes)) {
+	if (ftruncate(fd,(off_t)fmtparam->disk_size_bytes)) {
 		fprintf(stderr,"ftruncate failed\n");
 		return 1;
 	}
