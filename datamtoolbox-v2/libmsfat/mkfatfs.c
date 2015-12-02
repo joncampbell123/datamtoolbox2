@@ -50,6 +50,7 @@ static uint8_t					allow_non_power_of_2_cluster_size = 0;
 static uint8_t					allow_64kb_or_larger_clusters = 0;
 static uint32_t					set_root_directory_entries = 0;
 static uint32_t					root_directory_entries = 0;
+static uint32_t					set_fsinfo_sector = 0;
 static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
 
@@ -189,6 +190,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"root-directories")) {
 				set_root_directory_entries = (uint32_t)strtoul(argv[i++],NULL,0);
 			}
+			else if (!strcmp(a,"fsinfo")) {
+				set_fsinfo_sector = (uint32_t)strtoul(argv[i++],NULL,0);
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -228,6 +232,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--large-clusters            Allow clusters to be 64KB or larger (FAT specification violation!)\n");
 		fprintf(stderr,"--fat-tables <x>            Number of FAT tables\n");
 		fprintf(stderr,"--root-directories <x>      Number of root directory entries\n");
+		fprintf(stderr,"--fsinfo <x>                What sector to put the FAT32 FSInfo at\n");
 		return 1;
 	}
 
@@ -502,10 +507,15 @@ int main(int argc,char **argv) {
 		reserved_sectors = 1;
 	}
 
-	if (base_info.FAT_size == 32)
-		base_info.fat32.BPB_FSInfo = 6;
-	else
+	if (base_info.FAT_size == 32) {
+		if (set_fsinfo_sector != 0)
+			base_info.fat32.BPB_FSInfo = set_fsinfo_sector;
+		else
+			base_info.fat32.BPB_FSInfo = 6;
+	}
+	else {
 		base_info.fat32.BPB_FSInfo = 0;
+	}
 
 	if (base_info.fat32.BPB_FSInfo >= reserved_sectors)
 		base_info.fat32.BPB_FSInfo = reserved_sectors - 1;
@@ -705,6 +715,8 @@ int main(int argc,char **argv) {
 		(unsigned long)base_info.TotalSectors,
 		(unsigned long)base_info.Total_data_clusters,
 		(unsigned long)base_info.Total_clusters);
+	printf("   Reserved sectors: %lu\n",
+		(unsigned long)reserved_sectors);
 	printf("   Root directory entries: %lu (%lu sectors)\n",
 		(unsigned long)root_directory_entries,
 		(unsigned long)base_info.RootDirectory_size);
