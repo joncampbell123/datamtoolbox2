@@ -57,6 +57,8 @@ static uint8_t					set_fat_tables = 0;
 static uint32_t					set_reserved_sectors = 0;
 static uint32_t					volume_id = 0;
 static const char*				volume_label = NULL;
+static uint32_t					set_volume_id = 0;
+static uint8_t					set_volume_id_flag = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -201,6 +203,10 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"reserved-sectors")) {
 				set_reserved_sectors = (uint32_t)strtoul(argv[i++],NULL,0);
 			}
+			else if (!strcmp(a,"volume-id")) {
+				set_volume_id = (uint32_t)strtoul(argv[i++],NULL,0);
+				set_volume_id_flag = 1;
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -242,6 +248,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--root-directories <x>      Number of root directory entries\n");
 		fprintf(stderr,"--fsinfo <x>                What sector to put the FAT32 FSInfo at\n");
 		fprintf(stderr,"--reserved-sectors <x>      Number of reserved sectors\n");
+		fprintf(stderr,"--volume-id <x>             Set volume id to <x> (X is a decimal or hex value 32-bit wide)\n");
 		return 1;
 	}
 
@@ -726,8 +733,10 @@ int main(int argc,char **argv) {
 	// TODO: allow user override
 	volume_label = "NO LABEL";
 
-	// TODO: allow user override
-	volume_id = (uint32_t)time(NULL);
+	if (set_volume_id_flag)
+		volume_id = set_volume_id;
+	else
+		volume_id = (uint32_t)time(NULL);
 
 	printf("   FAT filesystem FAT%u. %lu x %lu (%lu bytes) per cluster. %lu sectors => %lu clusters (%lu)\n",
 		base_info.FAT_size,
