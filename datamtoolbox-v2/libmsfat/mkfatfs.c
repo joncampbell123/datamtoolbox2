@@ -412,6 +412,49 @@ int libmsfat_formatting_params_auto_choose_FAT_tables(struct libmsfat_formatting
 	return 0;
 }
 
+int libmsfat_formatting_params_auto_choose_cluster_size(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (set_cluster_size != 0) {
+		unsigned long x;
+
+		x = ((unsigned long)set_cluster_size + ((unsigned long)f->disk_bytes_per_sector / 2UL)) / (unsigned long)f->disk_bytes_per_sector;
+		if (x == 0) x = f->disk_bytes_per_sector;
+		if (x > 255UL) x = 255UL;
+		f->base_info.Sectors_Per_Cluster = (uint8_t)x;
+	}
+	else {
+		uint32_t cluslimit;
+
+		if (f->base_info.FAT_size == 32) {
+			/* it's better to keep the FAT table small. try not to do one cluster per sector */
+			if (f->base_info.TotalSectors >= (uint32_t)0x3FFFF5UL) {
+				f->base_info.Sectors_Per_Cluster = 16;
+				if (f->base_info.TotalSectors >= (uint32_t)0x00FFFFF5UL)
+					cluslimit = (uint32_t)0x03FFFFF5UL;
+				else
+					cluslimit = (uint32_t)0x00FFFFF5UL;
+			}
+			else {
+				cluslimit = (uint32_t)0x0007FFF5UL;
+				f->base_info.Sectors_Per_Cluster = 1;
+			}
+		}
+		else {
+			f->base_info.Sectors_Per_Cluster = 1;
+			if (f->base_info.FAT_size == 16)
+				cluslimit = (uint32_t)0x0000FFF5UL;
+			else
+				cluslimit = (uint32_t)0x00000FF5UL;
+		}
+
+		while (f->base_info.Sectors_Per_Cluster < 0xFF && (f->base_info.TotalSectors / (uint32_t)f->base_info.Sectors_Per_Cluster) >= cluslimit)
+			f->base_info.Sectors_Per_Cluster++;
+	}
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
@@ -620,43 +663,7 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_update_total_sectors(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_FAT_size(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_FAT_tables(fmtparam)) return 1;
-
-	if (set_cluster_size != 0) {
-		unsigned long x;
-
-		x = ((unsigned long)set_cluster_size + ((unsigned long)fmtparam->disk_bytes_per_sector / 2UL)) / (unsigned long)fmtparam->disk_bytes_per_sector;
-		if (x == 0) x = fmtparam->disk_bytes_per_sector;
-		if (x > 255UL) x = 255UL;
-		fmtparam->base_info.Sectors_Per_Cluster = (uint8_t)x;
-	}
-	else {
-		uint32_t cluslimit;
-
-		if (fmtparam->base_info.FAT_size == 32) {
-			/* it's better to keep the FAT table small. try not to do one cluster per sector */
-			if (fmtparam->base_info.TotalSectors >= (uint32_t)0x3FFFF5UL) {
-				fmtparam->base_info.Sectors_Per_Cluster = 16;
-				if (fmtparam->base_info.TotalSectors >= (uint32_t)0x00FFFFF5UL)
-					cluslimit = (uint32_t)0x03FFFFF5UL;
-				else
-					cluslimit = (uint32_t)0x00FFFFF5UL;
-			}
-			else {
-				cluslimit = (uint32_t)0x0007FFF5UL;
-				fmtparam->base_info.Sectors_Per_Cluster = 1;
-			}
-		}
-		else {
-			fmtparam->base_info.Sectors_Per_Cluster = 1;
-			if (fmtparam->base_info.FAT_size == 16)
-				cluslimit = (uint32_t)0x0000FFF5UL;
-			else
-				cluslimit = (uint32_t)0x00000FF5UL;
-		}
-
-		while (fmtparam->base_info.Sectors_Per_Cluster < 0xFF && (fmtparam->base_info.TotalSectors / (uint32_t)fmtparam->base_info.Sectors_Per_Cluster) >= cluslimit)
-			fmtparam->base_info.Sectors_Per_Cluster++;
-	}
+	if (libmsfat_formatting_params_auto_choose_cluster_size(fmtparam)) return 1;
 
 	if (fmtparam->base_info.FAT_size == 32) {
 		fmtparam->base_info.RootDirectory_size = 0;
