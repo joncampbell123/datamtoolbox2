@@ -33,6 +33,12 @@ static uint64_t					disk_sectors = 0;
 static unsigned int				disk_bytes_per_sector = 0;
 static uint64_t					disk_size_bytes = 0;
 static uint8_t					disk_media_type_byte = 0;
+static uint8_t					make_partition = 0;
+static uint64_t					partition_offset = 0;
+static uint64_t					partition_size = 0;
+static uint8_t					partition_type = 0;
+static uint8_t					lba_mode = 0;
+static uint8_t					chs_mode = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -80,6 +86,9 @@ uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 }
 
 int main(int argc,char **argv) {
+	const char *s_partition_offset = NULL;
+	const char *s_partition_size = NULL;
+	const char *s_partition_type = NULL;
 	const char *s_sectorsize = NULL;
 	const char *s_media_type = NULL;
 	const char *s_geometry = NULL;
@@ -110,6 +119,24 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"media-type")) {
 				s_media_type = argv[i++];
 			}
+			else if (!strcmp(a,"partition")) {
+				make_partition = 1;
+			}
+			else if (!strcmp(a,"partition-offset")) {
+				s_partition_offset = argv[i++];
+			}
+			else if (!strcmp(a,"partition-size")) {
+				s_partition_size = argv[i++];
+			}
+			else if (!strcmp(a,"partition-type")) {
+				s_partition_type = argv[i++];
+			}
+			else if (!strcmp(a,"lba")) {
+				lba_mode = 1;
+			}
+			else if (!strcmp(a,"chs")) {
+				chs_mode = 1;
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -134,6 +161,12 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--size <n>                  Disk image is N bytes long. Use suffixes K, M, G to specify KB, MB, GB\n");
 		fprintf(stderr,"--sectorsize <n>            Disk image uses N bytes/sector (default 512)\n");
 		fprintf(stderr,"--media-type <x>            Force media type byte X\n");
+		fprintf(stderr,"--partition                 Make partition table (as hard drive)\n");
+		fprintf(stderr,"--partition-offset <x>      Starting sector number of the partition\n");
+		fprintf(stderr,"--partition-size <n>        Make partition within image N bytes (with suffixes)\n");
+		fprintf(stderr,"--partition-type <x>        Force partition type X\n");
+		fprintf(stderr,"--lba                       LBA mode\n");
+		fprintf(stderr,"--chs                       CHS mode\n");
 		return 1;
 	}
 
@@ -173,7 +206,7 @@ int main(int argc,char **argv) {
 		if (disk_geo.heads == 0)
 			disk_geo.heads = 16;
 
-		if (disk_size_bytes > (uint64_t)(512ULL * 1024ULL)) { // 512MB
+		if (lba_mode || disk_size_bytes > (uint64_t)(512ULL * 1024ULL)) { // 512MB
 			if (disk_geo.sectors == 0)
 				disk_geo.sectors = 63;
 		}
@@ -201,6 +234,89 @@ int main(int argc,char **argv) {
 		disk_size_bytes = disk_sectors * (uint64_t)disk_bytes_per_sector;
 	}
 
+	if (!lba_mode && !chs_mode) {
+		if (disk_geo.sectors >= 63 && disk_geo.cylinders >= 4096)
+			lba_mode = 1;
+		else
+			chs_mode = 1;
+	}
+
+	if (s_partition_offset != NULL)
+		partition_offset = (uint64_t)strtoull(s_partition_offset,NULL,0);
+
+	if (s_partition_size != NULL) {
+		char *s=NULL;
+
+		partition_size = (uint64_t)strtoull(s_partition_size,&s,0);
+
+		if (s && *s) {
+			if (tolower(*s) == 'k')
+				partition_size <<= (uint64_t)10;	// KB
+			else if (tolower(*s) == 'm')
+				partition_size <<= (uint64_t)20;	// MB
+			else if (tolower(*s) == 'g')
+				partition_size <<= (uint64_t)30;	// GB
+			else if (tolower(*s) == 't')
+				partition_size <<= (uint64_t)40;	// TB
+		}
+
+		partition_size /= (uint64_t)disk_bytes_per_sector;
+	}
+
+	// automatically default to a partition starting on a track boundary.
+	// MS-DOS, especially 6.x and earlier, require this. MS-DOS 7 and higher
+	// demand this IF the partition was made in CHS mode.
+	if (partition_offset == (uint64_t)0UL)
+		partition_offset = disk_geo.sectors;
+
+	if (partition_offset >= disk_sectors) {
+		fprintf(stderr,"Partition offset >= disk sectors\n");
+		return 1;
+	}
+
+	if (partition_size == (uint64_t)0UL) {
+		uint64_t diskrnd = disk_sectors;
+		diskrnd -= diskrnd % (uint64_t)disk_geo.sectors;
+		if (partition_offset >= diskrnd) {
+			fprintf(stderr,"Partition offset >= disk sectors (rounded down to track)\n");
+			return 1;
+		}
+
+		partition_size = diskrnd - partition_offset;
+	}
+
+	if (s_partition_type != NULL) {
+		partition_type = (uint8_t)strtoul(s_partition_type,NULL,0);
+		if (partition_type == 0) return 1;
+	}
+	else {
+		// resides in the first 32MB. this is the only case that disregards LBA mode
+		if ((partition_offset+partition_size)*((uint64_t)disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
+			if (0/*TODO: If FAT16 */)
+				partition_type = 0x04; // FAT16 with less than 65536 sectors
+			else
+				partition_type = 0x01; // FAT12 as primary partition in the first 32MB
+		}
+		// resides in the first 8GB.
+		else if ((partition_offset+partition_size)*((uint64_t)disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
+			if (0/*TODO: If FAT32 */)
+				partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
+			else if (0/*TODO: If FAT16 */)
+				partition_type = lba_mode ? 0x0E : 0x06;	// FAT16B with (lba_mode ? LBA : CHS) mode
+			else
+				partition_type = 0x01; // FAT12
+		}
+		// resides past 8GB. this is the only case that disregards CHS mode
+		else {
+			if (0/*TODO: If FAT32 */)
+				partition_type = 0x0C;	// FAT32 with LBA mode
+			else if (0/*TODO: If FAT16 */)
+				partition_type = 0x0E;	// FAT16B with LBA mode
+			else
+				partition_type = 0x01; // FAT12
+		}
+	}
+
 	if (s_media_type != NULL) {
 		disk_media_type_byte = (uint8_t)strtoul(s_media_type,NULL,0);
 		if (disk_media_type_byte < 0xF0) return 1;
@@ -209,14 +325,28 @@ int main(int argc,char **argv) {
 		disk_media_type_byte = guess_from_geometry(&disk_geo);
 	}
 
-	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x\n",
+	assert(lba_mode || chs_mode);
+	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x %s\n",
 		(unsigned long long)disk_sectors,
 		(unsigned int)disk_bytes_per_sector,
 		(unsigned long long)disk_sectors * (unsigned long long)disk_bytes_per_sector,
 		(unsigned int)disk_geo.cylinders,
 		(unsigned int)disk_geo.heads,
 		(unsigned int)disk_geo.sectors,
-		(unsigned int)disk_media_type_byte);
+		(unsigned int)disk_media_type_byte,
+		lba_mode ? "LBA" : "CHS");
+
+	if (make_partition) {
+		printf("   Partition: type=0x%02x sectors %llu-%llu\n",
+			(unsigned int)partition_type,
+			(unsigned long long)partition_offset,
+			(unsigned long long)(partition_offset + partition_size - (uint64_t)1UL));
+
+		if (chs_mode && (partition_offset % (uint64_t)disk_geo.sectors) != 0)
+			printf("    WARNING: Partition does not start on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
+		if (chs_mode && ((partition_offset + partition_size) % (uint64_t)disk_geo.sectors) != 0)
+			printf("    WARNING: Partition does not end on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
+	}
 
 	fd = open(s_image,O_RDWR|O_BINARY|O_CREAT|O_TRUNC,0644);
 	if (fd < 0) {
