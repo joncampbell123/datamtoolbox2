@@ -91,6 +91,7 @@ struct libmsfat_formatting_params {
 	uint64_t					disk_size_bytes;
 	uint64_t					disk_sectors;
 
+	unsigned int					disk_size_bytes_set:1;
 	unsigned int					disk_bytes_per_sector_set:1;
 };
 
@@ -137,6 +138,13 @@ int libmsfat_formatting_params_set_FAT_width(struct libmsfat_formatting_params *
 	return 0;
 }
 
+int libmsfat_formatting_params_update_disk_sectors(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+	if (f->disk_bytes_per_sector == 0) return -1;
+	f->disk_sectors = (uint64_t)f->disk_size_bytes / (uint64_t)f->disk_bytes_per_sector;
+	return 0;
+}
+
 int libmsfat_formatting_params_set_sector_size(struct libmsfat_formatting_params *f,unsigned int sz) {
 	if (f == NULL) return -1;
 
@@ -153,6 +161,63 @@ int libmsfat_formatting_params_set_sector_size(struct libmsfat_formatting_params
 	return 0;
 }
 
+int libmsfat_formatting_params_set_disk_size_bytes(struct libmsfat_formatting_params *f,uint64_t byte_count) {
+	if (f == NULL) return -1;
+
+	if (byte_count == (uint64_t)0ULL) {
+		f->disk_size_bytes_set = 0;
+		f->disk_size_bytes = 0;
+	}
+	else {
+		f->disk_size_bytes_set = 1;
+		f->disk_size_bytes = byte_count;
+	}
+
+	return 0;
+}
+
+int libmsfat_formatting_params_autofill_geometry(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+	if (f->disk_size_bytes == 0) return 1;
+
+	if (lba_mode || f->disk_size_bytes > (uint64_t)(128ULL << 20ULL)) { // 64MB
+		if (f->disk_geo.heads == 0)
+			f->disk_geo.heads = 16;
+	}
+	else {
+		if (f->disk_geo.heads == 0)
+			f->disk_geo.heads = 8;
+	}
+
+	if (lba_mode || f->disk_size_bytes > (uint64_t)(96ULL << 20ULL)) { // 96MB
+		if (f->disk_geo.sectors == 0)
+			f->disk_geo.sectors = 63;
+	}
+	else if (f->disk_size_bytes > (uint64_t)(32ULL << 20ULL)) { // 32MB
+		if (f->disk_geo.sectors == 0)
+			f->disk_geo.sectors = 32;
+	}
+	else {
+		if (f->disk_geo.sectors == 0)
+			f->disk_geo.sectors = 15;
+	}
+
+	return 0;
+}
+
+int libmsfat_formatting_params_auto_choose_lba_chs(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (!lba_mode && !chs_mode) {
+		if (f->disk_size_bytes >= (uint64_t)(8192ULL << 20ULL))
+			lba_mode = 1;
+		else
+			chs_mode = 1;
+	}
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
@@ -161,7 +226,6 @@ int main(int argc,char **argv) {
 	const char *s_media_type = NULL;
 	const char *s_geometry = NULL;
 	const char *s_image = NULL;
-	const char *s_size = NULL;
 	int i,fd;
 
 	if ((fmtparam=libmsfat_formatting_params_create()) == NULL) {
@@ -182,10 +246,13 @@ int main(int argc,char **argv) {
 				s_image = argv[i++];
 			}
 			else if (!strcmp(a,"size")) {
-				s_size = argv[i++];
+				if (libmsfat_formatting_params_set_disk_size_bytes(fmtparam,(uint64_t)strtoull_with_unit_suffixes(argv[i++],NULL,0))) {
+					fprintf(stderr,"--size: Size setting failed\n");
+					return 1;
+				}
 			}
 			else if (!strcmp(a,"sectorsize")) {
-				if (libmsfat_formatting_params_set_sector_size(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
+				if (libmsfat_formatting_params_set_sector_size(fmtparam,(unsigned int)strtoull_with_unit_suffixes(argv[i++],NULL,0))) {
 					fprintf(stderr,"--fat: Invalid FAT bit width\n");
 					return 1;
 				}
@@ -291,7 +358,7 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	if (s_image == NULL || (s_geometry == NULL && s_size == NULL)) {
+	if (s_image == NULL || (s_geometry == NULL && !fmtparam->disk_size_bytes_set)) {
 		fprintf(stderr,"mkfatfs --image <image> ...\n");
 		fprintf(stderr,"Generate a new filesystem. You must specify either --geometry or --size.\n");
 		fprintf(stderr,"\n");
@@ -330,40 +397,16 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	if (s_size != NULL) {
+	if (fmtparam->disk_size_bytes_set && libmsfat_formatting_params_autofill_geometry(fmtparam)) {
+		fprintf(stderr,"Failed to auto-fill geometry given disk size\n");
+		return 1;
+	}
+
+	if (fmtparam->disk_size_bytes_set) {
 		uint64_t cyl;
 
-		fmtparam->disk_size_bytes = (uint64_t)strtoull_with_unit_suffixes(s_size,NULL,0);
-		if (fmtparam->disk_size_bytes == 0) return 1;
-
-		if (lba_mode || fmtparam->disk_size_bytes > (uint64_t)(128ULL << 20ULL)) { // 64MB
-			if (fmtparam->disk_geo.heads == 0)
-				fmtparam->disk_geo.heads = 16;
-		}
-		else {
-			if (fmtparam->disk_geo.heads == 0)
-				fmtparam->disk_geo.heads = 8;
-		}
-
-		if (lba_mode || fmtparam->disk_size_bytes > (uint64_t)(96ULL << 20ULL)) { // 96MB
-			if (fmtparam->disk_geo.sectors == 0)
-				fmtparam->disk_geo.sectors = 63;
-		}
-		else if (fmtparam->disk_size_bytes > (uint64_t)(32ULL << 20ULL)) { // 32MB
-			if (fmtparam->disk_geo.sectors == 0)
-				fmtparam->disk_geo.sectors = 32;
-		}
-		else {
-			if (fmtparam->disk_geo.sectors == 0)
-				fmtparam->disk_geo.sectors = 15;
-		}
-
-		if (!lba_mode && !chs_mode) {
-			if (fmtparam->disk_size_bytes >= (uint64_t)(8192ULL << 20ULL))
-				lba_mode = 1;
-			else
-				chs_mode = 1;
-		}
+		if (libmsfat_formatting_params_update_disk_sectors(fmtparam)) return 1;
+		if (libmsfat_formatting_params_auto_choose_lba_chs(fmtparam)) return 1;
 
 		fmtparam->disk_sectors = fmtparam->disk_size_bytes / (uint64_t)fmtparam->disk_bytes_per_sector;
 		if (!fmtparam->disk_bytes_per_sector_set) {
@@ -432,12 +475,18 @@ int main(int argc,char **argv) {
 		partition_offset = fmtparam->disk_geo.sectors;
 
 	if (partition_offset >= fmtparam->disk_sectors) {
-		fprintf(stderr,"Partition offset >= disk sectors\n");
+		fprintf(stderr,"Partition offset >= disk sectors (%llu >= %llu)\n",
+			(unsigned long long)partition_offset,
+			(unsigned long long)fmtparam->disk_sectors);
 		return 1;
 	}
 
-	if (!dont_partition_track_align)
-		partition_offset -= partition_offset % (uint64_t)fmtparam->disk_geo.sectors;
+	if (!dont_partition_track_align) {
+		if (partition_offset != (uint64_t)0UL) {
+			partition_offset -= partition_offset % (uint64_t)fmtparam->disk_geo.sectors;
+			if (partition_offset == (uint64_t)0UL) partition_offset += (uint64_t)fmtparam->disk_geo.sectors;
+		}
+	}
 
 	if (partition_size == (uint64_t)0UL)
 		partition_size = fmtparam->disk_sectors - partition_offset;
