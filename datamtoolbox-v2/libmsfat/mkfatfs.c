@@ -395,7 +395,30 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 #elif defined(_WIN32)
-	/* TODO: Make the file NTFS sparse (if possible), then set file size */
+	/* Windows: Assuming NTFS and NT kernel (XP/Vista/7/8/10), mark the file as sparse, then set the file size. */
+	{
+		DWORD dwTemp;
+		LONG lo,hi;
+		HANDLE h;
+
+		h = (HANDLE)_get_osfhandle(fd);
+		if (h == INVALID_HANDLE_VALUE) return 1; // <- what?
+		DeviceIoControl(h,FSCTL_SET_SPARSE,NULL,0,NULL,0,&dwTemp,NULL); // <- don't care if it fails.
+
+		/* FIXME: "LONG" is 32-bit wide even in Win64, right? Does SetFilePointer() work the same in Win64? */
+		lo = (LONG)(disk_size_bytes & 0xFFFFFFFFUL);
+		hi = (LONG)(disk_size_bytes >> (uint64_t)32UL);
+		if (SetFilePointer(h,lo,&hi,FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
+			fprintf(stderr,"SetFilePointer failed\n");
+			return 1;
+		}
+
+		/* and then make that the end of the file */
+		if (SetEndOfFile(h) == 0) {
+			fprintf(stderr,"SetEndOfFile failed\n");
+			return 1;
+		}
+	}
 #else
 	/* try to make it sparse using lseek then a write.
 	 * this is the most portable way I know to make a file of the size we want.
