@@ -52,7 +52,6 @@ unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned i
 	return res;
 }
 
-static uint8_t					disk_media_type_byte = 0;
 static uint8_t					make_partition = 0;
 static uint8_t					lba_mode = 0;
 static uint8_t					chs_mode = 0;
@@ -91,9 +90,11 @@ struct libmsfat_formatting_params {
 	uint64_t					partition_size;
 	uint64_t					disk_sectors;
 	uint8_t						partition_type;
+	uint8_t						disk_media_type_byte;
 
 	unsigned int					partition_type_set:1;
 	unsigned int					disk_size_bytes_set:1;
+	unsigned int					disk_media_type_byte_set:1;
 	unsigned int					disk_bytes_per_sector_set:1;
 };
 
@@ -144,6 +145,22 @@ int libmsfat_formatting_params_update_disk_sectors(struct libmsfat_formatting_pa
 	if (f == NULL) return -1;
 	if (f->disk_bytes_per_sector == 0) return -1;
 	f->disk_sectors = (uint64_t)f->disk_size_bytes / (uint64_t)f->disk_bytes_per_sector;
+	return 0;
+}
+
+int libmsfat_formatting_params_set_media_type_byte(struct libmsfat_formatting_params *f,unsigned int b) {
+	if (f == NULL) return -1;
+
+	if (b != 0) {
+		if (b < 0xF0) return -1;
+		f->disk_media_type_byte_set = 1;
+		f->disk_media_type_byte = (uint8_t)b;
+	}
+	else {
+		f->disk_media_type_byte_set = 0;
+		f->disk_media_type_byte = 0;
+	}
+
 	return 0;
 }
 
@@ -698,12 +715,21 @@ int libmsfat_formatting_params_set_partition_type(struct libmsfat_formatting_par
 	return 0;
 }
 
+int libmsfat_formatting_params_auto_choose_media_type_byte(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (!f->disk_media_type_byte_set)
+		f->disk_media_type_byte = libmsfat_guess_from_geometry(&f->disk_geo);
+
+	if (f->disk_media_type_byte < 0xF0) return -1;
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	struct libmsfat_context_t *msfatctx = NULL;
 	const char *s_partition_offset = NULL;
 	const char *s_partition_size = NULL;
-	const char *s_media_type = NULL;
 	const char *s_geometry = NULL;
 	const char *s_image = NULL;
 	int i,fd,dfd;
@@ -738,7 +764,10 @@ int main(int argc,char **argv) {
 				}
 			}
 			else if (!strcmp(a,"media-type")) {
-				s_media_type = argv[i++];
+				if (libmsfat_formatting_params_set_media_type_byte(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
+					fprintf(stderr,"--fat: Invalid FAT bit width\n");
+					return 1;
+				}
 			}
 			else if (!strcmp(a,"partition")) {
 				make_partition = 1;
@@ -916,14 +945,7 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(fmtparam)) return 1;
 	if (libmsfat_formatting_params_compute_cluster_count(fmtparam)) return 1;
 	if (make_partition && libmsfat_formatting_params_choose_partition_table(fmtparam)) return 1;
-
-	if (s_media_type != NULL) {
-		disk_media_type_byte = (uint8_t)strtoul(s_media_type,NULL,0);
-		if (disk_media_type_byte < 0xF0) return 1;
-	}
-	else {
-		disk_media_type_byte = libmsfat_guess_from_geometry(&fmtparam->disk_geo);
-	}
+	if (libmsfat_formatting_params_auto_choose_media_type_byte(fmtparam)) return 1;
 
 	assert(lba_mode || chs_mode);
 	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x %s\n",
@@ -933,7 +955,7 @@ int main(int argc,char **argv) {
 		(unsigned int)fmtparam->disk_geo.cylinders,
 		(unsigned int)fmtparam->disk_geo.heads,
 		(unsigned int)fmtparam->disk_geo.sectors,
-		(unsigned int)disk_media_type_byte,
+		(unsigned int)fmtparam->disk_media_type_byte,
 		lba_mode ? "LBA" : "CHS");
 
 	if (make_partition) {
@@ -1178,7 +1200,7 @@ int main(int argc,char **argv) {
 			bs->BPB_common.BPB_TotSec16 = 0;
 		else
 			bs->BPB_common.BPB_TotSec16 = (uint16_t)htole16(fmtparam->base_info.TotalSectors);
-		bs->BPB_common.BPB_Media = disk_media_type_byte;
+		bs->BPB_common.BPB_Media = fmtparam->disk_media_type_byte;
 		if (fmtparam->base_info.FAT_size == 32)
 			bs->BPB_common.BPB_FATSz16 = 0;
 		else
@@ -1331,7 +1353,7 @@ int main(int argc,char **argv) {
 		}
 
 		for (i=0;i < fmtparam->final_info.FAT_tables;i++) {
-			if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFF00UL + (uint32_t)disk_media_type_byte,libmsfat_CLUSTER_0_MEDIA_TYPE,i)) {
+			if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFF00UL + (uint32_t)fmtparam->disk_media_type_byte,libmsfat_CLUSTER_0_MEDIA_TYPE,i)) {
 				fprintf(stderr,"Cannot write cluster 1\n");
 				return 1;
 			}
