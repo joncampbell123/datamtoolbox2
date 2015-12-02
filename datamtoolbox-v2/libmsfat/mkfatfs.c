@@ -54,8 +54,6 @@ unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned i
 
 static uint8_t					disk_media_type_byte = 0;
 static uint8_t					make_partition = 0;
-static uint64_t					partition_offset = 0;
-static uint64_t					partition_size = 0;
 static uint8_t					partition_type = 0;
 static uint8_t					lba_mode = 0;
 static uint8_t					chs_mode = 0;
@@ -88,7 +86,9 @@ struct libmsfat_formatting_params {
 	struct chs_geometry_t				disk_geo;
 	libpartmbr_sector_t				diskimage_sector;
 	unsigned int					disk_bytes_per_sector;
+	uint64_t					partition_offset;
 	uint64_t					disk_size_bytes;
+	uint64_t					partition_size;
 	uint64_t					disk_sectors;
 
 	unsigned int					disk_size_bytes_set:1;
@@ -302,6 +302,55 @@ int libmsfat_formatting_params_update_geometry_from_size(struct libmsfat_formatt
 	return 0;
 }
 
+int libmsfat_formatting_params_set_partition_offset(struct libmsfat_formatting_params *f,uint64_t byte_offset) {
+	if (f == NULL) return -1;
+	if (f->disk_bytes_per_sector == 0) return -1;
+	f->partition_offset = byte_offset / (uint64_t)f->disk_bytes_per_sector;
+	return 0;
+}
+
+int libmsfat_formatting_params_set_partition_size(struct libmsfat_formatting_params *f,uint64_t byte_offset) {
+	if (f == NULL) return -1;
+	if (f->disk_bytes_per_sector == 0) return -1;
+	f->partition_size = byte_offset / (uint64_t)f->disk_bytes_per_sector;
+	return 0;
+}
+
+int libmsfat_formatting_params_autofill_and_align(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	// automatically default to a partition starting on a track boundary.
+	// MS-DOS, especially 6.x and earlier, require this. MS-DOS 7 and higher
+	// demand this IF the partition was made in CHS mode.
+	if (f->partition_offset == (uint64_t)0UL)
+		f->partition_offset = f->disk_geo.sectors;
+
+	if (f->partition_offset >= f->disk_sectors)
+		return -1;
+
+	if (!dont_partition_track_align) {
+		if (f->partition_offset != (uint64_t)0UL) {
+			f->partition_offset -= f->partition_offset % (uint64_t)f->disk_geo.sectors;
+			if (f->partition_offset == (uint64_t)0UL) f->partition_offset += (uint64_t)f->disk_geo.sectors;
+		}
+	}
+
+	if (f->partition_size == (uint64_t)0UL && f->partition_offset != (uint64_t)0UL)
+		f->partition_size = f->disk_sectors - f->partition_offset;
+
+	if (!dont_partition_track_align) {
+		uint64_t sum = f->partition_offset + f->partition_size;
+
+		sum -= sum % (uint64_t)f->disk_geo.sectors;
+		if (sum <= f->partition_offset) return -1;
+
+		sum -= f->partition_offset;
+		f->partition_size = sum;
+	}
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
@@ -498,52 +547,18 @@ int main(int argc,char **argv) {
 		if (libmsfat_formatting_params_auto_choose_lba_chs_from_geometry(fmtparam)) return 1;
 	}
 
-	if (s_partition_offset != NULL)
-		partition_offset = (uint64_t)strtoull_with_unit_suffixes(s_partition_offset,NULL,0) /
-			(uint64_t)fmtparam->disk_bytes_per_sector;
-
-	if (s_partition_size != NULL)
-		partition_size = (uint64_t)strtoull_with_unit_suffixes(s_partition_size,NULL,0) /
-			(uint64_t)fmtparam->disk_bytes_per_sector;
-
-	// automatically default to a partition starting on a track boundary.
-	// MS-DOS, especially 6.x and earlier, require this. MS-DOS 7 and higher
-	// demand this IF the partition was made in CHS mode.
-	if (partition_offset == (uint64_t)0UL)
-		partition_offset = fmtparam->disk_geo.sectors;
-
-	if (partition_offset >= fmtparam->disk_sectors) {
-		fprintf(stderr,"Partition offset >= disk sectors (%llu >= %llu)\n",
-			(unsigned long long)partition_offset,
-			(unsigned long long)fmtparam->disk_sectors);
-		return 1;
-	}
-
-	if (!dont_partition_track_align) {
-		if (partition_offset != (uint64_t)0UL) {
-			partition_offset -= partition_offset % (uint64_t)fmtparam->disk_geo.sectors;
-			if (partition_offset == (uint64_t)0UL) partition_offset += (uint64_t)fmtparam->disk_geo.sectors;
-		}
-	}
-
-	if (partition_size == (uint64_t)0UL)
-		partition_size = fmtparam->disk_sectors - partition_offset;
-
-	if (!dont_partition_track_align) {
-		uint64_t sum = partition_offset + partition_size;
-
-		sum -= sum % (uint64_t)fmtparam->disk_geo.sectors;
-		if (sum <= partition_offset) {
-			fprintf(stderr,"Partition size round down failed\n");
+	if (make_partition) {
+		if (s_partition_offset != NULL && libmsfat_formatting_params_set_partition_offset(fmtparam,(uint64_t)strtoull_with_unit_suffixes(s_partition_offset,NULL,0)))
 			return 1;
-		}
-		sum -= partition_offset;
-		partition_size = sum;
+		if (s_partition_size != NULL && libmsfat_formatting_params_set_partition_size(fmtparam,(uint64_t)strtoull_with_unit_suffixes(s_partition_size,NULL,0)))
+			return 1;
+		if (libmsfat_formatting_params_autofill_and_align(fmtparam))
+			return 1;
 	}
 
 	fmtparam->base_info.BytesPerSector = fmtparam->disk_bytes_per_sector;
 	if (make_partition)
-		fmtparam->base_info.TotalSectors = (uint32_t)partition_size;
+		fmtparam->base_info.TotalSectors = (uint32_t)fmtparam->partition_size;
 	else
 		fmtparam->base_info.TotalSectors = (uint32_t)fmtparam->disk_sectors;
 
@@ -807,14 +822,14 @@ int main(int argc,char **argv) {
 	}
 	else {
 		// resides in the first 32MB. this is the only case that disregards LBA mode
-		if ((partition_offset+partition_size)*((uint64_t)fmtparam->disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
+		if ((fmtparam->partition_offset+fmtparam->partition_size)*((uint64_t)fmtparam->disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
 			if (fmtparam->base_info.FAT_size == 16)
 				partition_type = 0x04; // FAT16 with less than 65536 sectors
 			else
 				partition_type = 0x01; // FAT12 as primary partition in the first 32MB
 		}
 		// resides in the first 8GB.
-		else if ((partition_offset+partition_size)*((uint64_t)fmtparam->disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
+		else if ((fmtparam->partition_offset+fmtparam->partition_size)*((uint64_t)fmtparam->disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
 			if (fmtparam->base_info.FAT_size == 32)
 				partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
 			else if (fmtparam->base_info.FAT_size == 16)
@@ -855,15 +870,15 @@ int main(int argc,char **argv) {
 	if (make_partition) {
 		printf("   Partition: type=0x%02x sectors %llu-%llu\n",
 			(unsigned int)partition_type,
-			(unsigned long long)partition_offset,
-			(unsigned long long)(partition_offset + partition_size - (uint64_t)1UL));
+			(unsigned long long)fmtparam->partition_offset,
+			(unsigned long long)(fmtparam->partition_offset + fmtparam->partition_size - (uint64_t)1UL));
 
-		if (chs_mode && (partition_offset % (uint64_t)fmtparam->disk_geo.sectors) != 0)
+		if (chs_mode && (fmtparam->partition_offset % (uint64_t)fmtparam->disk_geo.sectors) != 0)
 			printf("    WARNING: Partition does not start on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
-		if (chs_mode && ((partition_offset + partition_size) % (uint64_t)fmtparam->disk_geo.sectors) != 0)
+		if (chs_mode && ((fmtparam->partition_offset + fmtparam->partition_size) % (uint64_t)fmtparam->disk_geo.sectors) != 0)
 			printf("    WARNING: Partition does not end on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
 
-		if (partition_offset == 0 || partition_size == 0) return 1;
+		if (fmtparam->partition_offset == 0 || fmtparam->partition_size == 0) return 1;
 	}
 
 	if (set_volume_label != NULL)
@@ -985,9 +1000,9 @@ int main(int argc,char **argv) {
 		}
 
 		ent.partition_type = partition_type;
-		ent.first_lba_sector = (uint32_t)partition_offset;
-		ent.number_lba_sectors = (uint32_t)partition_size;
-		if (int13cnv_lba_to_chs(&chs,&fmtparam->disk_geo,(uint32_t)partition_offset)) {
+		ent.first_lba_sector = (uint32_t)fmtparam->partition_offset;
+		ent.number_lba_sectors = (uint32_t)fmtparam->partition_size;
+		if (int13cnv_lba_to_chs(&chs,&fmtparam->disk_geo,(uint32_t)fmtparam->partition_offset)) {
 			fprintf(stderr,"Failed to convert start LBA -> CHS\n");
 			return 1;
 		}
@@ -997,7 +1012,7 @@ int main(int argc,char **argv) {
 			return 1;
 		}
 
-		if (int13cnv_lba_to_chs(&chs,&fmtparam->disk_geo,(uint32_t)partition_offset + (uint32_t)partition_size - (uint32_t)1UL)) {
+		if (int13cnv_lba_to_chs(&chs,&fmtparam->disk_geo,(uint32_t)fmtparam->partition_offset + (uint32_t)fmtparam->partition_size - (uint32_t)1UL)) {
 			fprintf(stderr,"Failed to convert end LBA -> CHS\n");
 			return 1;
 		}
@@ -1030,7 +1045,7 @@ int main(int argc,char **argv) {
 		int dfd;
 
 		if (make_partition)
-			offset = partition_offset;
+			offset = fmtparam->partition_offset;
 		else
 			offset = 0;
 		offset *= (uint64_t)fmtparam->disk_bytes_per_sector;
@@ -1149,7 +1164,7 @@ int main(int argc,char **argv) {
 		// backup copy too
 		if (fmtparam->base_info.FAT_size == 32) {
 			if (make_partition)
-				offset = partition_offset;
+				offset = fmtparam->partition_offset;
 			else
 				offset = 0;
 
@@ -1167,7 +1182,7 @@ int main(int argc,char **argv) {
 			struct libmsfat_fat32_fsinfo_t fsinfo;
 
 			if (make_partition)
-				offset = partition_offset;
+				offset = fmtparam->partition_offset;
 			else
 				offset = 0;
 
@@ -1202,7 +1217,7 @@ int main(int argc,char **argv) {
 		dfd = -1; /* takes ownership, drop it */
 
 		if (make_partition)
-			msfatctx->partition_byte_offset = (uint64_t)partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
+			msfatctx->partition_byte_offset = (uint64_t)fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
 
 		if (libmsfat_bs_compute_disk_locations(&fmtparam->final_info,bs)) {
 			printf("Unable to locate disk locations.\n");
