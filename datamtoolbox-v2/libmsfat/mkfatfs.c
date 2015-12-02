@@ -60,6 +60,7 @@ static const char*				volume_label = NULL;
 static uint32_t					set_volume_id = 0;
 static const char*				set_volume_label = NULL;
 static uint8_t					set_volume_id_flag = 0;
+static uint32_t					set_root_cluster = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -211,6 +212,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"volume-label")) {
 				set_volume_label = argv[i++];
 			}
+			else if (!strcmp(a,"root-cluster")) {
+				set_root_cluster = (uint32_t)strtoul(argv[i++],NULL,0);
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -253,6 +257,8 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--fsinfo <x>                What sector to put the FAT32 FSInfo at\n");
 		fprintf(stderr,"--reserved-sectors <x>      Number of reserved sectors\n");
 		fprintf(stderr,"--volume-id <x>             Set volume id to <x> (X is a decimal or hex value 32-bit wide)\n");
+		fprintf(stderr,"--volume-label <x>          Set volume label to string <x> (max 11 chars)\n");
+		fprintf(stderr,"--root-cluster <x>          Root directory starts at cluster <x> (FAT32 only)\n");
 		return 1;
 	}
 
@@ -946,7 +952,10 @@ int main(int argc,char **argv) {
 			bs->at36.BPB_FAT32.BPB_FATSz32 = htole32(base_info.FAT_table_size);
 			bs->at36.BPB_FAT32.BPB_ExtFlags = 0;
 			bs->at36.BPB_FAT32.BPB_FSVer = 0;
-			bs->at36.BPB_FAT32.BPB_RootClus = htole32(2); // FIXME: allow user override
+			if (set_root_cluster != 0)
+				bs->at36.BPB_FAT32.BPB_RootClus = htole32(set_root_cluster);
+			else
+				bs->at36.BPB_FAT32.BPB_RootClus = htole32(2);
 			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(base_info.fat32.BPB_FSInfo);
 			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(1); // FIXME: allow user override. Also, what does MS-DOS normally do?
 			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
