@@ -583,6 +583,79 @@ int libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(struct libms
 	return 0;
 }
 
+int libmsfat_formatting_params_compute_cluster_count(struct libmsfat_formatting_params *f) {
+	uint32_t cluslimit,x,t;
+
+	if (f == NULL) return -1;
+
+	// initial estimate. doesn't factor in root directory, root directory, boot sector...
+	// estimate will be a little large compared to the final value.
+	if (f->base_info.FAT_size == 32)
+		cluslimit = (uint32_t)0x0FFFFFF5UL;
+	else if (f->base_info.FAT_size == 16)
+		cluslimit = (uint32_t)0x0000FFF5UL;
+	else
+		cluslimit = (uint32_t)0x00000FF5UL;
+
+	x = f->base_info.TotalSectors;
+
+	if (x > (uint32_t)reserved_sectors) x -= (uint32_t)reserved_sectors;
+	else x = (uint32_t)0;
+
+	if (x > (uint32_t)f->base_info.RootDirectory_size) x -= (uint32_t)f->base_info.RootDirectory_size;
+	else x = (uint32_t)0;
+
+	x /= (uint32_t)f->base_info.Sectors_Per_Cluster;
+	if (x == (uint32_t)0UL) return -1;
+
+	/* use it to calculate size of the FAT table */
+	if (f->base_info.FAT_size == 12)
+		t = ((x + (uint32_t)1UL) / (uint32_t)2UL) * (uint32_t)3UL; // 1/2x * 3 = number of 24-bit doubles
+	else
+		t = x * (f->base_info.FAT_size / (uint32_t)8UL);
+	t = (t + (uint32_t)f->disk_bytes_per_sector - (uint32_t)1UL) / (uint32_t)f->disk_bytes_per_sector;
+	f->base_info.FAT_table_size = t;
+
+	/* do it again */
+	x = f->base_info.TotalSectors;
+
+	if (x > (uint32_t)reserved_sectors) x -= (uint32_t)reserved_sectors;
+	else x = (uint32_t)0;
+
+	if (x > (uint32_t)f->base_info.RootDirectory_size) x -= (uint32_t)f->base_info.RootDirectory_size;
+	else x = (uint32_t)0;
+
+	t = (uint32_t)f->base_info.FAT_table_size * (uint32_t)f->base_info.FAT_tables;
+	if (x > t) x -= t;
+	else x = (uint32_t)0;
+
+	x /= (uint32_t)f->base_info.Sectors_Per_Cluster;
+	if (x == (uint32_t)0UL) return -1;
+
+	/* clip the cluster count (and therefore the sector count) if we have to */
+	if (x >= cluslimit) {
+		assert(cluslimit != (uint32_t)0UL);
+		x = cluslimit - (uint32_t)1UL;
+
+		if (f->base_info.FAT_size == 12)
+			t = ((x + (uint32_t)1UL) / (uint32_t)2UL) * (uint32_t)3UL; // 1/2x * 3 = number of 24-bit doubles
+		else
+			t = x * (f->base_info.FAT_size / (uint32_t)8UL);
+		t = (t + (uint32_t)f->disk_bytes_per_sector - (uint32_t)1UL) / (uint32_t)f->disk_bytes_per_sector;
+		f->base_info.FAT_table_size = t;
+
+		f->base_info.TotalSectors =
+			(x * (uint32_t)f->base_info.Sectors_Per_Cluster) +
+			(uint32_t)f->base_info.FAT_table_size +
+			(uint32_t)f->base_info.RootDirectory_size +
+			(uint32_t)reserved_sectors;
+	}
+
+	f->base_info.Total_data_clusters = x;
+	f->base_info.Total_clusters = x + (uint32_t)2UL;
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
@@ -796,90 +869,7 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_auto_choose_reserved_sectors(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_fat32_bpb_fsinfo_location(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(fmtparam)) return 1;
-
-	// now we need to figure out number of clusters.
-	{
-		// initial estimate. doesn't factor in root directory, root directory, boot sector...
-		// estimate will be a little large compared to the final value.
-		uint32_t cluslimit;
-		uint32_t x,t;
-
-		if (fmtparam->base_info.FAT_size == 32)
-			cluslimit = (uint32_t)0x0FFFFFF5UL;
-		else if (fmtparam->base_info.FAT_size == 16)
-			cluslimit = (uint32_t)0x0000FFF5UL;
-		else
-			cluslimit = (uint32_t)0x00000FF5UL;
-
-		x = fmtparam->base_info.TotalSectors;
-
-		if (x > (uint32_t)reserved_sectors) x -= (uint32_t)reserved_sectors;
-		else x = (uint32_t)0;
-
-		if (x > (uint32_t)fmtparam->base_info.RootDirectory_size) x -= (uint32_t)fmtparam->base_info.RootDirectory_size;
-		else x = (uint32_t)0;
-
-		x /= (uint32_t)fmtparam->base_info.Sectors_Per_Cluster;
-		if (x == (uint32_t)0UL) {
-			fprintf(stderr,"Too small for any clusters\n");
-			return 1;
-		}
-
-		/* use it to calculate size of the FAT table */
-		if (fmtparam->base_info.FAT_size == 12)
-			t = ((x + (uint32_t)1UL) / (uint32_t)2UL) * (uint32_t)3UL; // 1/2x * 3 = number of 24-bit doubles
-		else
-			t = x * (fmtparam->base_info.FAT_size / (uint32_t)8UL);
-		t = (t + (uint32_t)fmtparam->disk_bytes_per_sector - (uint32_t)1UL) / (uint32_t)fmtparam->disk_bytes_per_sector;
-		fmtparam->base_info.FAT_table_size = t;
-
-		/* do it again */
-		x = fmtparam->base_info.TotalSectors;
-
-		if (x > (uint32_t)reserved_sectors) x -= (uint32_t)reserved_sectors;
-		else x = (uint32_t)0;
-
-		if (x > (uint32_t)fmtparam->base_info.RootDirectory_size) x -= (uint32_t)fmtparam->base_info.RootDirectory_size;
-		else x = (uint32_t)0;
-
-		t = (uint32_t)fmtparam->base_info.FAT_table_size * (uint32_t)fmtparam->base_info.FAT_tables;
-		if (x > t) x -= t;
-		else x = (uint32_t)0;
-
-		x /= (uint32_t)fmtparam->base_info.Sectors_Per_Cluster;
-		if (x == (uint32_t)0UL) {
-			fprintf(stderr,"Too small for any clusters\n");
-			return 1;
-		}
-
-		/* clip the cluster count (and therefore the sector count) if we have to */
-		if (x >= cluslimit) {
-			fprintf(stderr,"WARNING: total sector and cluster count exceeds highest valid count for FAT width\n");
-			fprintf(stderr,"          sectors=%lu data_clusters=%lu limit=%lu\n",
-				(unsigned long)fmtparam->base_info.TotalSectors,
-				(unsigned long)x,
-				(unsigned long)cluslimit);
-
-			assert(cluslimit != (uint32_t)0UL);
-			x = cluslimit - (uint32_t)1UL;
-
-			if (fmtparam->base_info.FAT_size == 12)
-				t = ((x + (uint32_t)1UL) / (uint32_t)2UL) * (uint32_t)3UL; // 1/2x * 3 = number of 24-bit doubles
-			else
-				t = x * (fmtparam->base_info.FAT_size / (uint32_t)8UL);
-			t = (t + (uint32_t)fmtparam->disk_bytes_per_sector - (uint32_t)1UL) / (uint32_t)fmtparam->disk_bytes_per_sector;
-			fmtparam->base_info.FAT_table_size = t;
-
-			fmtparam->base_info.TotalSectors =
-				(x * (uint32_t)fmtparam->base_info.Sectors_Per_Cluster) +
-				(uint32_t)fmtparam->base_info.FAT_table_size +
-				(uint32_t)fmtparam->base_info.RootDirectory_size +
-				(uint32_t)reserved_sectors;
-		}
-
-		fmtparam->base_info.Total_data_clusters = x;
-		fmtparam->base_info.Total_clusters = x + (uint32_t)2UL;
-	}
+	if (libmsfat_formatting_params_compute_cluster_count(fmtparam)) return 1;
 
 	if (s_partition_type != NULL) {
 		partition_type = (uint8_t)strtoul(s_partition_type,NULL,0);
