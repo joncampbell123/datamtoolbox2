@@ -28,6 +28,8 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
+static libpartmbr_sector_t			diskimage_sector;
+
 static struct chs_geometry_t			disk_geo;
 static uint64_t					disk_sectors = 0;
 static unsigned int				disk_bytes_per_sector = 0;
@@ -439,6 +441,52 @@ int main(int argc,char **argv) {
 		}
 	}
 #endif
+
+	if (make_partition) {
+		struct libpartmbr_state_t diskimage_state;
+		struct libpartmbr_entry_t ent;
+		struct chs_geometry_t chs;
+
+		libpartmbr_state_zero(&diskimage_state);
+
+		if (libpartmbr_create_partition_table(diskimage_sector,&diskimage_state)) {
+			fprintf(stderr,"Failed to create partition table sector\n");
+			return 1;
+		}
+
+		ent.partition_type = partition_type;
+		ent.first_lba_sector = partition_offset;
+		ent.number_lba_sectors = partition_size;
+		if (int13cnv_lba_to_chs(&chs,&disk_geo,partition_offset)) {
+			fprintf(stderr,"Failed to convert start LBA -> CHS\n");
+			return 1;
+		}
+		int13cnv_chs_int13_cliprange(&chs,&disk_geo);
+		if (int13cnv_chs_to_int13(&ent.first_chs_sector,&chs)) {
+			fprintf(stderr,"Failed to convert start CHS -> INT13\n");
+			return 1;
+		}
+
+		if (int13cnv_lba_to_chs(&chs,&disk_geo,(uint32_t)partition_offset + (uint32_t)partition_size - (uint32_t)1UL)) {
+			fprintf(stderr,"Failed to convert end LBA -> CHS\n");
+			return 1;
+		}
+		int13cnv_chs_int13_cliprange(&chs,&disk_geo);
+		if (int13cnv_chs_to_int13(&ent.last_chs_sector,&chs)) {
+			fprintf(stderr,"Failed to convert end CHS -> INT13\n");
+			return 1;
+		}
+
+		if (libpartmbr_write_entry(diskimage_sector,&ent,&diskimage_state,0)) {
+			fprintf(stderr,"Unable to write entry\n");
+			return 1;
+		}
+
+		if (lseek(fd,0,SEEK_SET) != 0 || write(fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
+			fprintf(stderr,"Failed to write MBR back\n");
+			return 1;
+		}
+	}
 
 	close(fd);
 	fd = -1;
