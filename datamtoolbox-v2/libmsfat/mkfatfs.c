@@ -502,6 +502,14 @@ int main(int argc,char **argv) {
 		reserved_sectors = 1;
 	}
 
+	if (base_info.FAT_size == 32)
+		base_info.fat32.BPB_FSInfo = 6;
+	else
+		base_info.fat32.BPB_FSInfo = 0;
+
+	if (base_info.fat32.BPB_FSInfo >= reserved_sectors)
+		base_info.fat32.BPB_FSInfo = reserved_sectors - 1;
+
 	if (!allow_non_power_of_2_cluster_size) {
 		/* need to round to a power of 2 */
 		if (base_info.Sectors_Per_Cluster >= (64+1)/*65*/)
@@ -703,6 +711,15 @@ int main(int argc,char **argv) {
 	printf("   %u FAT tables: %lu sectors per table\n",
 		(unsigned int)base_info.FAT_tables,
 		(unsigned long)base_info.FAT_table_size);
+
+	if (base_info.FAT_size == 32)
+		printf("   FAT32 FSInfo sector: %lu\n",
+			(unsigned long)base_info.fat32.BPB_FSInfo);
+
+	if (base_info.FAT_size == 32 && base_info.fat32.BPB_FSInfo == 0) {
+		fprintf(stderr,"FAT32 requires a sector set aside for FSInfo\n");
+		return 1;
+	}
 
 	if (base_info.FAT_size == 0) {
 		fprintf(stderr,"Unable to decide on a FAT bit width\n");
