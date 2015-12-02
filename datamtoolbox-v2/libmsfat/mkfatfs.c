@@ -205,7 +205,20 @@ int libmsfat_formatting_params_autofill_geometry(struct libmsfat_formatting_para
 	return 0;
 }
 
-int libmsfat_formatting_params_auto_choose_lba_chs(struct libmsfat_formatting_params *f) {
+int libmsfat_formatting_params_auto_choose_lba_chs_from_geometry(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (!lba_mode && !chs_mode) {
+		if (f->disk_geo.sectors >= 63 && f->disk_geo.cylinders >= 1024)
+			lba_mode = 1;
+		else
+			chs_mode = 1;
+	}
+
+	return 0;
+}
+
+int libmsfat_formatting_params_auto_choose_lba_chs_from_disk_size(struct libmsfat_formatting_params *f) {
 	if (f == NULL) return -1;
 
 	if (!lba_mode && !chs_mode) {
@@ -214,6 +227,77 @@ int libmsfat_formatting_params_auto_choose_lba_chs(struct libmsfat_formatting_pa
 		else
 			chs_mode = 1;
 	}
+
+	return 0;
+}
+
+int libmsfat_formatting_params_enlarge_sectors_4GB_count_workaround(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (!f->disk_bytes_per_sector_set) {
+		while (f->disk_sectors >= (uint64_t)0xFFFFFFF0UL) {
+			f->disk_bytes_per_sector *= (uint64_t)2UL;
+			f->disk_sectors = (uint64_t)f->disk_size_bytes / (uint64_t)f->disk_bytes_per_sector;
+		}
+	}
+
+	return 0;
+}
+
+int libmsfat_formatting_params_update_size_from_geometry(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	f->disk_sectors = (uint64_t)f->disk_geo.heads *
+		(uint64_t)f->disk_geo.sectors *
+		(uint64_t)f->disk_geo.cylinders;
+	f->disk_size_bytes = f->disk_sectors *
+		(uint64_t)f->disk_bytes_per_sector;
+
+	return 0;
+}
+
+int libmsfat_formatting_params_update_geometry_from_size_bios_xlat(struct libmsfat_formatting_params *f) {
+	uint64_t cyl;
+
+	if (f == NULL) return -1;
+	if (f->disk_geo.heads == 0 || f->disk_geo.sectors == 0) return -1;
+
+	/* how many cylinders? */
+	cyl = f->disk_sectors / ((uint64_t)f->disk_geo.heads * (uint64_t)f->disk_geo.sectors);
+
+	/* BIOS CHS translations to exceed 512MB limit */
+	while (cyl > 1023 && f->disk_geo.heads < 128) {
+		f->disk_geo.heads *= 2;
+		cyl = f->disk_sectors / ((uint64_t)f->disk_geo.heads * (uint64_t)f->disk_geo.sectors);
+	}
+	if (cyl > 1023 && f->disk_geo.heads < 255) {
+		f->disk_geo.heads = 255;
+		cyl = f->disk_sectors / ((uint64_t)f->disk_geo.heads * (uint64_t)f->disk_geo.sectors);
+	}
+
+	/* final limit (16383 at IDE, 1024 at BIOS) */
+	if (cyl > (uint64_t)1024UL) cyl = (uint64_t)1024UL;
+
+	/* that's the number of cylinders! */
+	f->disk_geo.cylinders = (uint16_t)cyl;
+
+	return 0;
+}
+
+int libmsfat_formatting_params_update_geometry_from_size(struct libmsfat_formatting_params *f) {
+	uint64_t cyl;
+
+	if (f == NULL) return -1;
+	if (f->disk_geo.heads == 0 || f->disk_geo.sectors == 0) return -1;
+
+	/* how many cylinders? */
+	cyl = f->disk_sectors / ((uint64_t)f->disk_geo.heads * (uint64_t)f->disk_geo.sectors);
+
+	/* final limit (16383 at IDE, 1024 at BIOS) */
+	if (cyl > (uint64_t)1024UL) cyl = (uint64_t)1024UL;
+
+	/* that's the number of cylinders! */
+	f->disk_geo.cylinders = (uint16_t)cyl;
 
 	return 0;
 }
@@ -403,61 +487,15 @@ int main(int argc,char **argv) {
 	}
 
 	if (fmtparam->disk_size_bytes_set) {
-		uint64_t cyl;
-
 		if (libmsfat_formatting_params_update_disk_sectors(fmtparam)) return 1;
-		if (libmsfat_formatting_params_auto_choose_lba_chs(fmtparam)) return 1;
-
-		fmtparam->disk_sectors = fmtparam->disk_size_bytes / (uint64_t)fmtparam->disk_bytes_per_sector;
-		if (!fmtparam->disk_bytes_per_sector_set) {
-			while (fmtparam->disk_sectors >= (uint64_t)0xFFFFFFF0UL) {
-				fmtparam->disk_bytes_per_sector *= (uint64_t)2UL;
-				fmtparam->disk_sectors = fmtparam->disk_size_bytes / (uint64_t)fmtparam->disk_bytes_per_sector;
-			}
-		}
-
-		/* how many cylinders? */
-		cyl = fmtparam->disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
-
-		/* BIOS CHS translations to exceed 512MB limit */
-		while (cyl > 1023 && fmtparam->disk_geo.heads < 128) {
-			fmtparam->disk_geo.heads *= 2;
-			cyl = fmtparam->disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
-		}
-		if (cyl > 1023 && fmtparam->disk_geo.heads < 255) {
-			fmtparam->disk_geo.heads = 255;
-			cyl = fmtparam->disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
-		}
-
-		/* final limit (16383 at IDE, 1024 at BIOS) */
-		if (cyl > (uint64_t)1024UL) cyl = (uint64_t)1024UL;
-
-		/* that's the number of cylinders! */
-		fmtparam->disk_geo.cylinders = (uint16_t)cyl;
-
-		if (chs_mode) {
-			fmtparam->disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
-				(uint64_t)fmtparam->disk_geo.sectors *
-				(uint64_t)fmtparam->disk_geo.cylinders;
-			fmtparam->disk_size_bytes = fmtparam->disk_sectors *
-				(uint64_t)fmtparam->disk_bytes_per_sector;
-		}
+		if (libmsfat_formatting_params_auto_choose_lba_chs_from_disk_size(fmtparam)) return 1;
+		if (libmsfat_formatting_params_enlarge_sectors_4GB_count_workaround(fmtparam)) return 1;
+		if (libmsfat_formatting_params_update_geometry_from_size_bios_xlat(fmtparam)) return 1;
+		if (chs_mode && libmsfat_formatting_params_update_size_from_geometry(fmtparam)) return 1;
 	}
 	else {
-		if (fmtparam->disk_geo.cylinders == 0 || fmtparam->disk_geo.heads == 0 || fmtparam->disk_geo.sectors == 0) return 1;
-
-		fmtparam->disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
-			(uint64_t)fmtparam->disk_geo.sectors *
-			(uint64_t)fmtparam->disk_geo.cylinders;
-		fmtparam->disk_size_bytes = fmtparam->disk_sectors *
-			(uint64_t)fmtparam->disk_bytes_per_sector;
-	}
-
-	if (!lba_mode && !chs_mode) {
-		if (fmtparam->disk_geo.sectors >= 63 && fmtparam->disk_geo.cylinders >= 4096)
-			lba_mode = 1;
-		else
-			chs_mode = 1;
+		if (libmsfat_formatting_params_update_size_from_geometry(fmtparam)) return 1;
+		if (libmsfat_formatting_params_auto_choose_lba_chs_from_geometry(fmtparam)) return 1;
 	}
 
 	if (s_partition_offset != NULL)
