@@ -931,7 +931,7 @@ int main(int argc,char **argv) {
 			bs->at36.BPB_FAT32.BPB_FATSz32 = htole32(base_info.FAT_table_size);
 			bs->at36.BPB_FAT32.BPB_ExtFlags = 0;
 			bs->at36.BPB_FAT32.BPB_FSVer = 0;
-			bs->at36.BPB_FAT32.BPB_RootClus = 2; // FIXME: allow user override
+			bs->at36.BPB_FAT32.BPB_RootClus = htole32(2); // FIXME: allow user override
 			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(base_info.fat32.BPB_FSInfo);
 			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(1); // FIXME: allow user override. Also, what does MS-DOS normally do?
 			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
@@ -1093,6 +1093,26 @@ int main(int argc,char **argv) {
 				fprintf(stderr,"Cannot write cluster 1\n");
 				return 1;
 			}
+		}
+
+		if (final_info.FAT_size == 32) {
+			/* remember the root cluster we chose? we need to mark it allocated, and
+			 * then zero the cluster out */
+			libmsfat_cluster_t rootclus = (libmsfat_cluster_t)le32toh(bs->at36.BPB_FAT32.BPB_RootClus);
+
+			if (rootclus < (libmsfat_cluster_t)2UL) {
+				fprintf(stderr,"Invalid root cluster\n");
+				return 1;
+			}
+			for (i=0;i < final_info.FAT_tables;i++) {
+				if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFFFFUL,rootclus,i)) {
+					fprintf(stderr,"Cannot write cluster %lu, to mark as EOC\n",(unsigned long)rootclus);
+					return 1;
+				}
+			}
+			// make sure the cluster corresponding to the root dir is zeroed out
+			if (libmsfat_file_io_ctx_zero_cluster(rootclus,msfatctx))
+				fprintf(stderr,"WARNING: failed to zero root cluster\n");
 		}
 	}
 
