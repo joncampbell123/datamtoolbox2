@@ -50,6 +50,7 @@ static uint8_t					allow_non_power_of_2_cluster_size = 0;
 static uint8_t					allow_64kb_or_larger_clusters = 0;
 static uint32_t					root_directory_entries = 0;
 static uint32_t					reserved_sectors = 0;
+static uint8_t					set_fat_tables = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -181,6 +182,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"large-clusters")) {
 				allow_64kb_or_larger_clusters = 1;
 			}
+			else if (!strcmp(a,"fat-tables")) {
+				set_fat_tables = (uint8_t)strtoul(argv[i++],NULL,0);
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -218,6 +222,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--cluster-size <x>          Cluster size in bytes\n");
 		fprintf(stderr,"--cluster-non-power-of-2    Allow cluster size that is not a power of 2 (FAT specification violation!)\n");
 		fprintf(stderr,"--large-clusters            Allow clusters to be 64KB or larger (FAT specification violation!)\n");
+		fprintf(stderr,"--fat-tables <x>            Number of FAT tables\n");
 		return 1;
 	}
 
@@ -427,8 +432,9 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	// TODO: allow user to override!
-	if (base_info.FAT_tables == 0)
+	if (set_fat_tables)
+		base_info.FAT_tables = set_fat_tables;
+	else if (base_info.FAT_tables == 0)
 		base_info.FAT_tables = 2;
 
 	if (set_cluster_size != 0) {
