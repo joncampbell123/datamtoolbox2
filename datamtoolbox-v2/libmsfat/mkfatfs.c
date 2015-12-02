@@ -61,6 +61,7 @@ static uint32_t					set_volume_id = 0;
 static const char*				set_volume_label = NULL;
 static uint8_t					set_volume_id_flag = 0;
 static uint32_t					set_root_cluster = 0;
+static uint32_t					set_backup_boot_sector = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -215,6 +216,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"root-cluster")) {
 				set_root_cluster = (uint32_t)strtoul(argv[i++],NULL,0);
 			}
+			else if (!strcmp(a,"backup-boot-sector")) {
+				set_backup_boot_sector = (uint32_t)strtoul(argv[i++],NULL,0);
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -259,6 +263,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--volume-id <x>             Set volume id to <x> (X is a decimal or hex value 32-bit wide)\n");
 		fprintf(stderr,"--volume-label <x>          Set volume label to string <x> (max 11 chars)\n");
 		fprintf(stderr,"--root-cluster <x>          Root directory starts at cluster <x> (FAT32 only)\n");
+		fprintf(stderr,"--backup-boot-sector <x>    FAT32 backup boot sector location\n");
 		return 1;
 	}
 
@@ -513,10 +518,13 @@ int main(int argc,char **argv) {
 	if (base_info.FAT_size == 32) {
 		base_info.RootDirectory_size = 0;
 		root_directory_entries = 0; // FAT32 makes the root directory an allocation chain
-		if (set_reserved_sectors >= (uint32_t)2U)
+		if (set_reserved_sectors != (uint32_t)0U)
 			reserved_sectors = set_reserved_sectors;
 		else
 			reserved_sectors = 32; // typical FAT32 value, allowing FSInfo at sector 6
+
+		if (reserved_sectors < 3U) // BPB + backup BPB + FSInfo
+			reserved_sectors = 3U;
 	}
 	else {
 		if (set_root_directory_entries != 0)
@@ -552,6 +560,9 @@ int main(int argc,char **argv) {
 
 	if (base_info.fat32.BPB_FSInfo >= reserved_sectors)
 		base_info.fat32.BPB_FSInfo = reserved_sectors - 1;
+
+	if (set_backup_boot_sector != 0 && set_backup_boot_sector >= reserved_sectors)
+		set_backup_boot_sector = reserved_sectors - 1;
 
 	if (!allow_non_power_of_2_cluster_size) {
 		/* need to round to a power of 2 */
@@ -957,7 +968,10 @@ int main(int argc,char **argv) {
 			else
 				bs->at36.BPB_FAT32.BPB_RootClus = htole32(2);
 			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(base_info.fat32.BPB_FSInfo);
-			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(1); // FIXME: allow user override. Also, what does MS-DOS normally do?
+			if (set_backup_boot_sector != 0)
+				bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(set_backup_boot_sector);
+			else
+				bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(1);
 			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
 			bs->at36.BPB_FAT32.BS_BootSig = 0x29;
 			bs->at36.BPB_FAT32.BS_VolID = htole32(volume_id);
