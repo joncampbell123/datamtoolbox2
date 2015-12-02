@@ -203,14 +203,20 @@ int main(int argc,char **argv) {
 				disk_size_bytes <<= (uint64_t)40;	// TB
 		}
 
-		if (disk_geo.heads == 0)
-			disk_geo.heads = 16;
+		if (lba_mode || disk_size_bytes > (uint64_t)(128ULL << 20ULL)) { // 64MB
+			if (disk_geo.heads == 0)
+				disk_geo.heads = 16;
+		}
+		else {
+			if (disk_geo.heads == 0)
+				disk_geo.heads = 8;
+		}
 
-		if (lba_mode || disk_size_bytes > (uint64_t)(512ULL * 1024ULL)) { // 512MB
+		if (lba_mode || disk_size_bytes > (uint64_t)(96ULL << 20ULL)) { // 96MB
 			if (disk_geo.sectors == 0)
 				disk_geo.sectors = 63;
 		}
-		else if (disk_size_bytes > (uint64_t)(32ULL * 1024ULL)) { // 32MB
+		else if (disk_size_bytes > (uint64_t)(32ULL << 20ULL)) { // 32MB
 			if (disk_geo.sectors == 0)
 				disk_geo.sectors = 32;
 		}
@@ -219,12 +225,37 @@ int main(int argc,char **argv) {
 				disk_geo.sectors = 15;
 		}
 
+		if (!lba_mode && !chs_mode) {
+			if (disk_size_bytes >= (uint64_t)(8192ULL << 20ULL))
+				lba_mode = 1;
+			else
+				chs_mode = 1;
+		}
+
 		disk_sectors = disk_size_bytes / (uint64_t)disk_bytes_per_sector;
-
 		cyl = disk_sectors / ((uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors);
-		if (cyl > (uint64_t)16384UL) cyl = (uint64_t)16384UL;
 
+		/* BIOS CHS translations to exceed 512MB limit */
+		while (cyl > 1023 && disk_geo.heads < 128) {
+			disk_geo.heads *= 2;
+			cyl = disk_sectors / ((uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors);
+		}
+		if (cyl > 1023 && disk_geo.heads < 255) {
+			disk_geo.heads = 255;
+			cyl = disk_sectors / ((uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors);
+		}
+
+		/* final limit (16383 at IDE, 1024 at BIOS) */
+		if (cyl > (uint64_t)1024UL) cyl = (uint64_t)1024UL;
+
+		/* that's the number of cylinders! */
 		disk_geo.cylinders = (uint16_t)cyl;
+
+		if (chs_mode) {
+			disk_sectors = (uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors *
+				(uint64_t)disk_geo.cylinders;
+			disk_size_bytes = disk_sectors * (uint64_t)disk_bytes_per_sector;
+		}
 	}
 	else {
 		if (disk_geo.cylinders == 0 || disk_geo.heads == 0 || disk_geo.sectors == 0) return 1;
