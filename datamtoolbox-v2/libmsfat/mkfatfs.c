@@ -29,11 +29,6 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
-static struct libmsfat_disk_locations_and_info	base_info;
-static struct libmsfat_disk_locations_and_info	final_info;
-static libpartmbr_sector_t			diskimage_sector;
-
-static struct chs_geometry_t			disk_geo;
 static uint64_t					disk_sectors = 0;
 static unsigned int				disk_bytes_per_sector = 0;
 static uint64_t					disk_size_bytes = 0;
@@ -47,7 +42,6 @@ static uint8_t					chs_mode = 0;
 static uint8_t					allow_fat32 = 1;
 static uint8_t					allow_fat16 = 1;
 static uint8_t					allow_fat12 = 1;
-static uint8_t					force_fat = 0;
 static uint16_t					set_cluster_size = 0;
 static uint8_t					allow_non_power_of_2_cluster_size = 0;
 static uint8_t					allow_64kb_or_larger_clusters = 0;
@@ -66,7 +60,47 @@ static uint32_t					set_root_cluster = 0;
 static uint32_t					set_backup_boot_sector = 0;
 static uint8_t					set_boot_sector_bpb_size = 0;
 
+struct libmsfat_formatting_params {
+	uint8_t						force_fat;
+	struct libmsfat_disk_locations_and_info		base_info;
+	struct libmsfat_disk_locations_and_info		final_info;
+	struct chs_geometry_t				disk_geo;
+	libpartmbr_sector_t				diskimage_sector;
+};
+
+void libmsfat_formatting_params_free(struct libmsfat_formatting_params *f) {
+}
+
+int libmsfat_formatting_params_init(struct libmsfat_formatting_params *f) {
+	memset(f,0,sizeof(*f));
+	return 0;
+}
+
+struct libmsfat_formatting_params *libmsfat_formatting_params_destroy(struct libmsfat_formatting_params *f) {
+	if (f != NULL) {
+		libmsfat_formatting_params_free(f);
+		free(f);
+	}
+
+	return NULL;
+}
+
+struct libmsfat_formatting_params *libmsfat_formatting_params_create() {
+	struct libmsfat_formatting_params *f;
+
+	f = malloc(sizeof(struct libmsfat_formatting_params));
+	if (f == NULL) return NULL;
+	if (libmsfat_formatting_params_init(f)) {
+		libmsfat_formatting_params_destroy(f);
+		free(f);
+		return NULL;
+	}
+
+	return f;
+}
+
 int main(int argc,char **argv) {
+	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
 	const char *s_partition_size = NULL;
 	const char *s_partition_type = NULL;
@@ -77,8 +111,10 @@ int main(int argc,char **argv) {
 	const char *s_size = NULL;
 	int i,fd;
 
-	memset(&base_info,0,sizeof(base_info));
-	memset(&disk_geo,0,sizeof(disk_geo));
+	if ((fmtparam=libmsfat_formatting_params_create()) == NULL) {
+		fprintf(stderr,"Cannot alloc format params\n");
+		return 1;
+	}
 
 	for (i=1;i < argc;) {
 		const char *a = argv[i++];
@@ -138,7 +174,7 @@ int main(int argc,char **argv) {
 				allow_fat12 = 1;
 			}
 			else if (!strcmp(a,"fat")) {
-				force_fat = (int)strtoul(argv[i++],NULL,0);
+				fmtparam->force_fat = (int)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"cluster-size")) {
 				set_cluster_size = (uint16_t)strtoul(argv[i++],NULL,0);
@@ -226,7 +262,7 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	if (force_fat != 0 && !(force_fat == 12 || force_fat == 16 || force_fat == 32)) {
+	if (fmtparam->force_fat != 0 && !(fmtparam->force_fat == 12 || fmtparam->force_fat == 16 || fmtparam->force_fat == 32)) {
 		fprintf(stderr,"Invalid FAT bit width\n");
 		return 1;
 	}
@@ -239,7 +275,7 @@ int main(int argc,char **argv) {
 	if ((disk_bytes_per_sector % 32) != 0 || disk_bytes_per_sector < 128 || disk_bytes_per_sector > 4096) return 1;
 
 	if (s_geometry != NULL) {
-		if (int13cnv_parse_chs_geometry(&disk_geo,s_geometry)) {
+		if (int13cnv_parse_chs_geometry(&fmtparam->disk_geo,s_geometry)) {
 			fprintf(stderr,"Failed to parse geometry\n");
 			return 1;
 		}
@@ -265,25 +301,25 @@ int main(int argc,char **argv) {
 		}
 
 		if (lba_mode || disk_size_bytes > (uint64_t)(128ULL << 20ULL)) { // 64MB
-			if (disk_geo.heads == 0)
-				disk_geo.heads = 16;
+			if (fmtparam->disk_geo.heads == 0)
+				fmtparam->disk_geo.heads = 16;
 		}
 		else {
-			if (disk_geo.heads == 0)
-				disk_geo.heads = 8;
+			if (fmtparam->disk_geo.heads == 0)
+				fmtparam->disk_geo.heads = 8;
 		}
 
 		if (lba_mode || disk_size_bytes > (uint64_t)(96ULL << 20ULL)) { // 96MB
-			if (disk_geo.sectors == 0)
-				disk_geo.sectors = 63;
+			if (fmtparam->disk_geo.sectors == 0)
+				fmtparam->disk_geo.sectors = 63;
 		}
 		else if (disk_size_bytes > (uint64_t)(32ULL << 20ULL)) { // 32MB
-			if (disk_geo.sectors == 0)
-				disk_geo.sectors = 32;
+			if (fmtparam->disk_geo.sectors == 0)
+				fmtparam->disk_geo.sectors = 32;
 		}
 		else {
-			if (disk_geo.sectors == 0)
-				disk_geo.sectors = 15;
+			if (fmtparam->disk_geo.sectors == 0)
+				fmtparam->disk_geo.sectors = 15;
 		}
 
 		if (!lba_mode && !chs_mode) {
@@ -302,40 +338,42 @@ int main(int argc,char **argv) {
 		}
 
 		/* how many cylinders? */
-		cyl = disk_sectors / ((uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors);
+		cyl = disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
 
 		/* BIOS CHS translations to exceed 512MB limit */
-		while (cyl > 1023 && disk_geo.heads < 128) {
-			disk_geo.heads *= 2;
-			cyl = disk_sectors / ((uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors);
+		while (cyl > 1023 && fmtparam->disk_geo.heads < 128) {
+			fmtparam->disk_geo.heads *= 2;
+			cyl = disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
 		}
-		if (cyl > 1023 && disk_geo.heads < 255) {
-			disk_geo.heads = 255;
-			cyl = disk_sectors / ((uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors);
+		if (cyl > 1023 && fmtparam->disk_geo.heads < 255) {
+			fmtparam->disk_geo.heads = 255;
+			cyl = disk_sectors / ((uint64_t)fmtparam->disk_geo.heads * (uint64_t)fmtparam->disk_geo.sectors);
 		}
 
 		/* final limit (16383 at IDE, 1024 at BIOS) */
 		if (cyl > (uint64_t)1024UL) cyl = (uint64_t)1024UL;
 
 		/* that's the number of cylinders! */
-		disk_geo.cylinders = (uint16_t)cyl;
+		fmtparam->disk_geo.cylinders = (uint16_t)cyl;
 
 		if (chs_mode) {
-			disk_sectors = (uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors *
-				(uint64_t)disk_geo.cylinders;
+			disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
+				(uint64_t)fmtparam->disk_geo.sectors *
+				(uint64_t)fmtparam->disk_geo.cylinders;
 			disk_size_bytes = disk_sectors * (uint64_t)disk_bytes_per_sector;
 		}
 	}
 	else {
-		if (disk_geo.cylinders == 0 || disk_geo.heads == 0 || disk_geo.sectors == 0) return 1;
+		if (fmtparam->disk_geo.cylinders == 0 || fmtparam->disk_geo.heads == 0 || fmtparam->disk_geo.sectors == 0) return 1;
 
-		disk_sectors = (uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors *
-			(uint64_t)disk_geo.cylinders;
+		disk_sectors = (uint64_t)fmtparam->disk_geo.heads *
+			(uint64_t)fmtparam->disk_geo.sectors *
+			(uint64_t)fmtparam->disk_geo.cylinders;
 		disk_size_bytes = disk_sectors * (uint64_t)disk_bytes_per_sector;
 	}
 
 	if (!lba_mode && !chs_mode) {
-		if (disk_geo.sectors >= 63 && disk_geo.cylinders >= 4096)
+		if (fmtparam->disk_geo.sectors >= 63 && fmtparam->disk_geo.cylinders >= 4096)
 			lba_mode = 1;
 		else
 			chs_mode = 1;
@@ -367,7 +405,7 @@ int main(int argc,char **argv) {
 	// MS-DOS, especially 6.x and earlier, require this. MS-DOS 7 and higher
 	// demand this IF the partition was made in CHS mode.
 	if (partition_offset == (uint64_t)0UL)
-		partition_offset = disk_geo.sectors;
+		partition_offset = fmtparam->disk_geo.sectors;
 
 	if (partition_offset >= disk_sectors) {
 		fprintf(stderr,"Partition offset >= disk sectors\n");
@@ -376,7 +414,7 @@ int main(int argc,char **argv) {
 
 	if (partition_size == (uint64_t)0UL) {
 		uint64_t diskrnd = disk_sectors;
-		diskrnd -= diskrnd % (uint64_t)disk_geo.sectors;
+		diskrnd -= diskrnd % (uint64_t)fmtparam->disk_geo.sectors;
 		if (partition_offset >= diskrnd) {
 			fprintf(stderr,"Partition offset >= disk sectors (rounded down to track)\n");
 			return 1;
@@ -385,97 +423,97 @@ int main(int argc,char **argv) {
 		partition_size = diskrnd - partition_offset;
 	}
 
-	base_info.BytesPerSector = disk_bytes_per_sector;
+	fmtparam->base_info.BytesPerSector = disk_bytes_per_sector;
 	if (make_partition)
-		base_info.TotalSectors = (uint32_t)partition_size;
+		fmtparam->base_info.TotalSectors = (uint32_t)partition_size;
 	else
-		base_info.TotalSectors = (uint32_t)disk_sectors;
+		fmtparam->base_info.TotalSectors = (uint32_t)disk_sectors;
 
-	if (force_fat != 0) {
-		if (force_fat == 12 && !allow_fat12) {
+	if (fmtparam->force_fat != 0) {
+		if (fmtparam->force_fat == 12 && !allow_fat12) {
 			fprintf(stderr,"--no-fat12 and FAT12 forced does not make sense\n");
 			return 1;
 		}
-		else if (force_fat == 16 && !allow_fat16) {
+		else if (fmtparam->force_fat == 16 && !allow_fat16) {
 			fprintf(stderr,"--no-fat16 and FAT16 forced does not make sense\n");
 			return 1;
 		}
-		else if (force_fat == 32 && !allow_fat32) {
+		else if (fmtparam->force_fat == 32 && !allow_fat32) {
 			fprintf(stderr,"--no-fat32 and FAT32 forced does not make sense\n");
 			return 1;
 		}
 
-		base_info.FAT_size = force_fat;
+		fmtparam->base_info.FAT_size = fmtparam->force_fat;
 	}
-	if (base_info.FAT_size == 0) {
+	if (fmtparam->base_info.FAT_size == 0) {
 		// if FAT32 allowed, and 2GB or larger, then do FAT32
-		if (allow_fat32 && ((uint64_t)base_info.TotalSectors * (uint64_t)base_info.BytesPerSector) >= ((uint64_t)(2000ULL << 20ULL)))
-			base_info.FAT_size = 32;
+		if (allow_fat32 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->base_info.BytesPerSector) >= ((uint64_t)(2000ULL << 20ULL)))
+			fmtparam->base_info.FAT_size = 32;
 		// if FAT16 allowed, and 32MB or larger, then do FAT16
-		else if (allow_fat16 && ((uint64_t)base_info.TotalSectors * (uint64_t)base_info.BytesPerSector) >= ((uint64_t)(30ULL << 20ULL)))
-			base_info.FAT_size = 16;
+		else if (allow_fat16 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->base_info.BytesPerSector) >= ((uint64_t)(30ULL << 20ULL)))
+			fmtparam->base_info.FAT_size = 16;
 		// if FAT12 allowed, then do it
-		else if (allow_fat12 && ((uint64_t)base_info.TotalSectors * (uint64_t)base_info.BytesPerSector) < ((uint64_t)(31ULL << 20ULL)))
-			base_info.FAT_size = 12;
+		else if (allow_fat12 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->base_info.BytesPerSector) < ((uint64_t)(31ULL << 20ULL)))
+			fmtparam->base_info.FAT_size = 12;
 		// maybe we can do FAT32?
-		else if (allow_fat32 && ((uint64_t)base_info.TotalSectors * (uint64_t)base_info.BytesPerSector) >= ((uint64_t)(200ULL << 20ULL)))
-			base_info.FAT_size = 32;
+		else if (allow_fat32 && ((uint64_t)fmtparam->base_info.TotalSectors * (uint64_t)fmtparam->base_info.BytesPerSector) >= ((uint64_t)(200ULL << 20ULL)))
+			fmtparam->base_info.FAT_size = 32;
 		else if (allow_fat16)
-			base_info.FAT_size = 16;
+			fmtparam->base_info.FAT_size = 16;
 		else if (allow_fat12)
-			base_info.FAT_size = 12;
+			fmtparam->base_info.FAT_size = 12;
 		else if (allow_fat32)
-			base_info.FAT_size = 32;
+			fmtparam->base_info.FAT_size = 32;
 	}
-	if (base_info.FAT_size == 0) {
+	if (fmtparam->base_info.FAT_size == 0) {
 		fprintf(stderr,"FAT size not determinated\n");
 		return 1;
 	}
 
 	if (set_fat_tables)
-		base_info.FAT_tables = set_fat_tables;
-	else if (base_info.FAT_tables == 0)
-		base_info.FAT_tables = 2;
+		fmtparam->base_info.FAT_tables = set_fat_tables;
+	else if (fmtparam->base_info.FAT_tables == 0)
+		fmtparam->base_info.FAT_tables = 2;
 
 	if (set_cluster_size != 0) {
 		unsigned long x;
 
-		x = ((unsigned long)set_cluster_size + ((unsigned long)base_info.BytesPerSector / 2UL)) / (unsigned long)base_info.BytesPerSector;
-		if (x == 0) x = base_info.BytesPerSector;
+		x = ((unsigned long)set_cluster_size + ((unsigned long)fmtparam->base_info.BytesPerSector / 2UL)) / (unsigned long)fmtparam->base_info.BytesPerSector;
+		if (x == 0) x = fmtparam->base_info.BytesPerSector;
 		if (x > 255UL) x = 255UL;
-		base_info.Sectors_Per_Cluster = (uint8_t)x;
+		fmtparam->base_info.Sectors_Per_Cluster = (uint8_t)x;
 	}
 	else {
 		uint32_t cluslimit;
 
-		if (base_info.FAT_size == 32) {
+		if (fmtparam->base_info.FAT_size == 32) {
 			/* it's better to keep the FAT table small. try not to do one cluster per sector */
-			if (base_info.TotalSectors >= (uint32_t)0x3FFFF5UL) {
-				base_info.Sectors_Per_Cluster = 16;
-				if (base_info.TotalSectors >= (uint32_t)0x00FFFFF5UL)
+			if (fmtparam->base_info.TotalSectors >= (uint32_t)0x3FFFF5UL) {
+				fmtparam->base_info.Sectors_Per_Cluster = 16;
+				if (fmtparam->base_info.TotalSectors >= (uint32_t)0x00FFFFF5UL)
 					cluslimit = (uint32_t)0x03FFFFF5UL;
 				else
 					cluslimit = (uint32_t)0x00FFFFF5UL;
 			}
 			else {
 				cluslimit = (uint32_t)0x0007FFF5UL;
-				base_info.Sectors_Per_Cluster = 1;
+				fmtparam->base_info.Sectors_Per_Cluster = 1;
 			}
 		}
 		else {
-			base_info.Sectors_Per_Cluster = 1;
-			if (base_info.FAT_size == 16)
+			fmtparam->base_info.Sectors_Per_Cluster = 1;
+			if (fmtparam->base_info.FAT_size == 16)
 				cluslimit = (uint32_t)0x0000FFF5UL;
 			else
 				cluslimit = (uint32_t)0x00000FF5UL;
 		}
 
-		while (base_info.Sectors_Per_Cluster < 0xFF && (base_info.TotalSectors / (uint32_t)base_info.Sectors_Per_Cluster) >= cluslimit)
-			base_info.Sectors_Per_Cluster++;
+		while (fmtparam->base_info.Sectors_Per_Cluster < 0xFF && (fmtparam->base_info.TotalSectors / (uint32_t)fmtparam->base_info.Sectors_Per_Cluster) >= cluslimit)
+			fmtparam->base_info.Sectors_Per_Cluster++;
 	}
 
-	if (base_info.FAT_size == 32) {
-		base_info.RootDirectory_size = 0;
+	if (fmtparam->base_info.FAT_size == 32) {
+		fmtparam->base_info.RootDirectory_size = 0;
 		root_directory_entries = 0; // FAT32 makes the root directory an allocation chain
 		if (set_reserved_sectors != (uint32_t)0U)
 			reserved_sectors = set_reserved_sectors;
@@ -499,7 +537,7 @@ int main(int argc,char **argv) {
 		else
 			root_directory_entries = 32; // 1KB
 
-		base_info.RootDirectory_size = ((root_directory_entries * 32) + 511) / 512;
+		fmtparam->base_info.RootDirectory_size = ((root_directory_entries * 32) + 511) / 512;
 
 		if (set_reserved_sectors != (uint32_t)0U)
 			reserved_sectors = set_reserved_sectors;
@@ -507,55 +545,55 @@ int main(int argc,char **argv) {
 			reserved_sectors = 1;
 	}
 
-	if (base_info.FAT_size == 32) {
+	if (fmtparam->base_info.FAT_size == 32) {
 		if (set_fsinfo_sector != 0)
-			base_info.fat32.BPB_FSInfo = set_fsinfo_sector;
+			fmtparam->base_info.fat32.BPB_FSInfo = set_fsinfo_sector;
 		else
-			base_info.fat32.BPB_FSInfo = 6;
+			fmtparam->base_info.fat32.BPB_FSInfo = 6;
 	}
 	else {
-		base_info.fat32.BPB_FSInfo = 0;
+		fmtparam->base_info.fat32.BPB_FSInfo = 0;
 	}
 
-	if (base_info.fat32.BPB_FSInfo >= reserved_sectors)
-		base_info.fat32.BPB_FSInfo = reserved_sectors - 1;
+	if (fmtparam->base_info.fat32.BPB_FSInfo >= reserved_sectors)
+		fmtparam->base_info.fat32.BPB_FSInfo = reserved_sectors - 1;
 
 	if (set_backup_boot_sector != 0 && set_backup_boot_sector >= reserved_sectors)
 		set_backup_boot_sector = reserved_sectors - 1;
 
 	if (!allow_non_power_of_2_cluster_size) {
 		/* need to round to a power of 2 */
-		if (base_info.Sectors_Per_Cluster >= (64+1)/*65*/)
-			base_info.Sectors_Per_Cluster = 128;
-		else if (base_info.Sectors_Per_Cluster >= (32+1)/*33*/)
-			base_info.Sectors_Per_Cluster = 64;
-		else if (base_info.Sectors_Per_Cluster >= (16+1)/*17*/)
-			base_info.Sectors_Per_Cluster = 32;
-		else if (base_info.Sectors_Per_Cluster >= (8+1)/*9*/)
-			base_info.Sectors_Per_Cluster = 16;
-		else if (base_info.Sectors_Per_Cluster >= (4+1)/*5*/)
-			base_info.Sectors_Per_Cluster = 8;
-		else if (base_info.Sectors_Per_Cluster >= (2+1)/*3*/)
-			base_info.Sectors_Per_Cluster = 4;
-		else if (base_info.Sectors_Per_Cluster >= 2)
-			base_info.Sectors_Per_Cluster = 2;
+		if (fmtparam->base_info.Sectors_Per_Cluster >= (64+1)/*65*/)
+			fmtparam->base_info.Sectors_Per_Cluster = 128;
+		else if (fmtparam->base_info.Sectors_Per_Cluster >= (32+1)/*33*/)
+			fmtparam->base_info.Sectors_Per_Cluster = 64;
+		else if (fmtparam->base_info.Sectors_Per_Cluster >= (16+1)/*17*/)
+			fmtparam->base_info.Sectors_Per_Cluster = 32;
+		else if (fmtparam->base_info.Sectors_Per_Cluster >= (8+1)/*9*/)
+			fmtparam->base_info.Sectors_Per_Cluster = 16;
+		else if (fmtparam->base_info.Sectors_Per_Cluster >= (4+1)/*5*/)
+			fmtparam->base_info.Sectors_Per_Cluster = 8;
+		else if (fmtparam->base_info.Sectors_Per_Cluster >= (2+1)/*3*/)
+			fmtparam->base_info.Sectors_Per_Cluster = 4;
+		else if (fmtparam->base_info.Sectors_Per_Cluster >= 2)
+			fmtparam->base_info.Sectors_Per_Cluster = 2;
 		else
-			base_info.Sectors_Per_Cluster = 1;
+			fmtparam->base_info.Sectors_Per_Cluster = 1;
 	}
 
 	if (!allow_64kb_or_larger_clusters) {
 		uint32_t sz;
 
-		sz = (uint32_t)base_info.Sectors_Per_Cluster * (uint32_t)base_info.BytesPerSector;
+		sz = (uint32_t)fmtparam->base_info.Sectors_Per_Cluster * (uint32_t)fmtparam->base_info.BytesPerSector;
 		if (sz >= (uint32_t)0x10000UL) {
 			fprintf(stderr,"WARNING: cluster size choice means cluster is 64KB or larger. choosing smaller cluster size.\n");
 
 			if (allow_non_power_of_2_cluster_size)
-				base_info.Sectors_Per_Cluster = (uint32_t)0xFFFFUL / (uint32_t)base_info.BytesPerSector;
+				fmtparam->base_info.Sectors_Per_Cluster = (uint32_t)0xFFFFUL / (uint32_t)fmtparam->base_info.BytesPerSector;
 			else {
-				while (sz >= (uint32_t)0x10000UL && base_info.Sectors_Per_Cluster >= 2U) {
-					base_info.Sectors_Per_Cluster /= 2U;
-					sz = (uint32_t)base_info.Sectors_Per_Cluster * (uint32_t)base_info.BytesPerSector;
+				while (sz >= (uint32_t)0x10000UL && fmtparam->base_info.Sectors_Per_Cluster >= 2U) {
+					fmtparam->base_info.Sectors_Per_Cluster /= 2U;
+					sz = (uint32_t)fmtparam->base_info.Sectors_Per_Cluster * (uint32_t)fmtparam->base_info.BytesPerSector;
 				}
 			}
 		}
@@ -568,49 +606,49 @@ int main(int argc,char **argv) {
 		uint32_t cluslimit;
 		uint32_t x,t;
 
-		if (base_info.FAT_size == 32)
+		if (fmtparam->base_info.FAT_size == 32)
 			cluslimit = (uint32_t)0x0FFFFFF5UL;
-		else if (base_info.FAT_size == 16)
+		else if (fmtparam->base_info.FAT_size == 16)
 			cluslimit = (uint32_t)0x0000FFF5UL;
 		else
 			cluslimit = (uint32_t)0x00000FF5UL;
 
-		x = base_info.TotalSectors;
+		x = fmtparam->base_info.TotalSectors;
 
 		if (x > (uint32_t)reserved_sectors) x -= (uint32_t)reserved_sectors;
 		else x = (uint32_t)0;
 
-		if (x > (uint32_t)base_info.RootDirectory_size) x -= (uint32_t)base_info.RootDirectory_size;
+		if (x > (uint32_t)fmtparam->base_info.RootDirectory_size) x -= (uint32_t)fmtparam->base_info.RootDirectory_size;
 		else x = (uint32_t)0;
 
-		x /= (uint32_t)base_info.Sectors_Per_Cluster;
+		x /= (uint32_t)fmtparam->base_info.Sectors_Per_Cluster;
 		if (x == (uint32_t)0UL) {
 			fprintf(stderr,"Too small for any clusters\n");
 			return 1;
 		}
 
 		/* use it to calculate size of the FAT table */
-		if (base_info.FAT_size == 12)
+		if (fmtparam->base_info.FAT_size == 12)
 			t = ((x + (uint32_t)1UL) / (uint32_t)2UL) * (uint32_t)3UL; // 1/2x * 3 = number of 24-bit doubles
 		else
-			t = x * (base_info.FAT_size / (uint32_t)8UL);
-		t = (t + (uint32_t)base_info.BytesPerSector - (uint32_t)1UL) / (uint32_t)base_info.BytesPerSector;
-		base_info.FAT_table_size = t;
+			t = x * (fmtparam->base_info.FAT_size / (uint32_t)8UL);
+		t = (t + (uint32_t)fmtparam->base_info.BytesPerSector - (uint32_t)1UL) / (uint32_t)fmtparam->base_info.BytesPerSector;
+		fmtparam->base_info.FAT_table_size = t;
 
 		/* do it again */
-		x = base_info.TotalSectors;
+		x = fmtparam->base_info.TotalSectors;
 
 		if (x > (uint32_t)reserved_sectors) x -= (uint32_t)reserved_sectors;
 		else x = (uint32_t)0;
 
-		if (x > (uint32_t)base_info.RootDirectory_size) x -= (uint32_t)base_info.RootDirectory_size;
+		if (x > (uint32_t)fmtparam->base_info.RootDirectory_size) x -= (uint32_t)fmtparam->base_info.RootDirectory_size;
 		else x = (uint32_t)0;
 
-		t = (uint32_t)base_info.FAT_table_size * (uint32_t)base_info.FAT_tables;
+		t = (uint32_t)fmtparam->base_info.FAT_table_size * (uint32_t)fmtparam->base_info.FAT_tables;
 		if (x > t) x -= t;
 		else x = (uint32_t)0;
 
-		x /= (uint32_t)base_info.Sectors_Per_Cluster;
+		x /= (uint32_t)fmtparam->base_info.Sectors_Per_Cluster;
 		if (x == (uint32_t)0UL) {
 			fprintf(stderr,"Too small for any clusters\n");
 			return 1;
@@ -620,29 +658,29 @@ int main(int argc,char **argv) {
 		if (x >= cluslimit) {
 			fprintf(stderr,"WARNING: total sector and cluster count exceeds highest valid count for FAT width\n");
 			fprintf(stderr,"          sectors=%lu data_clusters=%lu limit=%lu\n",
-				(unsigned long)base_info.TotalSectors,
+				(unsigned long)fmtparam->base_info.TotalSectors,
 				(unsigned long)x,
 				(unsigned long)cluslimit);
 
 			assert(cluslimit != (uint32_t)0UL);
 			x = cluslimit - (uint32_t)1UL;
 
-			if (base_info.FAT_size == 12)
+			if (fmtparam->base_info.FAT_size == 12)
 				t = ((x + (uint32_t)1UL) / (uint32_t)2UL) * (uint32_t)3UL; // 1/2x * 3 = number of 24-bit doubles
 			else
-				t = x * (base_info.FAT_size / (uint32_t)8UL);
-			t = (t + (uint32_t)base_info.BytesPerSector - (uint32_t)1UL) / (uint32_t)base_info.BytesPerSector;
-			base_info.FAT_table_size = t;
+				t = x * (fmtparam->base_info.FAT_size / (uint32_t)8UL);
+			t = (t + (uint32_t)fmtparam->base_info.BytesPerSector - (uint32_t)1UL) / (uint32_t)fmtparam->base_info.BytesPerSector;
+			fmtparam->base_info.FAT_table_size = t;
 
-			base_info.TotalSectors =
-				(x * (uint32_t)base_info.Sectors_Per_Cluster) +
-				(uint32_t)base_info.FAT_table_size +
-				(uint32_t)base_info.RootDirectory_size +
+			fmtparam->base_info.TotalSectors =
+				(x * (uint32_t)fmtparam->base_info.Sectors_Per_Cluster) +
+				(uint32_t)fmtparam->base_info.FAT_table_size +
+				(uint32_t)fmtparam->base_info.RootDirectory_size +
 				(uint32_t)reserved_sectors;
 		}
 
-		base_info.Total_data_clusters = x;
-		base_info.Total_clusters = x + (uint32_t)2UL;
+		fmtparam->base_info.Total_data_clusters = x;
+		fmtparam->base_info.Total_clusters = x + (uint32_t)2UL;
 	}
 
 	if (s_partition_type != NULL) {
@@ -652,25 +690,25 @@ int main(int argc,char **argv) {
 	else {
 		// resides in the first 32MB. this is the only case that disregards LBA mode
 		if ((partition_offset+partition_size)*((uint64_t)disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
-			if (base_info.FAT_size == 16)
+			if (fmtparam->base_info.FAT_size == 16)
 				partition_type = 0x04; // FAT16 with less than 65536 sectors
 			else
 				partition_type = 0x01; // FAT12 as primary partition in the first 32MB
 		}
 		// resides in the first 8GB.
 		else if ((partition_offset+partition_size)*((uint64_t)disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
-			if (base_info.FAT_size == 32)
+			if (fmtparam->base_info.FAT_size == 32)
 				partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
-			else if (base_info.FAT_size == 16)
+			else if (fmtparam->base_info.FAT_size == 16)
 				partition_type = lba_mode ? 0x0E : 0x06;	// FAT16B with (lba_mode ? LBA : CHS) mode
 			else
 				partition_type = 0x01; // FAT12
 		}
 		// resides past 8GB. this is the only case that disregards CHS mode
 		else {
-			if (base_info.FAT_size == 32)
+			if (fmtparam->base_info.FAT_size == 32)
 				partition_type = 0x0C;	// FAT32 with LBA mode
-			else if (base_info.FAT_size == 16)
+			else if (fmtparam->base_info.FAT_size == 16)
 				partition_type = 0x0E;	// FAT16B with LBA mode
 			else
 				partition_type = 0x01; // FAT12
@@ -682,7 +720,7 @@ int main(int argc,char **argv) {
 		if (disk_media_type_byte < 0xF0) return 1;
 	}
 	else {
-		disk_media_type_byte = libmsfat_guess_from_geometry(&disk_geo);
+		disk_media_type_byte = libmsfat_guess_from_geometry(&fmtparam->disk_geo);
 	}
 
 	assert(lba_mode || chs_mode);
@@ -690,9 +728,9 @@ int main(int argc,char **argv) {
 		(unsigned long long)disk_sectors,
 		(unsigned int)disk_bytes_per_sector,
 		(unsigned long long)disk_sectors * (unsigned long long)disk_bytes_per_sector,
-		(unsigned int)disk_geo.cylinders,
-		(unsigned int)disk_geo.heads,
-		(unsigned int)disk_geo.sectors,
+		(unsigned int)fmtparam->disk_geo.cylinders,
+		(unsigned int)fmtparam->disk_geo.heads,
+		(unsigned int)fmtparam->disk_geo.sectors,
 		(unsigned int)disk_media_type_byte,
 		lba_mode ? "LBA" : "CHS");
 
@@ -702,9 +740,9 @@ int main(int argc,char **argv) {
 			(unsigned long long)partition_offset,
 			(unsigned long long)(partition_offset + partition_size - (uint64_t)1UL));
 
-		if (chs_mode && (partition_offset % (uint64_t)disk_geo.sectors) != 0)
+		if (chs_mode && (partition_offset % (uint64_t)fmtparam->disk_geo.sectors) != 0)
 			printf("    WARNING: Partition does not start on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
-		if (chs_mode && ((partition_offset + partition_size) % (uint64_t)disk_geo.sectors) != 0)
+		if (chs_mode && ((partition_offset + partition_size) % (uint64_t)fmtparam->disk_geo.sectors) != 0)
 			printf("    WARNING: Partition does not end on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
 
 		if (partition_offset == 0 || partition_size == 0) return 1;
@@ -721,38 +759,38 @@ int main(int argc,char **argv) {
 		volume_id = (uint32_t)time(NULL);
 
 	printf("   FAT filesystem FAT%u. %lu x %lu (%lu bytes) per cluster. %lu sectors => %lu clusters (%lu)\n",
-		base_info.FAT_size,
-		(unsigned long)base_info.Sectors_Per_Cluster,
-		(unsigned long)base_info.BytesPerSector,
-		(unsigned long)base_info.Sectors_Per_Cluster * (unsigned long)base_info.BytesPerSector,
-		(unsigned long)base_info.TotalSectors,
-		(unsigned long)base_info.Total_data_clusters,
-		(unsigned long)base_info.Total_clusters);
+		fmtparam->base_info.FAT_size,
+		(unsigned long)fmtparam->base_info.Sectors_Per_Cluster,
+		(unsigned long)fmtparam->base_info.BytesPerSector,
+		(unsigned long)fmtparam->base_info.Sectors_Per_Cluster * (unsigned long)fmtparam->base_info.BytesPerSector,
+		(unsigned long)fmtparam->base_info.TotalSectors,
+		(unsigned long)fmtparam->base_info.Total_data_clusters,
+		(unsigned long)fmtparam->base_info.Total_clusters);
 	printf("   Reserved sectors: %lu\n",
 		(unsigned long)reserved_sectors);
 	printf("   Root directory entries: %lu (%lu sectors)\n",
 		(unsigned long)root_directory_entries,
-		(unsigned long)base_info.RootDirectory_size);
+		(unsigned long)fmtparam->base_info.RootDirectory_size);
 	printf("   %u FAT tables: %lu sectors per table\n",
-		(unsigned int)base_info.FAT_tables,
-		(unsigned long)base_info.FAT_table_size);
+		(unsigned int)fmtparam->base_info.FAT_tables,
+		(unsigned long)fmtparam->base_info.FAT_table_size);
 	printf("   Volume ID: 0x%08lx\n",
 		(unsigned long)volume_id);
 
-	if (base_info.FAT_size == 32)
+	if (fmtparam->base_info.FAT_size == 32)
 		printf("   FAT32 FSInfo sector: %lu\n",
-			(unsigned long)base_info.fat32.BPB_FSInfo);
+			(unsigned long)fmtparam->base_info.fat32.BPB_FSInfo);
 
-	if (base_info.FAT_size == 32 && base_info.fat32.BPB_FSInfo == 0) {
+	if (fmtparam->base_info.FAT_size == 32 && fmtparam->base_info.fat32.BPB_FSInfo == 0) {
 		fprintf(stderr,"FAT32 requires a sector set aside for FSInfo\n");
 		return 1;
 	}
 
-	if (base_info.FAT_size == 0) {
+	if (fmtparam->base_info.FAT_size == 0) {
 		fprintf(stderr,"Unable to decide on a FAT bit width\n");
 		return 1;
 	}
-	if (base_info.Sectors_Per_Cluster == 0) {
+	if (fmtparam->base_info.Sectors_Per_Cluster == 0) {
 		fprintf(stderr,"Unable to determine cluster size\n");
 		return 1;
 	}
@@ -823,7 +861,7 @@ int main(int argc,char **argv) {
 
 		libpartmbr_state_zero(&diskimage_state);
 
-		if (libpartmbr_create_partition_table(diskimage_sector,&diskimage_state)) {
+		if (libpartmbr_create_partition_table(fmtparam->diskimage_sector,&diskimage_state)) {
 			fprintf(stderr,"Failed to create partition table sector\n");
 			return 1;
 		}
@@ -831,32 +869,32 @@ int main(int argc,char **argv) {
 		ent.partition_type = partition_type;
 		ent.first_lba_sector = (uint32_t)partition_offset;
 		ent.number_lba_sectors = (uint32_t)partition_size;
-		if (int13cnv_lba_to_chs(&chs,&disk_geo,(uint32_t)partition_offset)) {
+		if (int13cnv_lba_to_chs(&chs,&fmtparam->disk_geo,(uint32_t)partition_offset)) {
 			fprintf(stderr,"Failed to convert start LBA -> CHS\n");
 			return 1;
 		}
-		int13cnv_chs_int13_cliprange(&chs,&disk_geo);
+		int13cnv_chs_int13_cliprange(&chs,&fmtparam->disk_geo);
 		if (int13cnv_chs_to_int13(&ent.first_chs_sector,&chs)) {
 			fprintf(stderr,"Failed to convert start CHS -> INT13\n");
 			return 1;
 		}
 
-		if (int13cnv_lba_to_chs(&chs,&disk_geo,(uint32_t)partition_offset + (uint32_t)partition_size - (uint32_t)1UL)) {
+		if (int13cnv_lba_to_chs(&chs,&fmtparam->disk_geo,(uint32_t)partition_offset + (uint32_t)partition_size - (uint32_t)1UL)) {
 			fprintf(stderr,"Failed to convert end LBA -> CHS\n");
 			return 1;
 		}
-		int13cnv_chs_int13_cliprange(&chs,&disk_geo);
+		int13cnv_chs_int13_cliprange(&chs,&fmtparam->disk_geo);
 		if (int13cnv_chs_to_int13(&ent.last_chs_sector,&chs)) {
 			fprintf(stderr,"Failed to convert end CHS -> INT13\n");
 			return 1;
 		}
 
-		if (libpartmbr_write_entry(diskimage_sector,&ent,&diskimage_state,0)) {
+		if (libpartmbr_write_entry(fmtparam->diskimage_sector,&ent,&diskimage_state,0)) {
 			fprintf(stderr,"Unable to write entry\n");
 			return 1;
 		}
 
-		if (lseek(fd,0,SEEK_SET) != 0 || write(fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
+		if (lseek(fd,0,SEEK_SET) != 0 || write(fd,fmtparam->diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
 			fprintf(stderr,"Failed to write MBR back\n");
 			return 1;
 		}
@@ -882,7 +920,7 @@ int main(int argc,char **argv) {
 		// TODO: options to emulate various DOS versions of the BPB
 		if (set_boot_sector_bpb_size != 0)
 			bs_sz = set_boot_sector_bpb_size;
-		else if (base_info.FAT_size == 32)
+		else if (fmtparam->base_info.FAT_size == 32)
 			bs_sz = 90;	// MS-DOS 7.x / Windows 9x FAT32
 		else
 			bs_sz = 62;	// MS-DOS 6.x and earlier, FAT12/FAT16
@@ -891,7 +929,7 @@ int main(int argc,char **argv) {
 			fprintf(stderr,"BPB too small\n");
 			return 1;
 		}
-		if (bs_sz < 90 && base_info.FAT_size == 32) {
+		if (bs_sz < 90 && fmtparam->base_info.FAT_size == 32) {
 			fprintf(stderr,"BPB too small for FAT32\n");
 			return 1;
 		}
@@ -912,35 +950,35 @@ int main(int argc,char **argv) {
 
 		// common BPB
 		bs->BPB_common.BPB_BytsPerSec = htole16(disk_bytes_per_sector);
-		bs->BPB_common.BPB_SecPerClus = base_info.Sectors_Per_Cluster;
+		bs->BPB_common.BPB_SecPerClus = fmtparam->base_info.Sectors_Per_Cluster;
 		bs->BPB_common.BPB_RsvdSecCnt = htole16(reserved_sectors);
-		bs->BPB_common.BPB_NumFATs = base_info.FAT_tables;
-		if (base_info.FAT_size == 32)
+		bs->BPB_common.BPB_NumFATs = fmtparam->base_info.FAT_tables;
+		if (fmtparam->base_info.FAT_size == 32)
 			bs->BPB_common.BPB_RootEntCnt = 0;
 		else
 			bs->BPB_common.BPB_RootEntCnt = htole16(root_directory_entries);
-		if (base_info.TotalSectors >= (uint32_t)65536 || base_info.FAT_size == 32)
+		if (fmtparam->base_info.TotalSectors >= (uint32_t)65536 || fmtparam->base_info.FAT_size == 32)
 			bs->BPB_common.BPB_TotSec16 = 0;
 		else
-			bs->BPB_common.BPB_TotSec16 = (uint16_t)htole16(base_info.TotalSectors);
+			bs->BPB_common.BPB_TotSec16 = (uint16_t)htole16(fmtparam->base_info.TotalSectors);
 		bs->BPB_common.BPB_Media = disk_media_type_byte;
-		if (base_info.FAT_size == 32)
+		if (fmtparam->base_info.FAT_size == 32)
 			bs->BPB_common.BPB_FATSz16 = 0;
 		else
-			bs->BPB_common.BPB_FATSz16 = htole16(base_info.FAT_table_size);
-		bs->BPB_common.BPB_SecPerTrk = disk_geo.sectors;
-		bs->BPB_common.BPB_NumHeads = disk_geo.heads;
-		bs->BPB_common.BPB_TotSec32 = htole32(base_info.TotalSectors);
+			bs->BPB_common.BPB_FATSz16 = htole16(fmtparam->base_info.FAT_table_size);
+		bs->BPB_common.BPB_SecPerTrk = fmtparam->disk_geo.sectors;
+		bs->BPB_common.BPB_NumHeads = fmtparam->disk_geo.heads;
+		bs->BPB_common.BPB_TotSec32 = htole32(fmtparam->base_info.TotalSectors);
 
-		if (base_info.FAT_size == 32) {
-			bs->at36.BPB_FAT32.BPB_FATSz32 = htole32(base_info.FAT_table_size);
+		if (fmtparam->base_info.FAT_size == 32) {
+			bs->at36.BPB_FAT32.BPB_FATSz32 = htole32(fmtparam->base_info.FAT_table_size);
 			bs->at36.BPB_FAT32.BPB_ExtFlags = 0;
 			bs->at36.BPB_FAT32.BPB_FSVer = 0;
 			if (set_root_cluster != 0)
 				bs->at36.BPB_FAT32.BPB_RootClus = htole32(set_root_cluster);
 			else
 				bs->at36.BPB_FAT32.BPB_RootClus = htole32(2);
-			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(base_info.fat32.BPB_FSInfo);
+			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(fmtparam->base_info.fat32.BPB_FSInfo);
 			if (set_backup_boot_sector != 0)
 				bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(set_backup_boot_sector);
 			else
@@ -974,7 +1012,7 @@ int main(int argc,char **argv) {
 				while (d < df) *d++ = ' ';
 			}
 
-			if (base_info.FAT_size == 16)
+			if (fmtparam->base_info.FAT_size == 16)
 				memcpy(bs->at36.BPB_FAT.BS_FilSysType,"FAT16   ",8);
 			else
 				memcpy(bs->at36.BPB_FAT.BS_FilSysType,"FAT12   ",8);
@@ -991,7 +1029,7 @@ int main(int argc,char **argv) {
 		}
 
 		// backup copy too
-		if (base_info.FAT_size == 32) {
+		if (fmtparam->base_info.FAT_size == 32) {
 			if (make_partition)
 				offset = partition_offset;
 			else
@@ -1007,7 +1045,7 @@ int main(int argc,char **argv) {
 		}
 
 		// FSInfo
-		if (base_info.FAT_size == 32) {
+		if (fmtparam->base_info.FAT_size == 32) {
 			struct libmsfat_fat32_fsinfo_t fsinfo;
 
 			if (make_partition)
@@ -1048,54 +1086,54 @@ int main(int argc,char **argv) {
 		if (make_partition)
 			msfatctx->partition_byte_offset = (uint64_t)partition_offset * (uint64_t)disk_bytes_per_sector;
 
-		if (libmsfat_bs_compute_disk_locations(&final_info,bs)) {
+		if (libmsfat_bs_compute_disk_locations(&fmtparam->final_info,bs)) {
 			printf("Unable to locate disk locations.\n");
 			return 1;
 		}
-		if (libmsfat_context_set_fat_info(msfatctx,&final_info)) {
+		if (libmsfat_context_set_fat_info(msfatctx,&fmtparam->final_info)) {
 			fprintf(stderr,"msfat library rejected disk location info\n");
 			return 1;
 		}
 
 		printf("Disk location and FAT info:\n");
 		printf("    FAT format:        FAT%u\n",
-			final_info.FAT_size);
+			fmtparam->final_info.FAT_size);
 		printf("    FAT tables:        %u\n",
-			final_info.FAT_tables);
+			fmtparam->final_info.FAT_tables);
 		printf("    FAT table size:    %lu sectors\n",
-			(unsigned long)final_info.FAT_table_size);
+			(unsigned long)fmtparam->final_info.FAT_table_size);
 		printf("    FAT offset:        %lu sectors\n",
-			(unsigned long)final_info.FAT_offset);
+			(unsigned long)fmtparam->final_info.FAT_offset);
 		printf("    Root directory:    %lu sectors\n",
-			(unsigned long)final_info.RootDirectory_offset);
+			(unsigned long)fmtparam->final_info.RootDirectory_offset);
 		printf("    Root dir size:     %lu sectors\n",
-			(unsigned long)final_info.RootDirectory_size);
+			(unsigned long)fmtparam->final_info.RootDirectory_size);
 		printf("    Data offset:       %lu sectors\n",
-			(unsigned long)final_info.Data_offset);
+			(unsigned long)fmtparam->final_info.Data_offset);
 		printf("    Data size:         %lu sectors\n",
-			(unsigned long)final_info.Data_size);
+			(unsigned long)fmtparam->final_info.Data_size);
 		printf("    Sectors/cluster:   %u\n",
-			(unsigned int)final_info.Sectors_Per_Cluster);
+			(unsigned int)fmtparam->final_info.Sectors_Per_Cluster);
 		printf("    Bytes per sector:  %u\n",
-			(unsigned int)final_info.BytesPerSector);
+			(unsigned int)fmtparam->final_info.BytesPerSector);
 		printf("    Total clusters:    %lu\n",
-			(unsigned long)final_info.Total_clusters);
+			(unsigned long)fmtparam->final_info.Total_clusters);
 		printf("    Total data clusts: %lu\n",
-			(unsigned long)final_info.Total_data_clusters);
+			(unsigned long)fmtparam->final_info.Total_data_clusters);
 		printf("    Max clusters psbl: %lu\n",
-			(unsigned long)final_info.Max_possible_clusters);
+			(unsigned long)fmtparam->final_info.Max_possible_clusters);
 		printf("    Max data clus psbl:%lu\n",
-			(unsigned long)final_info.Max_possible_data_clusters);
+			(unsigned long)fmtparam->final_info.Max_possible_data_clusters);
 		printf("    Total sectors:     %lu sectors\n",
-			(unsigned long)final_info.TotalSectors);
-		if (final_info.FAT_size >= 32) {
+			(unsigned long)fmtparam->final_info.TotalSectors);
+		if (fmtparam->final_info.FAT_size >= 32) {
 			printf("    FAT32 FSInfo:      %lu sector\n",
-				(unsigned long)final_info.fat32.BPB_FSInfo);
+				(unsigned long)fmtparam->final_info.fat32.BPB_FSInfo);
 			printf("    Root dir cluster:  %lu\n",
-				(unsigned long)final_info.fat32.RootDirectory_cluster);
+				(unsigned long)fmtparam->final_info.fat32.RootDirectory_cluster);
 		}
 
-		for (i=0;i < final_info.FAT_tables;i++) {
+		for (i=0;i < fmtparam->final_info.FAT_tables;i++) {
 			if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFF00UL + (uint32_t)disk_media_type_byte,libmsfat_CLUSTER_0_MEDIA_TYPE,i)) {
 				fprintf(stderr,"Cannot write cluster 1\n");
 				return 1;
@@ -1106,7 +1144,7 @@ int main(int argc,char **argv) {
 			}
 		}
 
-		if (final_info.FAT_size == 32) {
+		if (fmtparam->final_info.FAT_size == 32) {
 			/* remember the root cluster we chose? we need to mark it allocated, and
 			 * then zero the cluster out */
 			libmsfat_cluster_t rootclus = (libmsfat_cluster_t)le32toh(bs->at36.BPB_FAT32.BPB_RootClus);
@@ -1115,7 +1153,7 @@ int main(int argc,char **argv) {
 				fprintf(stderr,"Invalid root cluster\n");
 				return 1;
 			}
-			for (i=0;i < final_info.FAT_tables;i++) {
+			for (i=0;i < fmtparam->final_info.FAT_tables;i++) {
 				if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFFFFUL,rootclus,i)) {
 					fprintf(stderr,"Cannot write cluster %lu, to mark as EOC\n",(unsigned long)rootclus);
 					return 1;
@@ -1169,6 +1207,7 @@ int main(int argc,char **argv) {
 		msfatctx = libmsfat_context_destroy(msfatctx);
 	}
 
+	fmtparam = libmsfat_formatting_params_destroy(fmtparam);
 	close(fd);
 	fd = -1;
 	return 0;
