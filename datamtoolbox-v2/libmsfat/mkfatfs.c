@@ -47,6 +47,7 @@ static uint8_t					allow_fat12 = 1;
 static uint8_t					force_fat = 0;
 static uint16_t					set_cluster_size = 0;
 static uint8_t					allow_non_power_of_2_cluster_size = 0;
+static uint8_t					allow_64kb_or_larger_clusters = 0;
 static uint32_t					root_directory_entries = 0;
 static uint32_t					reserved_sectors = 0;
 
@@ -177,6 +178,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"cluster-non-power-of-2")) {
 				allow_non_power_of_2_cluster_size = 1;
 			}
+			else if (!strcmp(a,"large-clusters")) {
+				allow_64kb_or_larger_clusters = 1;
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -213,6 +217,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--chs                       CHS mode\n");
 		fprintf(stderr,"--cluster-size <x>          Cluster size in bytes\n");
 		fprintf(stderr,"--cluster-non-power-of-2    Allow cluster size that is not a power of 2 (FAT specification violation!)\n");
+		fprintf(stderr,"--large-clusters            Allow clusters to be 64KB or larger (FAT specification violation!)\n");
 		return 1;
 	}
 
@@ -503,6 +508,24 @@ int main(int argc,char **argv) {
 			base_info.Sectors_Per_Cluster = 2;
 		else
 			base_info.Sectors_Per_Cluster = 1;
+	}
+
+	if (!allow_64kb_or_larger_clusters) {
+		uint32_t sz;
+
+		sz = (uint32_t)base_info.Sectors_Per_Cluster * (uint32_t)base_info.BytesPerSector;
+		if (sz >= (uint32_t)0x10000UL) {
+			fprintf(stderr,"WARNING: cluster size choice means cluster is 64KB or larger. choosing smaller cluster size.\n");
+
+			if (allow_non_power_of_2_cluster_size)
+				base_info.Sectors_Per_Cluster = (uint32_t)0xFFFFUL / (uint32_t)base_info.BytesPerSector;
+			else {
+				while (sz >= (uint32_t)0x10000UL && base_info.Sectors_Per_Cluster >= 2U) {
+					base_info.Sectors_Per_Cluster /= 2U;
+					sz = (uint32_t)base_info.Sectors_Per_Cluster * (uint32_t)base_info.BytesPerSector;
+				}
+			}
+		}
 	}
 
 	// now we need to figure out number of clusters.
