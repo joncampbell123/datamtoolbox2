@@ -55,6 +55,7 @@ unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned i
 static uint8_t					disk_media_type_byte = 0;
 static uint8_t					make_partition = 0;
 static uint8_t					partition_type = 0;
+static uint8_t					partition_type_set = 0;
 static uint8_t					lba_mode = 0;
 static uint8_t					chs_mode = 0;
 static uint8_t					allow_fat32 = 1;
@@ -656,11 +657,52 @@ int libmsfat_formatting_params_compute_cluster_count(struct libmsfat_formatting_
 	return 0;
 }
 
+int libmsfat_formatting_params_choose_partition_table(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (!partition_type_set) {
+		// resides in the first 32MB. this is the only case that disregards LBA mode
+		if ((f->partition_offset+f->partition_size)*((uint64_t)f->disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
+			if (f->base_info.FAT_size == 16)
+				partition_type = 0x04; // FAT16 with less than 65536 sectors
+			else
+				partition_type = 0x01; // FAT12 as primary partition in the first 32MB
+		}
+		// resides in the first 8GB.
+		else if ((f->partition_offset+f->partition_size)*((uint64_t)f->disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
+			if (f->base_info.FAT_size == 32)
+				partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
+			else if (f->base_info.FAT_size == 16)
+				partition_type = lba_mode ? 0x0E : 0x06;	// FAT16B with (lba_mode ? LBA : CHS) mode
+			else
+				partition_type = 0x01; // FAT12
+		}
+		// resides past 8GB. this is the only case that disregards CHS mode
+		else {
+			if (f->base_info.FAT_size == 32)
+				partition_type = 0x0C;	// FAT32 with LBA mode
+			else if (f->base_info.FAT_size == 16)
+				partition_type = 0x0E;	// FAT16B with LBA mode
+			else
+				partition_type = 0x01; // FAT12
+		}
+	}
+
+	return 0;
+}
+
+int libmsfat_formatting_params_set_partition_type(struct libmsfat_formatting_params *f,unsigned int t) {
+	if (f == NULL) return -1;
+
+	partition_type = (uint8_t)t;
+	partition_type_set = 1;
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
 	const char *s_partition_size = NULL;
-	const char *s_partition_type = NULL;
 	const char *s_media_type = NULL;
 	const char *s_geometry = NULL;
 	const char *s_image = NULL;
@@ -708,7 +750,10 @@ int main(int argc,char **argv) {
 				s_partition_size = argv[i++];
 			}
 			else if (!strcmp(a,"partition-type")) {
-				s_partition_type = argv[i++];
+				if (libmsfat_formatting_params_set_partition_type(fmtparam,(unsigned int)strtoull_with_unit_suffixes(argv[i++],NULL,0))) {
+					fprintf(stderr,"--fat: Invalid FAT bit width\n");
+					return 1;
+				}
 			}
 			else if (!strcmp(a,"lba")) {
 				lba_mode = 1;
@@ -870,38 +915,7 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_auto_choose_fat32_bpb_fsinfo_location(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(fmtparam)) return 1;
 	if (libmsfat_formatting_params_compute_cluster_count(fmtparam)) return 1;
-
-	if (s_partition_type != NULL) {
-		partition_type = (uint8_t)strtoul(s_partition_type,NULL,0);
-		if (partition_type == 0) return 1;
-	}
-	else {
-		// resides in the first 32MB. this is the only case that disregards LBA mode
-		if ((fmtparam->partition_offset+fmtparam->partition_size)*((uint64_t)fmtparam->disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
-			if (fmtparam->base_info.FAT_size == 16)
-				partition_type = 0x04; // FAT16 with less than 65536 sectors
-			else
-				partition_type = 0x01; // FAT12 as primary partition in the first 32MB
-		}
-		// resides in the first 8GB.
-		else if ((fmtparam->partition_offset+fmtparam->partition_size)*((uint64_t)fmtparam->disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
-			if (fmtparam->base_info.FAT_size == 32)
-				partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
-			else if (fmtparam->base_info.FAT_size == 16)
-				partition_type = lba_mode ? 0x0E : 0x06;	// FAT16B with (lba_mode ? LBA : CHS) mode
-			else
-				partition_type = 0x01; // FAT12
-		}
-		// resides past 8GB. this is the only case that disregards CHS mode
-		else {
-			if (fmtparam->base_info.FAT_size == 32)
-				partition_type = 0x0C;	// FAT32 with LBA mode
-			else if (fmtparam->base_info.FAT_size == 16)
-				partition_type = 0x0E;	// FAT16B with LBA mode
-			else
-				partition_type = 0x01; // FAT12
-		}
-	}
+	if (make_partition && libmsfat_formatting_params_choose_partition_table(fmtparam)) return 1;
 
 	if (s_media_type != NULL) {
 		disk_media_type_byte = (uint8_t)strtoul(s_media_type,NULL,0);
