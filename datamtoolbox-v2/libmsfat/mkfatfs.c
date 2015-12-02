@@ -53,6 +53,7 @@ static uint32_t					root_directory_entries = 0;
 static uint32_t					set_fsinfo_sector = 0;
 static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
+static uint32_t					set_reserved_sectors = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -193,6 +194,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"fsinfo")) {
 				set_fsinfo_sector = (uint32_t)strtoul(argv[i++],NULL,0);
 			}
+			else if (!strcmp(a,"reserved-sectors")) {
+				set_reserved_sectors = (uint32_t)strtoul(argv[i++],NULL,0);
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -233,6 +237,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--fat-tables <x>            Number of FAT tables\n");
 		fprintf(stderr,"--root-directories <x>      Number of root directory entries\n");
 		fprintf(stderr,"--fsinfo <x>                What sector to put the FAT32 FSInfo at\n");
+		fprintf(stderr,"--reserved-sectors <x>      Number of reserved sectors\n");
 		return 1;
 	}
 
@@ -487,7 +492,10 @@ int main(int argc,char **argv) {
 	if (base_info.FAT_size == 32) {
 		base_info.RootDirectory_size = 0;
 		root_directory_entries = 0; // FAT32 makes the root directory an allocation chain
-		reserved_sectors = 32; // typical FAT32 value, allowing FSInfo at sector 6
+		if (set_reserved_sectors >= (uint32_t)2U)
+			reserved_sectors = set_reserved_sectors;
+		else
+			reserved_sectors = 32; // typical FAT32 value, allowing FSInfo at sector 6
 	}
 	else {
 		if (set_root_directory_entries != 0)
@@ -504,7 +512,11 @@ int main(int argc,char **argv) {
 			root_directory_entries = 32; // 1KB
 
 		base_info.RootDirectory_size = ((root_directory_entries * 32) + 511) / 512;
-		reserved_sectors = 1;
+
+		if (set_reserved_sectors != (uint32_t)0U)
+			reserved_sectors = set_reserved_sectors;
+		else
+			reserved_sectors = 1;
 	}
 
 	if (base_info.FAT_size == 32) {
