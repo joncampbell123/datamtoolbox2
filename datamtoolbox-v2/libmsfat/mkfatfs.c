@@ -29,6 +29,8 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
+static struct libmsfat_disk_locations_and_info	base_info;
+static struct libmsfat_disk_locations_and_info	final_info;
 static libpartmbr_sector_t			diskimage_sector;
 
 static struct chs_geometry_t			disk_geo;
@@ -65,10 +67,6 @@ static uint32_t					set_backup_boot_sector = 0;
 static uint8_t					set_boot_sector_bpb_size = 0;
 
 int main(int argc,char **argv) {
-	struct libmsfat_disk_locations_and_info base_info,final_info;
-	struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
-	struct libmsfat_file_io_ctx_t *fioctx = NULL;
-	struct libmsfat_context_t *msfatctx = NULL;
 	const char *s_partition_offset = NULL;
 	const char *s_partition_size = NULL;
 	const char *s_partition_type = NULL;
@@ -79,7 +77,6 @@ int main(int argc,char **argv) {
 	const char *s_size = NULL;
 	int i,fd;
 
-	memset(&final_info,0,sizeof(final_info));
 	memset(&base_info,0,sizeof(base_info));
 	memset(&disk_geo,0,sizeof(disk_geo));
 
@@ -870,6 +867,9 @@ int main(int argc,char **argv) {
 		uint64_t offset;
 		unsigned char sector[512];
 		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
+		struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
+		struct libmsfat_file_io_ctx_t *fioctx = NULL;
+		struct libmsfat_context_t *msfatctx = NULL;
 		unsigned int bs_sz;
 		int dfd;
 
@@ -1163,11 +1163,12 @@ int main(int argc,char **argv) {
 				return 1;
 			}
 		}
+
+		fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
+		fioctx = libmsfat_file_io_ctx_destroy(fioctx);
+		msfatctx = libmsfat_context_destroy(msfatctx);
 	}
 
-	fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
-	fioctx = libmsfat_file_io_ctx_destroy(fioctx);
-	msfatctx = libmsfat_context_destroy(msfatctx);
 	close(fd);
 	fd = -1;
 	return 0;
