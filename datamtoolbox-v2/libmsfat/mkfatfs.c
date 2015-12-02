@@ -64,51 +64,6 @@ static uint32_t					set_root_cluster = 0;
 static uint32_t					set_backup_boot_sector = 0;
 static uint8_t					set_boot_sector_bpb_size = 0;
 
-uint8_t guess_from_geometry(struct chs_geometry_t *g) {
-	if (g->cylinders == 40) {
-		if (g->sectors == 8) {
-			if (g->heads == 2)
-				return 0xFF;	// 5.25" 320KB MFM    C/H/S 40/2/8
-			else if (g->heads == 1)
-				return 0xFE;	// 5.25" 160KB MFM    C/H/S 40/1/8
-		}
-		else if (g->sectors == 9) {
-			if (g->heads == 2)
-				return 0xFD;	// 5.25" 360KB MFM    C/H/S 40/2/9
-			else if (g->heads == 1)
-				return 0xFC;	// 5.25" 180KB MFM    C/H/S 40/1/9
-		}
-	}
-	else if (g->cylinders == 80) {
-		if (g->sectors == 8) {
-			if (g->heads == 2)
-				return 0xFB;	// 5.25"/3.5" 640KB MFM    C/H/S 80/2/8
-			else if (g->heads == 1)
-				return 0xFA;	// 5.25"/3.5" 320KB MFM    C/H/S 80/1/8
-		}
-		else if (g->sectors == 9) {
-			if (g->heads == 2)	// NTS: This also matches a 5.25" 720KB format (0xF8) but somehow that seems unlikely to be used in practice
-				return 0xF9;	// 3.5" 720KB MFM     C/H/S 80/2/9
-			else if (g->heads == 1)
-				return 0xF8;	// 5.25"/3.5" 360KB MFM    C/H/S 80/1/9
-		}
-		else if (g->sectors == 15) {
-			if (g->heads == 2)
-				return 0xF9;	// 5.25" 1.2MB        C/H/S 80/2/15
-		}
-		else if (g->sectors == 18) {
-			if (g->heads == 2)	// NTS: This also matches a 3.5" 1.44MB format (0xF9) which is... what exactly?
-				return 0xF0;	// 3.5" 1.44MB        C/H/S 80/2/18
-		}
-		else if (g->sectors == 36) {
-			if (g->heads == 2)	// 3.5" 2.88MB        C/H/S 80/2/36
-				return 0xF0;
-		}
-	}
-
-	return 0xF8;
-}
-
 int main(int argc,char **argv) {
 	struct libmsfat_disk_locations_and_info base_info,final_info;
 	struct libmsfat_context_t *msfatctx = NULL;
@@ -728,7 +683,7 @@ int main(int argc,char **argv) {
 		if (disk_media_type_byte < 0xF0) return 1;
 	}
 	else {
-		disk_media_type_byte = guess_from_geometry(&disk_geo);
+		disk_media_type_byte = libmsfat_guess_from_geometry(&disk_geo);
 	}
 
 	assert(lba_mode || chs_mode);

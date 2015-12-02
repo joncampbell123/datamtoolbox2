@@ -1919,3 +1919,48 @@ int libmsfat_file_io_ctx_zero_cluster(libmsfat_cluster_t cluster,struct libmsfat
 	return 0;
 }
 
+uint8_t libmsfat_guess_from_geometry(struct chs_geometry_t *g) {
+	if (g->cylinders == 40) {
+		if (g->sectors == 8) {
+			if (g->heads == 2)
+				return 0xFF;	// 5.25" 320KB MFM    C/H/S 40/2/8
+			else if (g->heads == 1)
+				return 0xFE;	// 5.25" 160KB MFM    C/H/S 40/1/8
+		}
+		else if (g->sectors == 9) {
+			if (g->heads == 2)
+				return 0xFD;	// 5.25" 360KB MFM    C/H/S 40/2/9
+			else if (g->heads == 1)
+				return 0xFC;	// 5.25" 180KB MFM    C/H/S 40/1/9
+		}
+	}
+	else if (g->cylinders == 80) {
+		if (g->sectors == 8) {
+			if (g->heads == 2)
+				return 0xFB;	// 5.25"/3.5" 640KB MFM    C/H/S 80/2/8
+			else if (g->heads == 1)
+				return 0xFA;	// 5.25"/3.5" 320KB MFM    C/H/S 80/1/8
+		}
+		else if (g->sectors == 9) {
+			if (g->heads == 2)	// NTS: This also matches a 5.25" 720KB format (0xF8) but somehow that seems unlikely to be used in practice
+				return 0xF9;	// 3.5" 720KB MFM     C/H/S 80/2/9
+			else if (g->heads == 1)
+				return 0xF8;	// 5.25"/3.5" 360KB MFM    C/H/S 80/1/9
+		}
+		else if (g->sectors == 15) {
+			if (g->heads == 2)
+				return 0xF9;	// 5.25" 1.2MB        C/H/S 80/2/15
+		}
+		else if (g->sectors == 18) {
+			if (g->heads == 2)	// NTS: This also matches a 3.5" 1.44MB format (0xF9) which is... what exactly?
+				return 0xF0;	// 3.5" 1.44MB        C/H/S 80/2/18
+		}
+		else if (g->sectors == 36) {
+			if (g->heads == 2)	// 3.5" 2.88MB        C/H/S 80/2/36
+				return 0xF0;
+		}
+	}
+
+	return 0xF8;
+}
+

@@ -487,5 +487,7 @@ int libmsfat_file_io_ctx_lseek(struct libmsfat_file_io_ctx_t *c,struct libmsfat_
 
 int libmsfat_file_io_ctx_zero_cluster(libmsfat_cluster_t cluster,struct libmsfat_context_t *msfatctx);
 
+uint8_t libmsfat_guess_from_geometry(struct chs_geometry_t *g);
+
 #endif // __DATAMTOOLBOX_LIBMSFAT_LIBMSFAT_H
 
