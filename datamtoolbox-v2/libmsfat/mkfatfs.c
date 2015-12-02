@@ -45,6 +45,8 @@ static uint8_t					allow_fat32 = 1;
 static uint8_t					allow_fat16 = 1;
 static uint8_t					allow_fat12 = 1;
 static uint8_t					force_fat = 0;
+static uint16_t					set_cluster_size = 0;
+static uint8_t					allow_non_power_of_2_cluster_size = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -167,6 +169,12 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"fat")) {
 				force_fat = (int)strtoul(argv[i++],NULL,0);
 			}
+			else if (!strcmp(a,"cluster-size")) {
+				set_cluster_size = (uint16_t)strtoul(argv[i++],NULL,0);
+			}
+			else if (!strcmp(a,"cluster-non-power-of-2")) {
+				allow_non_power_of_2_cluster_size = 1;
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -201,6 +209,8 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--fat <x>                   Force FATx (x can be 12, 16, or 32)\n");
 		fprintf(stderr,"--lba                       LBA mode\n");
 		fprintf(stderr,"--chs                       CHS mode\n");
+		fprintf(stderr,"--cluster-size <x>          Cluster size in bytes\n");
+		fprintf(stderr,"--cluster-non-power-of-2    Allow cluster size that is not a power of 2 (FAT specification violation!)\n");
 		return 1;
 	}
 
@@ -405,6 +415,61 @@ int main(int argc,char **argv) {
 		else if (allow_fat32)
 			base_info.FAT_size = 32;
 	}
+	if (base_info.FAT_size == 0) {
+		fprintf(stderr,"FAT size not determinated\n");
+		return 1;
+	}
+
+	if (set_cluster_size != 0) {
+		unsigned long x;
+
+		x = ((unsigned long)set_cluster_size + ((unsigned long)set_cluster_size / 2UL)) / (unsigned long)base_info.BytesPerSector;
+		if (x == 0) x = base_info.BytesPerSector;
+		if (x > 255UL) x = 255UL;
+		base_info.Sectors_Per_Cluster = (uint8_t)x;
+	}
+	else {
+		uint32_t cluslimit;
+
+		if (base_info.FAT_size == 32) {
+			/* it's better to keep the FAT table small. try not to do one cluster per sector */
+			base_info.Sectors_Per_Cluster = 16;
+			if (base_info.TotalSectors >= (uint32_t)0x00FFFFF5UL)
+				cluslimit = (uint32_t)0x03FFFFF5UL;
+			else
+				cluslimit = (uint32_t)0x00FFFFF5UL;
+		}
+		else {
+			base_info.Sectors_Per_Cluster = 1;
+			if (base_info.FAT_size == 16)
+				cluslimit = (uint32_t)0x0000FFF5UL;
+			else
+				cluslimit = (uint32_t)0x00000FF5UL;
+		}
+
+		while (base_info.Sectors_Per_Cluster < 0xFF && (base_info.TotalSectors / (uint32_t)base_info.Sectors_Per_Cluster) >= cluslimit)
+			base_info.Sectors_Per_Cluster++;
+	}
+
+	if (!allow_non_power_of_2_cluster_size) {
+		/* need to round to a power of 2 */
+		if (base_info.Sectors_Per_Cluster >= (64+32)/*96*/)
+			base_info.Sectors_Per_Cluster = 128;
+		else if (base_info.Sectors_Per_Cluster >= (32+16)/*48*/)
+			base_info.Sectors_Per_Cluster = 64;
+		else if (base_info.Sectors_Per_Cluster >= (16+8)/*24*/)
+			base_info.Sectors_Per_Cluster = 32;
+		else if (base_info.Sectors_Per_Cluster >= (8+4)/*12*/)
+			base_info.Sectors_Per_Cluster = 16;
+		else if (base_info.Sectors_Per_Cluster >= (4+2)/*6*/)
+			base_info.Sectors_Per_Cluster = 8;
+		else if (base_info.Sectors_Per_Cluster >= (2+1)/*3*/)
+			base_info.Sectors_Per_Cluster = 4;
+		else if (base_info.Sectors_Per_Cluster >= 2)
+			base_info.Sectors_Per_Cluster = 2;
+		else
+			base_info.Sectors_Per_Cluster = 1;
+	}
 
 	if (s_partition_type != NULL) {
 		partition_type = (uint8_t)strtoul(s_partition_type,NULL,0);
@@ -471,11 +536,18 @@ int main(int argc,char **argv) {
 		if (partition_offset == 0 || partition_size == 0) return 1;
 	}
 
-	printf("   FAT filesystem FAT%u\n",
-		base_info.FAT_size);
+	printf("   FAT filesystem FAT%u. %lu x %lu (%lu bytes) per cluster\n",
+		base_info.FAT_size,
+		(unsigned long)base_info.Sectors_Per_Cluster,
+		(unsigned long)base_info.BytesPerSector,
+		(unsigned long)base_info.Sectors_Per_Cluster * (unsigned long)base_info.BytesPerSector);
 
 	if (base_info.FAT_size == 0) {
 		fprintf(stderr,"Unable to decide on a FAT bit width\n");
+		return 1;
+	}
+	if (base_info.Sectors_Per_Cluster == 0) {
+		fprintf(stderr,"Unable to determine cluster size\n");
 		return 1;
 	}
 
