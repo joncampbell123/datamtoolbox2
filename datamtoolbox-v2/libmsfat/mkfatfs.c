@@ -433,11 +433,17 @@ int main(int argc,char **argv) {
 
 		if (base_info.FAT_size == 32) {
 			/* it's better to keep the FAT table small. try not to do one cluster per sector */
-			base_info.Sectors_Per_Cluster = 16;
-			if (base_info.TotalSectors >= (uint32_t)0x00FFFFF5UL)
-				cluslimit = (uint32_t)0x03FFFFF5UL;
-			else
-				cluslimit = (uint32_t)0x00FFFFF5UL;
+			if (base_info.TotalSectors >= (uint32_t)0x3FFFF5UL) {
+				base_info.Sectors_Per_Cluster = 16;
+				if (base_info.TotalSectors >= (uint32_t)0x00FFFFF5UL)
+					cluslimit = (uint32_t)0x03FFFFF5UL;
+				else
+					cluslimit = (uint32_t)0x00FFFFF5UL;
+			}
+			else {
+				cluslimit = (uint32_t)0x0007FFF5UL;
+				base_info.Sectors_Per_Cluster = 1;
+			}
 		}
 		else {
 			base_info.Sectors_Per_Cluster = 1;
