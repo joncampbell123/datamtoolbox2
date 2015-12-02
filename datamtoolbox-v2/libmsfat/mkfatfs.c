@@ -16,6 +16,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <time.h>
 #if defined(_MSC_VER)
 # include <datamtoolbox-v2/polyfill/ms_cpp.h>
 # include <windows.h>
@@ -54,6 +55,8 @@ static uint32_t					set_fsinfo_sector = 0;
 static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
 static uint32_t					set_reserved_sectors = 0;
+static uint32_t					volume_id = 0;
+static const char*				volume_label = NULL;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -719,6 +722,12 @@ int main(int argc,char **argv) {
 		if (partition_offset == 0 || partition_size == 0) return 1;
 	}
 
+	// TODO: allow user override
+	volume_label = "NO LABEL";
+
+	// TODO: allow user override
+	volume_id = (uint32_t)time(NULL);
+
 	printf("   FAT filesystem FAT%u. %lu x %lu (%lu bytes) per cluster. %lu sectors => %lu clusters (%lu)\n",
 		base_info.FAT_size,
 		(unsigned long)base_info.Sectors_Per_Cluster,
@@ -735,6 +744,8 @@ int main(int argc,char **argv) {
 	printf("   %u FAT tables: %lu sectors per table\n",
 		(unsigned int)base_info.FAT_tables,
 		(unsigned long)base_info.FAT_table_size);
+	printf("   Volume ID: 0x%08lx\n",
+		(unsigned long)volume_id);
 
 	if (base_info.FAT_size == 32)
 		printf("   FAT32 FSInfo sector: %lu\n",
@@ -856,6 +867,155 @@ int main(int argc,char **argv) {
 		if (lseek(fd,0,SEEK_SET) != 0 || write(fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
 			fprintf(stderr,"Failed to write MBR back\n");
 			return 1;
+		}
+	}
+
+	/* generate the boot sector! */
+	{
+		uint64_t offset;
+		unsigned char sector[512];
+		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
+		unsigned int bs_sz;
+
+		if (make_partition)
+			offset = partition_offset;
+		else
+			offset = 0;
+		offset *= (uint64_t)disk_bytes_per_sector;
+
+		// TODO: options to emulate various DOS versions of the BPB
+		if (base_info.FAT_size == 32)
+			bs_sz = 90;
+		else
+			bs_sz = 62;
+
+		// BEGIN
+		memset(sector,0,sizeof(sector));
+
+		// JMP instruction
+		bs->BS_header.BS_jmpBoot[0] = 0xEB;
+		bs->BS_header.BS_jmpBoot[1] = bs_sz - 2;
+		bs->BS_header.BS_jmpBoot[2] = 0x90;
+		memcpy(bs->BS_header.BS_OEMName,"DATATBOX",8);
+
+		// trap in case of booting. trigger bootstrap
+		sector[bs_sz] = 0xCD;
+		sector[bs_sz+1] = 0x19;
+		strcpy((char*)sector+bs_sz+2,"Not bootable, data only");
+
+		// common BPB
+		bs->BPB_common.BPB_BytsPerSec = htole16(disk_bytes_per_sector);
+		bs->BPB_common.BPB_SecPerClus = base_info.Sectors_Per_Cluster;
+		bs->BPB_common.BPB_RsvdSecCnt = htole16(reserved_sectors);
+		bs->BPB_common.BPB_NumFATs = base_info.FAT_tables;
+		if (base_info.FAT_size == 32)
+			bs->BPB_common.BPB_RootEntCnt = 0;
+		else
+			bs->BPB_common.BPB_RootEntCnt = htole16(root_directory_entries);
+		if (base_info.TotalSectors >= (uint32_t)65536 || base_info.FAT_size == 32)
+			bs->BPB_common.BPB_TotSec16 = 0;
+		else
+			bs->BPB_common.BPB_TotSec16 = (uint16_t)htole16(base_info.TotalSectors);
+		bs->BPB_common.BPB_Media = disk_media_type_byte;
+		if (base_info.FAT_size == 32)
+			bs->BPB_common.BPB_FATSz16 = 0;
+		else
+			bs->BPB_common.BPB_FATSz16 = htole16(base_info.FAT_table_size);
+		bs->BPB_common.BPB_SecPerTrk = disk_geo.sectors;
+		bs->BPB_common.BPB_NumHeads = disk_geo.heads;
+		bs->BPB_common.BPB_TotSec32 = htole32(base_info.TotalSectors);
+
+		if (base_info.FAT_size == 32) {
+			bs->at36.BPB_FAT32.BPB_FATSz32 = htole32(base_info.FAT_table_size);
+			bs->at36.BPB_FAT32.BPB_ExtFlags = 0;
+			bs->at36.BPB_FAT32.BPB_FSVer = 0;
+			bs->at36.BPB_FAT32.BPB_RootClus = 2; // FIXME: allow user override
+			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(base_info.fat32.BPB_FSInfo);
+			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(1); // FIXME: allow user override. Also, what does MS-DOS normally do?
+			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
+			bs->at36.BPB_FAT32.BS_BootSig = 0x29;
+			bs->at36.BPB_FAT32.BS_VolID = htole32(volume_id);
+
+			{
+				const char *s = volume_label;
+				uint8_t *d = bs->at36.BPB_FAT32.BS_VolLab;
+				uint8_t *df = d + 11;
+
+				while (*s && d < df) *d++ = *s++;
+				while (d < df) *d++ = ' ';
+			}
+
+			memcpy(bs->at36.BPB_FAT32.BS_FilSysType,"FAT32   ",8);
+		}
+		else {
+			bs->at36.BPB_FAT.BS_DrvNum = (make_partition ? 0x80 : 0x00);
+			bs->at36.BPB_FAT.BS_BootSig = 0x29;
+			bs->at36.BPB_FAT.BS_VolID = htole32(volume_id);
+
+			{
+				const char *s = volume_label;
+				uint8_t *d = bs->at36.BPB_FAT.BS_VolLab;
+				uint8_t *df = d + 11;
+
+				while (*s && d < df) *d++ = *s++;
+				while (d < df) *d++ = ' ';
+			}
+
+			if (base_info.FAT_size == 16)
+				memcpy(bs->at36.BPB_FAT.BS_FilSysType,"FAT16   ",8);
+			else
+				memcpy(bs->at36.BPB_FAT.BS_FilSysType,"FAT12   ",8);
+		}
+
+		// signature
+		sector[510] = 0x55;
+		sector[511] = 0xAA;
+
+		// write it
+		if (lseek(fd,(off_t)offset,SEEK_SET) != (off_t)offset || write(fd,sector,512) != 512) {
+			fprintf(stderr,"Failed to write BPB back\n");
+			return 1;
+		}
+
+		// backup copy too
+		if (base_info.FAT_size == 32) {
+			if (make_partition)
+				offset = partition_offset;
+			else
+				offset = 0;
+
+			offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_BkBootSec);
+			offset *= (uint64_t)disk_bytes_per_sector;
+
+			if (lseek(fd,(off_t)offset,SEEK_SET) != (off_t)offset || write(fd,sector,512) != 512) {
+				fprintf(stderr,"Failed to write BPB back\n");
+				return 1;
+			}
+		}
+
+		// FSInfo
+		if (base_info.FAT_size == 32) {
+			struct libmsfat_fat32_fsinfo_t fsinfo;
+
+			if (make_partition)
+				offset = partition_offset;
+			else
+				offset = 0;
+
+			offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_FSInfo);
+			offset *= (uint64_t)disk_bytes_per_sector;
+
+			memset(&fsinfo,0,sizeof(fsinfo));
+			fsinfo.FSI_LeadSig = htole32((uint32_t)0x41615252UL);
+			fsinfo.FSI_StrucSig = htole32((uint32_t)0x61417272UL);
+			fsinfo.FSI_Free_Count = (uint32_t)0xFFFFFFFFUL;
+			fsinfo.FSI_Nxt_Free = (uint32_t)0xFFFFFFFFUL;
+			fsinfo.FSI_TrailSig = htole32((uint32_t)0xAA550000UL);
+
+			if (lseek(fd,(off_t)offset,SEEK_SET) != (off_t)offset || write(fd,&fsinfo,512) != 512) {
+				fprintf(stderr,"Failed to write BPB back\n");
+				return 1;
+			}
 		}
 	}
 
