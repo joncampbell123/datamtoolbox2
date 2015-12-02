@@ -1034,7 +1034,9 @@ int main(int argc,char **argv) {
 		}
 		dfd = -1; /* takes ownership, drop it */
 
-		msfatctx->partition_byte_offset = (uint64_t)partition_offset * (uint64_t)disk_bytes_per_sector;
+		if (make_partition)
+			msfatctx->partition_byte_offset = (uint64_t)partition_offset * (uint64_t)disk_bytes_per_sector;
+
 		if (libmsfat_bs_compute_disk_locations(&final_info,bs)) {
 			printf("Unable to locate disk locations.\n");
 			return 1;
