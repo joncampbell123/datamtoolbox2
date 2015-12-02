@@ -79,6 +79,7 @@ static uint8_t					set_volume_id_flag = 0;
 static uint32_t					set_root_cluster = 0;
 static uint32_t					set_backup_boot_sector = 0;
 static uint8_t					set_boot_sector_bpb_size = 0;
+static uint8_t					dont_partition_track_align = 0;
 
 struct libmsfat_formatting_params {
 	uint8_t						force_fat;
@@ -271,6 +272,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"bpb-size")) {
 				set_boot_sector_bpb_size = (uint8_t)strtoul(argv[i++],NULL,0);
 			}
+			else if (!strcmp(a,"no-partition-track-align")) {
+				dont_partition_track_align = 1;
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -299,6 +303,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--partition-offset <x>      Starting sector number of the partition\n");
 		fprintf(stderr,"--partition-size <n>        Make partition within image N bytes (with suffixes)\n");
 		fprintf(stderr,"--partition-type <x>        Force partition type X\n");
+		fprintf(stderr,"--no-partition-track-align  Don't align partitions to C/H/S track boundaries\n");
 		fprintf(stderr,"--fat32 / --no-fat32        Allow / Don't allow FAT32\n");
 		fprintf(stderr,"--fat16 / --no-fat16        Allow / Don't allow FAT16\n");
 		fprintf(stderr,"--fat12 / --no-fat12        Allow / Don't allow FAT12\n");
@@ -413,7 +418,8 @@ int main(int argc,char **argv) {
 	}
 
 	if (s_partition_offset != NULL)
-		partition_offset = (uint64_t)strtoull_with_unit_suffixes(s_partition_offset,NULL,0);
+		partition_offset = (uint64_t)strtoull_with_unit_suffixes(s_partition_offset,NULL,0) /
+			(uint64_t)fmtparam->disk_bytes_per_sector;
 
 	if (s_partition_size != NULL)
 		partition_size = (uint64_t)strtoull_with_unit_suffixes(s_partition_size,NULL,0) /
@@ -430,15 +436,22 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	if (partition_size == (uint64_t)0UL) {
-		uint64_t diskrnd = fmtparam->disk_sectors;
-		diskrnd -= diskrnd % (uint64_t)fmtparam->disk_geo.sectors;
-		if (partition_offset >= diskrnd) {
-			fprintf(stderr,"Partition offset >= disk sectors (rounded down to track)\n");
+	if (!dont_partition_track_align)
+		partition_offset -= partition_offset % (uint64_t)fmtparam->disk_geo.sectors;
+
+	if (partition_size == (uint64_t)0UL)
+		partition_size = fmtparam->disk_sectors - partition_offset;
+
+	if (!dont_partition_track_align) {
+		uint64_t sum = partition_offset + partition_size;
+
+		sum -= sum % (uint64_t)fmtparam->disk_geo.sectors;
+		if (sum <= partition_offset) {
+			fprintf(stderr,"Partition size round down failed\n");
 			return 1;
 		}
-
-		partition_size = diskrnd - partition_offset;
+		sum -= partition_offset;
+		partition_size = sum;
 	}
 
 	fmtparam->base_info.BytesPerSector = fmtparam->disk_bytes_per_sector;
