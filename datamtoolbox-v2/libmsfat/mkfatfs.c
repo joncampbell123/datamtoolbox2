@@ -316,7 +316,7 @@ int libmsfat_formatting_params_set_partition_size(struct libmsfat_formatting_par
 	return 0;
 }
 
-int libmsfat_formatting_params_autofill_and_align(struct libmsfat_formatting_params *f) {
+int libmsfat_formatting_params_partition_autofill_and_align(struct libmsfat_formatting_params *f) {
 	if (f == NULL) return -1;
 
 	// automatically default to a partition starting on a track boundary.
@@ -552,7 +552,7 @@ int main(int argc,char **argv) {
 			return 1;
 		if (s_partition_size != NULL && libmsfat_formatting_params_set_partition_size(fmtparam,(uint64_t)strtoull_with_unit_suffixes(s_partition_size,NULL,0)))
 			return 1;
-		if (libmsfat_formatting_params_autofill_and_align(fmtparam))
+		if (libmsfat_formatting_params_partition_autofill_and_align(fmtparam))
 			return 1;
 	}
 
