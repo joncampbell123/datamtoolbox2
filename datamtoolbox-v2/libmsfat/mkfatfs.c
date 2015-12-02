@@ -351,6 +351,17 @@ int libmsfat_formatting_params_partition_autofill_and_align(struct libmsfat_form
 	return 0;
 }
 
+int libmsfat_formatting_params_update_total_sectors(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (make_partition)
+		f->base_info.TotalSectors = (uint32_t)f->partition_size;
+	else
+		f->base_info.TotalSectors = (uint32_t)f->disk_sectors;
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	const char *s_partition_offset = NULL;
@@ -556,10 +567,7 @@ int main(int argc,char **argv) {
 			return 1;
 	}
 
-	if (make_partition)
-		fmtparam->base_info.TotalSectors = (uint32_t)fmtparam->partition_size;
-	else
-		fmtparam->base_info.TotalSectors = (uint32_t)fmtparam->disk_sectors;
+	if (libmsfat_formatting_params_update_total_sectors(fmtparam)) return 1;
 
 	if (fmtparam->force_fat != 0) {
 		if (fmtparam->force_fat == 12 && !allow_fat12) {
