@@ -377,6 +377,8 @@ int main(int argc,char **argv) {
 			printf("    WARNING: Partition does not start on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
 		if (chs_mode && ((partition_offset + partition_size) % (uint64_t)disk_geo.sectors) != 0)
 			printf("    WARNING: Partition does not end on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
+
+		if (partition_offset == 0 || partition_size == 0) return 1;
 	}
 
 	fd = open(s_image,O_RDWR|O_BINARY|O_CREAT|O_TRUNC,0644);
