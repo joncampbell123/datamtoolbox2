@@ -54,8 +54,6 @@ unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned i
 
 static uint8_t					disk_media_type_byte = 0;
 static uint8_t					make_partition = 0;
-static uint8_t					partition_type = 0;
-static uint8_t					partition_type_set = 0;
 static uint8_t					lba_mode = 0;
 static uint8_t					chs_mode = 0;
 static uint8_t					allow_fat32 = 1;
@@ -92,7 +90,9 @@ struct libmsfat_formatting_params {
 	uint64_t					disk_size_bytes;
 	uint64_t					partition_size;
 	uint64_t					disk_sectors;
+	uint8_t						partition_type;
 
+	unsigned int					partition_type_set:1;
 	unsigned int					disk_size_bytes_set:1;
 	unsigned int					disk_bytes_per_sector_set:1;
 };
@@ -660,31 +660,31 @@ int libmsfat_formatting_params_compute_cluster_count(struct libmsfat_formatting_
 int libmsfat_formatting_params_choose_partition_table(struct libmsfat_formatting_params *f) {
 	if (f == NULL) return -1;
 
-	if (!partition_type_set) {
+	if (!f->partition_type_set) {
 		// resides in the first 32MB. this is the only case that disregards LBA mode
 		if ((f->partition_offset+f->partition_size)*((uint64_t)f->disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
 			if (f->base_info.FAT_size == 16)
-				partition_type = 0x04; // FAT16 with less than 65536 sectors
+				f->partition_type = 0x04; // FAT16 with less than 65536 sectors
 			else
-				partition_type = 0x01; // FAT12 as primary partition in the first 32MB
+				f->partition_type = 0x01; // FAT12 as primary partition in the first 32MB
 		}
 		// resides in the first 8GB.
 		else if ((f->partition_offset+f->partition_size)*((uint64_t)f->disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
 			if (f->base_info.FAT_size == 32)
-				partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
+				f->partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
 			else if (f->base_info.FAT_size == 16)
-				partition_type = lba_mode ? 0x0E : 0x06;	// FAT16B with (lba_mode ? LBA : CHS) mode
+				f->partition_type = lba_mode ? 0x0E : 0x06;	// FAT16B with (lba_mode ? LBA : CHS) mode
 			else
-				partition_type = 0x01; // FAT12
+				f->partition_type = 0x01; // FAT12
 		}
 		// resides past 8GB. this is the only case that disregards CHS mode
 		else {
 			if (f->base_info.FAT_size == 32)
-				partition_type = 0x0C;	// FAT32 with LBA mode
+				f->partition_type = 0x0C;	// FAT32 with LBA mode
 			else if (f->base_info.FAT_size == 16)
-				partition_type = 0x0E;	// FAT16B with LBA mode
+				f->partition_type = 0x0E;	// FAT16B with LBA mode
 			else
-				partition_type = 0x01; // FAT12
+				f->partition_type = 0x01; // FAT12
 		}
 	}
 
@@ -693,9 +693,8 @@ int libmsfat_formatting_params_choose_partition_table(struct libmsfat_formatting
 
 int libmsfat_formatting_params_set_partition_type(struct libmsfat_formatting_params *f,unsigned int t) {
 	if (f == NULL) return -1;
-
-	partition_type = (uint8_t)t;
-	partition_type_set = 1;
+	f->partition_type = (uint8_t)t;
+	f->partition_type_set = 1;
 	return 0;
 }
 
@@ -938,7 +937,7 @@ int main(int argc,char **argv) {
 
 	if (make_partition) {
 		printf("   Partition: type=0x%02x sectors %llu-%llu\n",
-			(unsigned int)partition_type,
+			(unsigned int)fmtparam->partition_type,
 			(unsigned long long)fmtparam->partition_offset,
 			(unsigned long long)(fmtparam->partition_offset + fmtparam->partition_size - (uint64_t)1UL));
 
@@ -1068,7 +1067,7 @@ int main(int argc,char **argv) {
 			return 1;
 		}
 
-		ent.partition_type = partition_type;
+		ent.partition_type = fmtparam->partition_type;
 		ent.first_lba_sector = (uint32_t)fmtparam->partition_offset;
 		ent.number_lba_sectors = (uint32_t)fmtparam->partition_size;
 		if (int13cnv_lba_to_chs(&chs,&fmtparam->disk_geo,(uint32_t)fmtparam->partition_offset)) {
