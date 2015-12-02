@@ -78,6 +78,7 @@ static uint32_t					set_root_cluster = 0;
 static uint32_t					set_backup_boot_sector = 0;
 static uint8_t					set_boot_sector_bpb_size = 0;
 static uint8_t					dont_partition_track_align = 0;
+static uint32_t					backup_boot_sector = 0;
 
 struct libmsfat_formatting_params {
 	uint8_t						force_fat;
@@ -736,8 +737,20 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_auto_choose_reserved_sectors(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_fat32_bpb_fsinfo_location(fmtparam)) return 1;
 
-	if (set_backup_boot_sector != 0 && set_backup_boot_sector >= reserved_sectors)
-		set_backup_boot_sector = reserved_sectors - 1;
+	if (fmtparam->base_info.FAT_size == 32) {
+		if (set_backup_boot_sector != 0) backup_boot_sector = set_backup_boot_sector;
+		else backup_boot_sector = 1;
+
+		if (backup_boot_sector >= reserved_sectors)
+			backup_boot_sector = reserved_sectors - 1;
+		if (backup_boot_sector > 1 && backup_boot_sector == fmtparam->base_info.fat32.BPB_FSInfo)
+			backup_boot_sector--;
+		if (backup_boot_sector == fmtparam->base_info.fat32.BPB_FSInfo)
+			return 1;
+	}
+	else {
+		backup_boot_sector = 0;
+	}
 
 	if (!allow_non_power_of_2_cluster_size) {
 		/* need to round to a power of 2 */
@@ -1157,10 +1170,7 @@ int main(int argc,char **argv) {
 			else
 				bs->at36.BPB_FAT32.BPB_RootClus = htole32(2);
 			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(fmtparam->base_info.fat32.BPB_FSInfo);
-			if (set_backup_boot_sector != 0)
-				bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(set_backup_boot_sector);
-			else
-				bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(1);
+			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(backup_boot_sector);
 			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
 			bs->at36.BPB_FAT32.BS_BootSig = 0x29;
 			bs->at36.BPB_FAT32.BS_VolID = htole32(volume_id);
