@@ -29,6 +29,29 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
+unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned int base) {
+	unsigned long long res = 0;
+	char *l_r = NULL;
+
+	if (s == NULL) return 0ULL;
+	res = strtoull(s,&l_r,base);
+
+	// suffix parsing
+	if (l_r && *l_r) {
+		if (tolower(*l_r) == 'k')
+			res <<= (uint64_t)10;	// KB
+		else if (tolower(*l_r) == 'm')
+			res <<= (uint64_t)20;	// MB
+		else if (tolower(*l_r) == 'g')
+			res <<= (uint64_t)30;	// GB
+		else if (tolower(*l_r) == 't')
+			res <<= (uint64_t)40;	// TB
+	}
+
+	if (r != NULL) *r = l_r;
+	return res;
+}
+
 static uint64_t					disk_sectors = 0;
 static uint64_t					disk_size_bytes = 0;
 static uint8_t					disk_media_type_byte = 0;
@@ -304,22 +327,9 @@ int main(int argc,char **argv) {
 
 	if (s_size != NULL) {
 		uint64_t cyl;
-		char *s=NULL;
 
-		disk_size_bytes = (uint64_t)strtoull(s_size,&s,0);
+		disk_size_bytes = (uint64_t)strtoull_with_unit_suffixes(s_size,NULL,0);
 		if (disk_size_bytes == 0) return 1;
-
-		// suffix
-		if (s && *s) {
-			if (tolower(*s) == 'k')
-				disk_size_bytes <<= (uint64_t)10;	// KB
-			else if (tolower(*s) == 'm')
-				disk_size_bytes <<= (uint64_t)20;	// MB
-			else if (tolower(*s) == 'g')
-				disk_size_bytes <<= (uint64_t)30;	// GB
-			else if (tolower(*s) == 't')
-				disk_size_bytes <<= (uint64_t)40;	// TB
-		}
 
 		if (lba_mode || disk_size_bytes > (uint64_t)(128ULL << 20ULL)) { // 64MB
 			if (fmtparam->disk_geo.heads == 0)
@@ -401,26 +411,11 @@ int main(int argc,char **argv) {
 	}
 
 	if (s_partition_offset != NULL)
-		partition_offset = (uint64_t)strtoull(s_partition_offset,NULL,0);
+		partition_offset = (uint64_t)strtoull_with_unit_suffixes(s_partition_offset,NULL,0);
 
-	if (s_partition_size != NULL) {
-		char *s=NULL;
-
-		partition_size = (uint64_t)strtoull(s_partition_size,&s,0);
-
-		if (s && *s) {
-			if (tolower(*s) == 'k')
-				partition_size <<= (uint64_t)10;	// KB
-			else if (tolower(*s) == 'm')
-				partition_size <<= (uint64_t)20;	// MB
-			else if (tolower(*s) == 'g')
-				partition_size <<= (uint64_t)30;	// GB
-			else if (tolower(*s) == 't')
-				partition_size <<= (uint64_t)40;	// TB
-		}
-
-		partition_size /= (uint64_t)fmtparam->disk_bytes_per_sector;
-	}
+	if (s_partition_size != NULL)
+		partition_size = (uint64_t)strtoull_with_unit_suffixes(s_partition_size,NULL,0) /
+			(uint64_t)fmtparam->disk_bytes_per_sector;
 
 	// automatically default to a partition starting on a track boundary.
 	// MS-DOS, especially 6.x and earlier, require this. MS-DOS 7 and higher
