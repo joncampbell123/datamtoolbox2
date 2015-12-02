@@ -297,11 +297,9 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 
-	if (s_geometry != NULL) {
-		if (int13cnv_parse_chs_geometry(&fmtparam->disk_geo,s_geometry)) {
-			fprintf(stderr,"Failed to parse geometry\n");
-			return 1;
-		}
+	if (s_geometry != NULL && int13cnv_parse_chs_geometry(&fmtparam->disk_geo,s_geometry)) {
+		fprintf(stderr,"Failed to parse geometry\n");
+		return 1;
 	}
 
 	if (s_size != NULL) {
