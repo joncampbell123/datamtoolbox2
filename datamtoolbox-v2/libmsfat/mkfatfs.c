@@ -41,6 +41,10 @@ static uint64_t					partition_size = 0;
 static uint8_t					partition_type = 0;
 static uint8_t					lba_mode = 0;
 static uint8_t					chs_mode = 0;
+static uint8_t					allow_fat32 = 1;
+static uint8_t					allow_fat16 = 1;
+static uint8_t					allow_fat12 = 1;
+static uint8_t					force_fat = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 	if (g->cylinders == 40) {
@@ -88,6 +92,7 @@ uint8_t guess_from_geometry(struct chs_geometry_t *g) {
 }
 
 int main(int argc,char **argv) {
+	struct libmsfat_disk_locations_and_info base_info,final_info;
 	const char *s_partition_offset = NULL;
 	const char *s_partition_size = NULL;
 	const char *s_partition_type = NULL;
@@ -98,6 +103,8 @@ int main(int argc,char **argv) {
 	const char *s_size = NULL;
 	int i,fd;
 
+	memset(&final_info,0,sizeof(final_info));
+	memset(&base_info,0,sizeof(base_info));
 	memset(&disk_geo,0,sizeof(disk_geo));
 
 	for (i=1;i < argc;) {
@@ -139,6 +146,27 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"chs")) {
 				chs_mode = 1;
 			}
+			else if (!strcmp(a,"no-fat32")) {
+				allow_fat32 = 0;
+			}
+			else if (!strcmp(a,"fat32")) {
+				allow_fat32 = 1;
+			}
+			else if (!strcmp(a,"no-fat16")) {
+				allow_fat16 = 0;
+			}
+			else if (!strcmp(a,"fat16")) {
+				allow_fat16 = 1;
+			}
+			else if (!strcmp(a,"no-fat12")) {
+				allow_fat12 = 0;
+			}
+			else if (!strcmp(a,"fat12")) {
+				allow_fat12 = 1;
+			}
+			else if (!strcmp(a,"fat")) {
+				force_fat = (int)strtoul(argv[i++],NULL,0);
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -167,8 +195,17 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--partition-offset <x>      Starting sector number of the partition\n");
 		fprintf(stderr,"--partition-size <n>        Make partition within image N bytes (with suffixes)\n");
 		fprintf(stderr,"--partition-type <x>        Force partition type X\n");
+		fprintf(stderr,"--fat32 / --no-fat32        Allow / Don't allow FAT32\n");
+		fprintf(stderr,"--fat16 / --no-fat16        Allow / Don't allow FAT16\n");
+		fprintf(stderr,"--fat12 / --no-fat12        Allow / Don't allow FAT12\n");
+		fprintf(stderr,"--fat <x>                   Force FATx (x can be 12, 16, or 32)\n");
 		fprintf(stderr,"--lba                       LBA mode\n");
 		fprintf(stderr,"--chs                       CHS mode\n");
+		return 1;
+	}
+
+	if (force_fat != 0 && !(force_fat == 12 || force_fat == 16 || force_fat == 32)) {
+		fprintf(stderr,"Invalid FAT bit width\n");
 		return 1;
 	}
 
@@ -235,6 +272,14 @@ int main(int argc,char **argv) {
 		}
 
 		disk_sectors = disk_size_bytes / (uint64_t)disk_bytes_per_sector;
+		if (s_sectorsize == NULL) {
+			while (disk_sectors >= (uint64_t)0xFFFFFFF0UL) {
+				disk_bytes_per_sector *= (uint64_t)2UL;
+				disk_sectors = disk_size_bytes / (uint64_t)disk_bytes_per_sector;
+			}
+		}
+
+		/* how many cylinders? */
 		cyl = disk_sectors / ((uint64_t)disk_geo.heads * (uint64_t)disk_geo.sectors);
 
 		/* BIOS CHS translations to exceed 512MB limit */
@@ -318,6 +363,49 @@ int main(int argc,char **argv) {
 		partition_size = diskrnd - partition_offset;
 	}
 
+	base_info.BytesPerSector = disk_bytes_per_sector;
+	if (make_partition)
+		base_info.TotalSectors = (uint32_t)partition_size;
+	else
+		base_info.TotalSectors = (uint32_t)disk_sectors;
+
+	if (force_fat != 0) {
+		if (force_fat == 12 && !allow_fat12) {
+			fprintf(stderr,"--no-fat12 and FAT12 forced does not make sense\n");
+			return 1;
+		}
+		else if (force_fat == 16 && !allow_fat16) {
+			fprintf(stderr,"--no-fat16 and FAT16 forced does not make sense\n");
+			return 1;
+		}
+		else if (force_fat == 32 && !allow_fat32) {
+			fprintf(stderr,"--no-fat32 and FAT32 forced does not make sense\n");
+			return 1;
+		}
+
+		base_info.FAT_size = force_fat;
+	}
+	if (base_info.FAT_size == 0) {
+		// if FAT32 allowed, and 2GB or larger, then do FAT32
+		if (allow_fat32 && ((uint64_t)base_info.TotalSectors * (uint64_t)base_info.BytesPerSector) >= ((uint64_t)(2000ULL << 20ULL)))
+			base_info.FAT_size = 32;
+		// if FAT16 allowed, and 32MB or larger, then do FAT16
+		else if (allow_fat16 && ((uint64_t)base_info.TotalSectors * (uint64_t)base_info.BytesPerSector) >= ((uint64_t)(30ULL << 20ULL)))
+			base_info.FAT_size = 16;
+		// if FAT12 allowed, then do it
+		else if (allow_fat12 && ((uint64_t)base_info.TotalSectors * (uint64_t)base_info.BytesPerSector) < ((uint64_t)(31ULL << 20ULL)))
+			base_info.FAT_size = 12;
+		// maybe we can do FAT32?
+		else if (allow_fat32 && ((uint64_t)base_info.TotalSectors * (uint64_t)base_info.BytesPerSector) >= ((uint64_t)(200ULL << 20ULL)))
+			base_info.FAT_size = 32;
+		else if (allow_fat16)
+			base_info.FAT_size = 16;
+		else if (allow_fat12)
+			base_info.FAT_size = 12;
+		else if (allow_fat32)
+			base_info.FAT_size = 32;
+	}
+
 	if (s_partition_type != NULL) {
 		partition_type = (uint8_t)strtoul(s_partition_type,NULL,0);
 		if (partition_type == 0) return 1;
@@ -325,25 +413,25 @@ int main(int argc,char **argv) {
 	else {
 		// resides in the first 32MB. this is the only case that disregards LBA mode
 		if ((partition_offset+partition_size)*((uint64_t)disk_bytes_per_sector) <= ((uint64_t)32UL << (uint64_t)20UL)) {
-			if (0/*TODO: If FAT16 */)
+			if (base_info.FAT_size == 16)
 				partition_type = 0x04; // FAT16 with less than 65536 sectors
 			else
 				partition_type = 0x01; // FAT12 as primary partition in the first 32MB
 		}
 		// resides in the first 8GB.
 		else if ((partition_offset+partition_size)*((uint64_t)disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
-			if (0/*TODO: If FAT32 */)
+			if (base_info.FAT_size == 32)
 				partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
-			else if (0/*TODO: If FAT16 */)
+			else if (base_info.FAT_size == 16)
 				partition_type = lba_mode ? 0x0E : 0x06;	// FAT16B with (lba_mode ? LBA : CHS) mode
 			else
 				partition_type = 0x01; // FAT12
 		}
 		// resides past 8GB. this is the only case that disregards CHS mode
 		else {
-			if (0/*TODO: If FAT32 */)
+			if (base_info.FAT_size == 32)
 				partition_type = 0x0C;	// FAT32 with LBA mode
-			else if (0/*TODO: If FAT16 */)
+			else if (base_info.FAT_size == 16)
 				partition_type = 0x0E;	// FAT16B with LBA mode
 			else
 				partition_type = 0x01; // FAT12
@@ -381,6 +469,14 @@ int main(int argc,char **argv) {
 			printf("    WARNING: Partition does not end on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
 
 		if (partition_offset == 0 || partition_size == 0) return 1;
+	}
+
+	printf("   FAT filesystem FAT%u\n",
+		base_info.FAT_size);
+
+	if (base_info.FAT_size == 0) {
+		fprintf(stderr,"Unable to decide on a FAT bit width\n");
+		return 1;
 	}
 
 	fd = open(s_image,O_RDWR|O_BINARY|O_CREAT|O_TRUNC,0644);
