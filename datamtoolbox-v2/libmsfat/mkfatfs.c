@@ -48,6 +48,7 @@ static uint8_t					force_fat = 0;
 static uint16_t					set_cluster_size = 0;
 static uint8_t					allow_non_power_of_2_cluster_size = 0;
 static uint8_t					allow_64kb_or_larger_clusters = 0;
+static uint32_t					set_root_directory_entries = 0;
 static uint32_t					root_directory_entries = 0;
 static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
@@ -185,6 +186,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"fat-tables")) {
 				set_fat_tables = (uint8_t)strtoul(argv[i++],NULL,0);
 			}
+			else if (!strcmp(a,"root-directories")) {
+				set_root_directory_entries = (uint32_t)strtoul(argv[i++],NULL,0);
+			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
 				return 1;
@@ -223,6 +227,7 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"--cluster-non-power-of-2    Allow cluster size that is not a power of 2 (FAT specification violation!)\n");
 		fprintf(stderr,"--large-clusters            Allow clusters to be 64KB or larger (FAT specification violation!)\n");
 		fprintf(stderr,"--fat-tables <x>            Number of FAT tables\n");
+		fprintf(stderr,"--root-directories <x>      Number of root directory entries\n");
 		return 1;
 	}
 
@@ -480,8 +485,9 @@ int main(int argc,char **argv) {
 		reserved_sectors = 32; // typical FAT32 value, allowing FSInfo at sector 6
 	}
 	else {
-		// TODO: allow user to override
-		if (disk_size_bytes >= (uint64_t)(100ULL << 20ULL)) // 100MB
+		if (set_root_directory_entries != 0)
+			root_directory_entries = set_root_directory_entries;
+		else if (disk_size_bytes >= (uint64_t)(100ULL << 20ULL)) // 100MB
 			root_directory_entries = 512; // 16KB
 		else if (disk_size_bytes >= (uint64_t)(60ULL << 20ULL)) // 60MB
 			root_directory_entries = 256; // 8KB
