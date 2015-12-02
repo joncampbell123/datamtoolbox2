@@ -58,6 +58,7 @@ static uint32_t					set_reserved_sectors = 0;
 static uint32_t					volume_id = 0;
 static const char*				volume_label = NULL;
 static uint32_t					set_volume_id = 0;
+static const char*				set_volume_label = NULL;
 static uint8_t					set_volume_id_flag = 0;
 
 uint8_t guess_from_geometry(struct chs_geometry_t *g) {
@@ -206,6 +207,9 @@ int main(int argc,char **argv) {
 			else if (!strcmp(a,"volume-id")) {
 				set_volume_id = (uint32_t)strtoul(argv[i++],NULL,0);
 				set_volume_id_flag = 1;
+			}
+			else if (!strcmp(a,"volume-label")) {
+				set_volume_label = argv[i++];
 			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
@@ -730,8 +734,10 @@ int main(int argc,char **argv) {
 		if (partition_offset == 0 || partition_size == 0) return 1;
 	}
 
-	// TODO: allow user override
-	volume_label = "NO LABEL";
+	if (set_volume_label != NULL)
+		volume_label = set_volume_label;
+	else
+		volume_label = "NO LABEL";
 
 	if (set_volume_id_flag)
 		volume_id = set_volume_id;
