@@ -118,7 +118,6 @@ static uint8_t					set_fat_tables = 0;
 static uint32_t					set_reserved_sectors = 0;
 static const char*				set_volume_label = NULL;
 static uint8_t					set_boot_sector_bpb_size = 0;
-static uint8_t					dont_partition_track_align = 0;
 
 struct libmsfat_formatting_params {
 	uint8_t						force_fat;
@@ -150,6 +149,7 @@ struct libmsfat_formatting_params {
 	unsigned int					disk_bytes_per_sector_set:1;
 	unsigned int					allow_non_power_of_2_cluster_size:1;
 	unsigned int					allow_64kb_or_larger_clusters:1;
+	unsigned int					dont_partition_track_align:1;
 	unsigned int					make_partition:1;
 	unsigned int					allow_fat32:1;
 	unsigned int					allow_fat16:1;
@@ -417,7 +417,7 @@ int libmsfat_formatting_params_partition_autofill_and_align(struct libmsfat_form
 	if (f->partition_offset >= f->disk_sectors)
 		return -1;
 
-	if (!dont_partition_track_align) {
+	if (!f->dont_partition_track_align) {
 		if (f->partition_offset != (uint64_t)0UL) {
 			f->partition_offset -= f->partition_offset % (uint64_t)f->disk_geo.sectors;
 			if (f->partition_offset == (uint64_t)0UL) f->partition_offset += (uint64_t)f->disk_geo.sectors;
@@ -427,7 +427,7 @@ int libmsfat_formatting_params_partition_autofill_and_align(struct libmsfat_form
 	if (f->partition_size == (uint64_t)0UL && f->partition_offset != (uint64_t)0UL)
 		f->partition_size = f->disk_sectors - f->partition_offset;
 
-	if (!dont_partition_track_align) {
+	if (!f->dont_partition_track_align) {
 		uint64_t sum = f->partition_offset + f->partition_size;
 
 		sum -= sum % (uint64_t)f->disk_geo.sectors;
@@ -1274,7 +1274,7 @@ int main(int argc,char **argv) {
 				set_boot_sector_bpb_size = (uint8_t)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"no-partition-track-align")) {
-				dont_partition_track_align = 1;
+				fmtparam->dont_partition_track_align = 1;
 			}
 			else {
 				fprintf(stderr,"Unknown switch '%s'\n",a);
