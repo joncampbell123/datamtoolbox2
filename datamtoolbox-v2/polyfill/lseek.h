@@ -1,3 +1,6 @@
+#ifndef __DATAMTOOLBOX_POLYFILL_LSEEK_H
+#define __DATAMTOOLBOX_POLYFILL_LSEEK_H
+
 #if defined(_MSC_VER) /* Microsoft C++ polyfill */
 # define lseek_off_t __int64
 
@@ -20,3 +23,5 @@ static lseek_off_t lseek64(int fd, lseek_off_t ofs, int origin) {
 # define lseek_off_t off_t
 /* Linux has lseek64() */
 #endif
+
+#endif /* __DATAMTOOLBOX_POLYFILL_LSEEK_H */
