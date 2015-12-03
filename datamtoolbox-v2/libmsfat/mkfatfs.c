@@ -1187,28 +1187,27 @@ int main(int argc,char **argv) {
 	{
 		unsigned int bs_sz = libmsfat_formatting_params_get_bpb_size(fmtparam);
 		unsigned char sector[512];
+		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
 
 		uint64_t offset;
-		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
 		struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
 		struct libmsfat_file_io_ctx_t *fioctx = NULL;
 
 		if (make_partition) offset = fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
 		else offset = 0;
 
-		// BEGIN
 		memset(sector,0,sizeof(sector));
-
-		// JMP instruction
-		bs->BS_header.BS_jmpBoot[0] = 0xEB;
-		bs->BS_header.BS_jmpBoot[1] = bs_sz - 2;
-		bs->BS_header.BS_jmpBoot[2] = 0x90;
 		memcpy(bs->BS_header.BS_OEMName,"DATATBOX",8);
 
 		// trap in case of booting. trigger bootstrap
 		sector[bs_sz] = 0xCD;
 		sector[bs_sz+1] = 0x19;
 		strcpy((char*)sector+bs_sz+2,"Not bootable, data only");
+
+		// JMP instruction
+		bs->BS_header.BS_jmpBoot[0] = 0xEB;
+		bs->BS_header.BS_jmpBoot[1] = bs_sz - 2;
+		bs->BS_header.BS_jmpBoot[2] = 0x90;
 
 		// common BPB
 		bs->BPB_common.BPB_BytsPerSec = htole16(fmtparam->disk_bytes_per_sector);
