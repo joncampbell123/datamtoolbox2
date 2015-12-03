@@ -1035,6 +1035,107 @@ int libmsfat_formatting_params_write_boot_sector(unsigned char *sector512,struct
 	return 0;
 }
 
+int libmsfat_formatting_params_reinit_final_info(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx,unsigned char *sector512) {
+	struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector512;
+
+	if (f == NULL || msfatctx == NULL || sector512 == NULL)
+		return -1;
+	if (libmsfat_bs_compute_disk_locations(&f->final_info,bs))
+		return -1;
+	if (libmsfat_context_set_fat_info(msfatctx,&f->final_info))
+		return -1;
+
+	return 0;
+}
+
+int libmsfat_formatting_params_write_fat_clusters01(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx) {
+	unsigned int i;
+
+	if (f == NULL || msfatctx == NULL)
+		return -1;
+
+	/* cluster dirty flags and media type byte */
+	for (i=0;i < f->final_info.FAT_tables;i++) {
+		if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFF00UL + (uint32_t)f->disk_media_type_byte,libmsfat_CLUSTER_0_MEDIA_TYPE,i))
+			return -1;
+		if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFFFFUL,libmsfat_CLUSTER_1_DIRTY_FLAGS,i))
+			return -1;
+	}
+
+	return 0;
+}
+
+int libmsfat_formatting_params_init_fat32_root_cluster(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx,unsigned char *sector512) {
+	struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector512;
+	unsigned int i;
+
+	if (f == NULL || msfatctx == NULL)
+		return -1;
+
+	if (f->final_info.FAT_size == 32) {
+		/* remember the root cluster we chose? we need to mark it allocated, and
+		 * then zero the cluster out */
+		libmsfat_cluster_t rootclus = (libmsfat_cluster_t)le32toh(bs->at36.BPB_FAT32.BPB_RootClus);
+
+		if (rootclus < (libmsfat_cluster_t)2UL)
+			return -1;
+
+		for (i=0;i < f->final_info.FAT_tables;i++) {
+			if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFFFFUL,rootclus,i))
+				return -1;
+		}
+
+		// make sure the cluster corresponding to the root dir is zeroed out
+		libmsfat_file_io_ctx_zero_cluster(rootclus,msfatctx);
+	}
+
+	return 0;
+}
+
+int libmsfat_formatting_params_init_root_directory_volume_label(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx) {
+	struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
+	struct libmsfat_file_io_ctx_t *fioctx = NULL;
+
+	if (f == NULL || msfatctx == NULL)
+		return -1;
+
+	fioctx_parent = libmsfat_file_io_ctx_create();
+	if (fioctx_parent == NULL) goto cleanup_err;
+
+	fioctx = libmsfat_file_io_ctx_create();
+	if (fioctx == NULL) goto cleanup_err;
+
+	if (libmsfat_file_io_ctx_assign_root_directory_with_parent(fioctx,fioctx_parent,msfatctx))
+		goto cleanup_err;
+
+	if (*f->volume_label != 0) {
+		struct libmsfat_dirent_t dirent;
+
+		memset(&dirent,0,sizeof(dirent));
+
+		{
+			const char *s = f->volume_label;
+			char *d = dirent.a.n.DIR_Name;
+			char *df = d + 11;
+
+			while (*s && d < df) *d++ = *s++;
+			while (d < df) *d++ = ' ';
+		}
+		dirent.a.n.DIR_Attr = libmsfat_DIR_ATTR_VOLUME_ID;
+
+		if (libmsfat_file_io_ctx_write(fioctx,msfatctx,&dirent,sizeof(dirent)) != sizeof(dirent))
+			goto cleanup_err;
+	}
+
+	fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
+	fioctx = libmsfat_file_io_ctx_destroy(fioctx);
+	return 0;
+cleanup_err:
+	fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
+	fioctx = libmsfat_file_io_ctx_destroy(fioctx);
+	return -1;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	struct libmsfat_context_t *msfatctx = NULL;
@@ -1354,10 +1455,6 @@ int main(int argc,char **argv) {
 		unsigned int bs_sz = libmsfat_formatting_params_get_bpb_size(fmtparam);
 		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
 
-		struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
-		struct libmsfat_file_io_ctx_t *fioctx = NULL;
-
-
 		memset(sector,0,sizeof(sector));
 		memcpy(bs->BS_header.BS_OEMName,"DATATBOX",8);
 
@@ -1370,125 +1467,10 @@ int main(int argc,char **argv) {
 		if (libmsfat_formatting_params_generate_boot_sector(sector,fmtparam)) return 1;
 		if (libmsfat_formatting_params_write_boot_sector(sector,msfatctx,fmtparam)) return 1;
 		if (libmsfat_formatting_params_write_fat32_fsinfo(sector,msfatctx,fmtparam)) return 1;
-
-		if (libmsfat_bs_compute_disk_locations(&fmtparam->final_info,bs)) {
-			printf("Unable to locate disk locations.\n");
-			return 1;
-		}
-		if (libmsfat_context_set_fat_info(msfatctx,&fmtparam->final_info)) {
-			fprintf(stderr,"msfat library rejected disk location info\n");
-			return 1;
-		}
-
-		printf("Disk location and FAT info:\n");
-		printf("    FAT format:        FAT%u\n",
-			fmtparam->final_info.FAT_size);
-		printf("    FAT tables:        %u\n",
-			fmtparam->final_info.FAT_tables);
-		printf("    FAT table size:    %lu sectors\n",
-			(unsigned long)fmtparam->final_info.FAT_table_size);
-		printf("    FAT offset:        %lu sectors\n",
-			(unsigned long)fmtparam->final_info.FAT_offset);
-		printf("    Root directory:    %lu sectors\n",
-			(unsigned long)fmtparam->final_info.RootDirectory_offset);
-		printf("    Root dir size:     %lu sectors\n",
-			(unsigned long)fmtparam->final_info.RootDirectory_size);
-		printf("    Data offset:       %lu sectors\n",
-			(unsigned long)fmtparam->final_info.Data_offset);
-		printf("    Data size:         %lu sectors\n",
-			(unsigned long)fmtparam->final_info.Data_size);
-		printf("    Sectors/cluster:   %u\n",
-			(unsigned int)fmtparam->final_info.Sectors_Per_Cluster);
-		printf("    Bytes per sector:  %u\n",
-			(unsigned int)fmtparam->final_info.BytesPerSector);
-		printf("    Total clusters:    %lu\n",
-			(unsigned long)fmtparam->final_info.Total_clusters);
-		printf("    Total data clusts: %lu\n",
-			(unsigned long)fmtparam->final_info.Total_data_clusters);
-		printf("    Max clusters psbl: %lu\n",
-			(unsigned long)fmtparam->final_info.Max_possible_clusters);
-		printf("    Max data clus psbl:%lu\n",
-			(unsigned long)fmtparam->final_info.Max_possible_data_clusters);
-		printf("    Total sectors:     %lu sectors\n",
-			(unsigned long)fmtparam->final_info.TotalSectors);
-		if (fmtparam->final_info.FAT_size >= 32) {
-			printf("    FAT32 FSInfo:      %lu sector\n",
-				(unsigned long)fmtparam->final_info.fat32.BPB_FSInfo);
-			printf("    Root dir cluster:  %lu\n",
-				(unsigned long)fmtparam->final_info.fat32.RootDirectory_cluster);
-		}
-
-		for (i=0;i < fmtparam->final_info.FAT_tables;i++) {
-			if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFF00UL + (uint32_t)fmtparam->disk_media_type_byte,libmsfat_CLUSTER_0_MEDIA_TYPE,i)) {
-				fprintf(stderr,"Cannot write cluster 1\n");
-				return 1;
-			}
-			if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFFFFUL,libmsfat_CLUSTER_1_DIRTY_FLAGS,i)) {
-				fprintf(stderr,"Cannot write cluster 1\n");
-				return 1;
-			}
-		}
-
-		if (fmtparam->final_info.FAT_size == 32) {
-			/* remember the root cluster we chose? we need to mark it allocated, and
-			 * then zero the cluster out */
-			libmsfat_cluster_t rootclus = (libmsfat_cluster_t)le32toh(bs->at36.BPB_FAT32.BPB_RootClus);
-
-			if (rootclus < (libmsfat_cluster_t)2UL) {
-				fprintf(stderr,"Invalid root cluster\n");
-				return 1;
-			}
-			for (i=0;i < fmtparam->final_info.FAT_tables;i++) {
-				if (libmsfat_context_write_FAT(msfatctx,(uint32_t)0xFFFFFFFFUL,rootclus,i)) {
-					fprintf(stderr,"Cannot write cluster %lu, to mark as EOC\n",(unsigned long)rootclus);
-					return 1;
-				}
-			}
-			// make sure the cluster corresponding to the root dir is zeroed out
-			if (libmsfat_file_io_ctx_zero_cluster(rootclus,msfatctx))
-				fprintf(stderr,"WARNING: failed to zero root cluster\n");
-		}
-
-		fioctx_parent = libmsfat_file_io_ctx_create();
-		if (fioctx_parent == NULL) {
-			fprintf(stderr,"Cannot alloc FIO ctx\n");
-			return 1;
-		}
-
-		fioctx = libmsfat_file_io_ctx_create();
-		if (fioctx == NULL) {
-			fprintf(stderr,"Cannot alloc FIO ctx\n");
-			return 1;
-		}
-
-		if (libmsfat_file_io_ctx_assign_root_directory_with_parent(fioctx,fioctx_parent,msfatctx)) {
-			fprintf(stderr,"Cannot assign root dir\n");
-			return 1;
-		}
-
-		if (*fmtparam->volume_label != 0) {
-			struct libmsfat_dirent_t dirent;
-
-			memset(&dirent,0,sizeof(dirent));
-
-			{
-				const char *s = fmtparam->volume_label;
-				char *d = dirent.a.n.DIR_Name;
-				char *df = d + 11;
-
-				while (*s && d < df) *d++ = *s++;
-				while (d < df) *d++ = ' ';
-			}
-			dirent.a.n.DIR_Attr = libmsfat_DIR_ATTR_VOLUME_ID;
-
-			if (libmsfat_file_io_ctx_write(fioctx,msfatctx,&dirent,sizeof(dirent)) != sizeof(dirent)) {
-				fprintf(stderr,"Cannot write root dir volume label\n");
-				return 1;
-			}
-		}
-
-		fioctx_parent = libmsfat_file_io_ctx_destroy(fioctx_parent);
-		fioctx = libmsfat_file_io_ctx_destroy(fioctx);
+		if (libmsfat_formatting_params_reinit_final_info(fmtparam,msfatctx,sector)) return 1;
+		if (libmsfat_formatting_params_write_fat_clusters01(fmtparam,msfatctx)) return 1;
+		if (libmsfat_formatting_params_init_fat32_root_cluster(fmtparam,msfatctx,sector)) return 1;
+		if (libmsfat_formatting_params_init_root_directory_volume_label(fmtparam,msfatctx)) return 1;
 	}
 
 	fmtparam = libmsfat_formatting_params_destroy(fmtparam);
