@@ -730,6 +730,7 @@ int libmsfat_formatting_params_create_partition_table_and_write_entry(struct lib
 	struct libpartmbr_state_t diskimage_state;
 	struct libpartmbr_entry_t ent;
 	struct chs_geometry_t chs;
+	uint32_t disk_sig;
 
 	if (f == NULL || msfatctx == NULL)
 		return -1;
@@ -760,6 +761,11 @@ int libmsfat_formatting_params_create_partition_table_and_write_entry(struct lib
 
 	if (libpartmbr_write_entry(f->diskimage_sector,&ent,&diskimage_state,0))
 		return -1;
+
+	/* NTS: The Linux kernel won't recognize our partition table unless we have
+	 *      a disk signature at 0x1B8 since everything from 0x000-0x1B7 is zero. */
+	disk_sig = (uint32_t)time(NULL);
+	*((uint32_t*)(f->diskimage_sector + 0x1B8)) = htole32(disk_sig);
 
 	if (msfatctx->write(msfatctx,f->diskimage_sector,0,LIBPARTMBR_SECTOR_SIZE))
 		return -1;
