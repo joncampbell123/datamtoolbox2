@@ -21,6 +21,7 @@
 # include <windows.h>
 #endif
 #include <datamtoolbox-v2/polyfill/lseek.h>
+#include <datamtoolbox-v2/polyfill/stat.h>
 #include <datamtoolbox-v2/polyfill/unix.h>
 
 #include <datamtoolbox-v2/libpartmbr/mbrctx.h>
@@ -96,7 +97,7 @@ int main(int argc,char **argv) {
 	{
 		/* make sure it's a file */
 		struct stat st;
-		if (fstat(fd,&st) || (!S_ISREG(st.st_mode) && !S_ISBLK(st.st_mode))) {
+		if (_polyfill_fstat(fd,&st) || (!S_ISREG(st.st_mode) && !S_ISBLK(st.st_mode))) {
 			fprintf(stderr,"Image is not a file\n");
 			return 1;
 		}

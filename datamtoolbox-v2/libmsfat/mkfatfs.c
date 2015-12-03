@@ -22,6 +22,7 @@
 # include <windows.h>
 #endif
 #include <datamtoolbox-v2/polyfill/lseek.h>
+#include <datamtoolbox-v2/polyfill/stat.h>
 #include <datamtoolbox-v2/polyfill/unix.h>
 
 #include <datamtoolbox-v2/libint13chs/int13chs.h>
@@ -37,7 +38,7 @@ static void try_autofill_size(const char *path,struct libmsfat_formatting_params
 	if (!f->disk_size_bytes_set) {
 		struct stat st;
 
-		if (lstat(path,&st) == 0) {
+		if (_polyfill_lstat(path,&st) == 0) {
 			if (S_ISREG(st.st_mode)) {
 				/* OK */
 			}
@@ -92,7 +93,7 @@ static int extend_sparse_file_to_size(int fd,uint64_t size) {
 
 		/* we support giving a block device for the image.
 		 * ftruncate() can't work with those, so we need to check first */
-		if (fstat(fd,&st)) {
+		if (_polyfill_fstat(fd,&st)) {
 			fprintf(stderr,"Cannot identify file info\n");
 			return -1;
 		}
@@ -458,7 +459,7 @@ int main(int argc,char **argv) {
 	{
 		/* make sure it's a file */
 		struct stat st;
-		if (fstat(fd,&st) || (!S_ISREG(st.st_mode) && !S_ISBLK(st.st_mode))) {
+		if (_polyfill_fstat(fd,&st) || (!S_ISREG(st.st_mode) && !S_ISBLK(st.st_mode))) {
 			fprintf(stderr,"Image is not a file\n");
 			return 1;
 		}
