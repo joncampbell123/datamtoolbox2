@@ -54,11 +54,14 @@ $(LIBUNICODE):
 	make -C ../unicode lib
 
 #--------------------------------------
-libmsfat.a: libmsfat.o
+libmsfat.a: libmsfat.o libmsfmt.o
 	rm -f $@
 	$(AR) r $@ $^
 
 libmsfat.o: libmsfat.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+libmsfmt.o: libmsfmt.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 #--------------------------------------
