@@ -2,7 +2,7 @@
 uname = $(shell uname -s)
 
 # Linux?
-ifeq ($(uname),GNU/Linux)
+ifeq ($(uname),Linux)
 CXXFLAGS += -D_LINUX -D_GNU_SOURCE
 CFLAGS += -D_LINUX -D_GNU_SOURCE
 endif
