@@ -740,6 +740,15 @@ int libmsfat_formatting_params_set_volume_id(struct libmsfat_formatting_params *
 	return 0;
 }
 
+int libmsfat_formatting_params_auto_choose_volume_id(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (!f->volume_id_set)
+		f->volume_id = (uint32_t)time(NULL);
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	struct libmsfat_context_t *msfatctx = NULL;
@@ -964,9 +973,7 @@ int main(int argc,char **argv) {
 	if (make_partition && libmsfat_formatting_params_choose_partition_table(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_media_type_byte(fmtparam)) return 1;
 	if (libmsfat_formatting_params_set_volume_label(fmtparam,set_volume_label)) return 1;
-
-	if (!fmtparam->volume_id_set)
-		fmtparam->volume_id = (uint32_t)time(NULL);
+	if (libmsfat_formatting_params_auto_choose_volume_id(fmtparam)) return 1;
 
 	assert(lba_mode || chs_mode);
 	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x %s\n",
