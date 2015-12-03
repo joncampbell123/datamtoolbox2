@@ -820,6 +820,46 @@ int libmsfat_formatting_params_is_valid(struct libmsfat_formatting_params *f) {
 	return 0;
 }
 
+int libmsfat_formatting_params_create_partition_table(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx) {
+	struct libpartmbr_state_t diskimage_state;
+	struct libpartmbr_entry_t ent;
+	struct chs_geometry_t chs;
+
+	if (f == NULL || msfatctx == NULL)
+		return -1;
+	if (msfatctx->write == NULL)
+		return -1;
+
+	libpartmbr_state_zero(&diskimage_state);
+	if (libpartmbr_create_partition_table(f->diskimage_sector,&diskimage_state))
+		return -1;
+
+	ent.partition_type = f->partition_type;
+	ent.first_lba_sector = (uint32_t)f->partition_offset;
+	ent.number_lba_sectors = (uint32_t)f->partition_size;
+	if (int13cnv_lba_to_chs(&chs,&f->disk_geo,(uint32_t)f->partition_offset))
+		return -1;
+
+	int13cnv_chs_int13_cliprange(&chs,&f->disk_geo);
+	if (int13cnv_chs_to_int13(&ent.first_chs_sector,&chs))
+		return -1;
+
+	if (int13cnv_lba_to_chs(&chs,&f->disk_geo,(uint32_t)f->partition_offset + (uint32_t)f->partition_size - (uint32_t)1UL))
+		return -1;
+
+	int13cnv_chs_int13_cliprange(&chs,&f->disk_geo);
+	if (int13cnv_chs_to_int13(&ent.last_chs_sector,&chs))
+		return -1;
+
+	if (libpartmbr_write_entry(f->diskimage_sector,&ent,&diskimage_state,0))
+		return -1;
+
+	if (msfatctx->write(msfatctx,f->diskimage_sector,0,LIBPARTMBR_SECTOR_SIZE))
+		return -1;
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	struct libmsfat_context_t *msfatctx = NULL;
@@ -1120,53 +1160,9 @@ int main(int argc,char **argv) {
 	}
 	dfd = -1; /* takes ownership, drop it */
 
-	if (make_partition)
-		msfatctx->partition_byte_offset = (uint64_t)fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
-
 	if (make_partition) {
-		struct libpartmbr_state_t diskimage_state;
-		struct libpartmbr_entry_t ent;
-		struct chs_geometry_t chs;
-
-		libpartmbr_state_zero(&diskimage_state);
-
-		if (libpartmbr_create_partition_table(fmtparam->diskimage_sector,&diskimage_state)) {
-			fprintf(stderr,"Failed to create partition table sector\n");
-			return 1;
-		}
-
-		ent.partition_type = fmtparam->partition_type;
-		ent.first_lba_sector = (uint32_t)fmtparam->partition_offset;
-		ent.number_lba_sectors = (uint32_t)fmtparam->partition_size;
-		if (int13cnv_lba_to_chs(&chs,&fmtparam->disk_geo,(uint32_t)fmtparam->partition_offset)) {
-			fprintf(stderr,"Failed to convert start LBA -> CHS\n");
-			return 1;
-		}
-		int13cnv_chs_int13_cliprange(&chs,&fmtparam->disk_geo);
-		if (int13cnv_chs_to_int13(&ent.first_chs_sector,&chs)) {
-			fprintf(stderr,"Failed to convert start CHS -> INT13\n");
-			return 1;
-		}
-
-		if (int13cnv_lba_to_chs(&chs,&fmtparam->disk_geo,(uint32_t)fmtparam->partition_offset + (uint32_t)fmtparam->partition_size - (uint32_t)1UL)) {
-			fprintf(stderr,"Failed to convert end LBA -> CHS\n");
-			return 1;
-		}
-		int13cnv_chs_int13_cliprange(&chs,&fmtparam->disk_geo);
-		if (int13cnv_chs_to_int13(&ent.last_chs_sector,&chs)) {
-			fprintf(stderr,"Failed to convert end CHS -> INT13\n");
-			return 1;
-		}
-
-		if (libpartmbr_write_entry(fmtparam->diskimage_sector,&ent,&diskimage_state,0)) {
-			fprintf(stderr,"Unable to write entry\n");
-			return 1;
-		}
-
-		if (lseek(fd,0,SEEK_SET) != 0 || write(fd,fmtparam->diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
-			fprintf(stderr,"Failed to write MBR back\n");
-			return 1;
-		}
+		msfatctx->partition_byte_offset = (uint64_t)fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
+		if (libmsfat_formatting_params_create_partition_table(fmtparam,msfatctx)) return 1;
 	}
 
 	/* generate the boot sector! */
