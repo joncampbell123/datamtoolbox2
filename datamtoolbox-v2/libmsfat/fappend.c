@@ -188,12 +188,12 @@ int main(int argc,char **argv) {
 
 		first_lba = 0;
 
-		x = lseek(fd,0,SEEK_END);
+		x = lseek64(fd,0,SEEK_END);
 		if (x < (lseek_off_t)0) x = 0;
 		x /= (lseek_off_t)512UL;
 		if (x > (lseek_off_t)0xFFFFFFFFUL) x = (lseek_off_t)0xFFFFFFFFUL;
 		size_lba = (uint32_t)x;
-		lseek(fd,0,SEEK_SET);
+		lseek64(fd,0,SEEK_SET);
 	}
 
 	printf("Reading from disk sectors %lu-%lu (%lu sectors)\n",
