@@ -310,7 +310,7 @@ int main(int argc,char **argv) {
 	}
 	{
 		/* make sure it's a file, or a block device */
-		struct stat st;
+		_polyfill_struct_stat st;
 		if (_polyfill_fstat(fd,&st) || (!S_ISREG(st.st_mode) && !S_ISBLK(st.st_mode))) {
 			fprintf(stderr,"Image is not a file\n");
 			return 1;

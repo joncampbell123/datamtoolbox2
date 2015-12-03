@@ -2,11 +2,11 @@
 #define __DATAMTOOLBOX_POLYFILL_STAT_H
 
 #if defined(_MSC_VER) /* Microsoft C++ polyfill */
-# define _polyfill_struct_stat struct stati64
+# define _polyfill_struct_stat struct _stati64
 
 /* Map Linux-like stat64 to Microsoft's _stati64 */
-static int _polyfill_stat(int fd, _polyfill_struct_stat *buffer) {
-	return _stati64(fd,buffer);
+static int _polyfill_stat(const char *path, _polyfill_struct_stat *buffer) {
+	return _stati64(path,buffer);
 }
 
 /* Map Linux-like fstat64 to Microsoft's _fstati64 */
