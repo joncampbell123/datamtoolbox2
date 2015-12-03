@@ -29,7 +29,7 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat.h>
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 
-unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned int base) {
+static unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned int base) {
 	unsigned long long res = 0;
 	char *l_r = NULL;
 
