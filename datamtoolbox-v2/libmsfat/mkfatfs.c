@@ -110,14 +110,6 @@ static int extend_sparse_file_to_size(int fd,uint64_t size) {
 	return 0;
 }
 
-static uint32_t					set_root_directory_entries = 0;
-static uint32_t					root_directory_entries = 0;
-static uint32_t					set_fsinfo_sector = 0;
-static uint32_t					reserved_sectors = 0;
-static uint8_t					set_fat_tables = 0;
-static uint32_t					set_reserved_sectors = 0;
-static uint8_t					set_boot_sector_bpb_size = 0;
-
 struct libmsfat_formatting_params {
 	uint8_t						force_fat;
 	struct libmsfat_disk_locations_and_info		base_info;
@@ -132,15 +124,21 @@ struct libmsfat_formatting_params {
 	uint32_t					volume_id;
 	uint8_t						partition_type;
 	uint8_t						disk_media_type_byte;
+	uint8_t						set_fat_tables;
+	uint8_t						set_boot_sector_bpb_size;
+	uint16_t					cluster_size;
 	uint32_t					backup_boot_sector;
 	uint32_t					root_cluster;
-	uint16_t					cluster_size;
+	uint32_t					set_root_directory_entries;
+	uint32_t					root_directory_entries;
+	uint32_t					set_fsinfo_sector;
+	uint32_t					reserved_sectors;
+	uint32_t					set_reserved_sectors;
 	const char*					volume_label;
-
 	unsigned int					lba_mode:1;
 	unsigned int					chs_mode:1;
 	unsigned int					volume_id_set:1;
-	uint32_t					root_cluster_set:1;
+	unsigned int					root_cluster_set:1;
 	unsigned int					partition_type_set:1;
 	unsigned int					disk_size_bytes_set:1;
 	unsigned int					backup_boot_sector_set:1;
@@ -492,8 +490,8 @@ int libmsfat_formatting_params_auto_choose_FAT_size(struct libmsfat_formatting_p
 int libmsfat_formatting_params_auto_choose_FAT_tables(struct libmsfat_formatting_params *f) {
 	if (f == NULL) return -1;
 
-	if (set_fat_tables)
-		f->base_info.FAT_tables = set_fat_tables;
+	if (f->set_fat_tables)
+		f->base_info.FAT_tables = f->set_fat_tables;
 	else if (f->base_info.FAT_tables == 0)
 		f->base_info.FAT_tables = 2;
 
@@ -505,23 +503,23 @@ int libmsfat_formatting_params_auto_choose_root_directory_size(struct libmsfat_f
 
 	if (f->base_info.FAT_size == 32) {
 		f->base_info.RootDirectory_size = 0;
-		root_directory_entries = 0; // FAT32 makes the root directory an allocation chain
+		f->root_directory_entries = 0; // FAT32 makes the root directory an allocation chain
 	}
 	else {
-		if (set_root_directory_entries != 0)
-			root_directory_entries = set_root_directory_entries;
+		if (f->set_root_directory_entries != 0)
+			f->root_directory_entries = f->set_root_directory_entries;
 		else if (f->disk_size_bytes >= (uint64_t)(100ULL << 20ULL)) // 100MB
-			root_directory_entries = 512; // 16KB
+			f->root_directory_entries = 512; // 16KB
 		else if (f->disk_size_bytes >= (uint64_t)(60ULL << 20ULL)) // 60MB
-			root_directory_entries = 256; // 8KB
+			f->root_directory_entries = 256; // 8KB
 		else if (f->disk_size_bytes >= (uint64_t)(32ULL << 20ULL)) // 32MB
-			root_directory_entries = 128; // 4KB
+			f->root_directory_entries = 128; // 4KB
 		else if (f->disk_size_bytes >= (uint64_t)(26ULL << 20ULL)) // 26MB
-			root_directory_entries = 64; // 2KB
+			f->root_directory_entries = 64; // 2KB
 		else
-			root_directory_entries = 32; // 1KB
+			f->root_directory_entries = 32; // 1KB
 
-		f->base_info.RootDirectory_size = ((root_directory_entries * 32) + 511) / 512;
+		f->base_info.RootDirectory_size = ((f->root_directory_entries * 32) + 511) / 512;
 	}
 
 	return 0;
@@ -612,19 +610,19 @@ int libmsfat_formatting_params_auto_choose_reserved_sectors(struct libmsfat_form
 	if (f == NULL) return -1;
 
 	if (f->base_info.FAT_size == 32) {
-		if (set_reserved_sectors != (uint32_t)0U)
-			reserved_sectors = set_reserved_sectors;
+		if (f->set_reserved_sectors != (uint32_t)0U)
+			f->reserved_sectors = f->set_reserved_sectors;
 		else
-			reserved_sectors = 32; // typical FAT32 value, allowing FSInfo at sector 6
+			f->reserved_sectors = 32; // typical FAT32 value, allowing FSInfo at sector 6
 
-		if (reserved_sectors < 3U) // BPB + backup BPB + FSInfo
-			reserved_sectors = 3U;
+		if (f->reserved_sectors < 3U) // BPB + backup BPB + FSInfo
+			f->reserved_sectors = 3U;
 	}
 	else {
-		if (set_reserved_sectors != (uint32_t)0U)
-			reserved_sectors = set_reserved_sectors;
+		if (f->set_reserved_sectors != (uint32_t)0U)
+			f->reserved_sectors = f->set_reserved_sectors;
 		else
-			reserved_sectors = 1;
+			f->reserved_sectors = 1;
 	}
 
 	return 0;
@@ -634,13 +632,13 @@ int libmsfat_formatting_params_auto_choose_fat32_bpb_fsinfo_location(struct libm
 	if (f == NULL) return -1;
 
 	if (f->base_info.FAT_size == 32) {
-		if (set_fsinfo_sector != 0)
-			f->base_info.fat32.BPB_FSInfo = set_fsinfo_sector;
+		if (f->set_fsinfo_sector != 0)
+			f->base_info.fat32.BPB_FSInfo = f->set_fsinfo_sector;
 		else
 			f->base_info.fat32.BPB_FSInfo = 6;
 
-		if (f->base_info.fat32.BPB_FSInfo >= reserved_sectors)
-			f->base_info.fat32.BPB_FSInfo = reserved_sectors - 1;
+		if (f->base_info.fat32.BPB_FSInfo >= f->reserved_sectors)
+			f->base_info.fat32.BPB_FSInfo = f->reserved_sectors - 1;
 	}
 	else {
 		f->base_info.fat32.BPB_FSInfo = 0;
@@ -655,8 +653,8 @@ int libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(struct libms
 	if (f->base_info.FAT_size == 32) {
 		if (!f->backup_boot_sector_set) f->backup_boot_sector = 1;
 
-		if (f->backup_boot_sector >= reserved_sectors)
-			f->backup_boot_sector = reserved_sectors - 1;
+		if (f->backup_boot_sector >= f->reserved_sectors)
+			f->backup_boot_sector = f->reserved_sectors - 1;
 		if (f->backup_boot_sector > 1 && f->backup_boot_sector == f->base_info.fat32.BPB_FSInfo)
 			f->backup_boot_sector--;
 		if (f->backup_boot_sector == f->base_info.fat32.BPB_FSInfo)
@@ -685,7 +683,7 @@ int libmsfat_formatting_params_compute_cluster_count(struct libmsfat_formatting_
 
 	x = f->base_info.TotalSectors;
 
-	if (x > (uint32_t)reserved_sectors) x -= (uint32_t)reserved_sectors;
+	if (x > (uint32_t)f->reserved_sectors) x -= (uint32_t)f->reserved_sectors;
 	else x = (uint32_t)0;
 
 	if (x > (uint32_t)f->base_info.RootDirectory_size) x -= (uint32_t)f->base_info.RootDirectory_size;
@@ -705,7 +703,7 @@ int libmsfat_formatting_params_compute_cluster_count(struct libmsfat_formatting_
 	/* do it again */
 	x = f->base_info.TotalSectors;
 
-	if (x > (uint32_t)reserved_sectors) x -= (uint32_t)reserved_sectors;
+	if (x > (uint32_t)f->reserved_sectors) x -= (uint32_t)f->reserved_sectors;
 	else x = (uint32_t)0;
 
 	if (x > (uint32_t)f->base_info.RootDirectory_size) x -= (uint32_t)f->base_info.RootDirectory_size;
@@ -734,7 +732,7 @@ int libmsfat_formatting_params_compute_cluster_count(struct libmsfat_formatting_
 			(x * (uint32_t)f->base_info.Sectors_Per_Cluster) +
 			(uint32_t)f->base_info.FAT_table_size +
 			(uint32_t)f->base_info.RootDirectory_size +
-			(uint32_t)reserved_sectors;
+			(uint32_t)f->reserved_sectors;
 	}
 
 	f->base_info.Total_data_clusters = x;
@@ -888,8 +886,8 @@ unsigned int libmsfat_formatting_params_get_bpb_size(struct libmsfat_formatting_
 	if (f == NULL) return 0;
 
 	// TODO: options to emulate various DOS versions of the BPB
-	if (set_boot_sector_bpb_size != 0)
-		bs_sz = set_boot_sector_bpb_size;
+	if (f->set_boot_sector_bpb_size != 0)
+		bs_sz = f->set_boot_sector_bpb_size;
 	else if (f->base_info.FAT_size == 32)
 		bs_sz = 90;	// MS-DOS 7.x / Windows 9x FAT32
 	else
@@ -915,12 +913,12 @@ int libmsfat_formatting_params_generate_boot_sector(unsigned char *sector512,str
 	// common BPB
 	bs->BPB_common.BPB_BytsPerSec = htole16(f->disk_bytes_per_sector);
 	bs->BPB_common.BPB_SecPerClus = f->base_info.Sectors_Per_Cluster;
-	bs->BPB_common.BPB_RsvdSecCnt = htole16(reserved_sectors);
+	bs->BPB_common.BPB_RsvdSecCnt = htole16(f->reserved_sectors);
 	bs->BPB_common.BPB_NumFATs = f->base_info.FAT_tables;
 	if (f->base_info.FAT_size == 32)
 		bs->BPB_common.BPB_RootEntCnt = 0;
 	else
-		bs->BPB_common.BPB_RootEntCnt = htole16(root_directory_entries);
+		bs->BPB_common.BPB_RootEntCnt = htole16(f->root_directory_entries);
 	if (f->base_info.TotalSectors >= (uint32_t)65536 || f->base_info.FAT_size == 32)
 		bs->BPB_common.BPB_TotSec16 = 0;
 	else
@@ -1237,16 +1235,16 @@ int main(int argc,char **argv) {
 				fmtparam->allow_64kb_or_larger_clusters = 1;
 			}
 			else if (!strcmp(a,"fat-tables")) {
-				set_fat_tables = (uint8_t)strtoul(argv[i++],NULL,0);
+				fmtparam->set_fat_tables = (uint8_t)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"root-directories")) {
-				set_root_directory_entries = (uint32_t)strtoul(argv[i++],NULL,0);
+				fmtparam->set_root_directory_entries = (uint32_t)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"fsinfo")) {
-				set_fsinfo_sector = (uint32_t)strtoul(argv[i++],NULL,0);
+				fmtparam->set_fsinfo_sector = (uint32_t)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"reserved-sectors")) {
-				set_reserved_sectors = (uint32_t)strtoul(argv[i++],NULL,0);
+				fmtparam->set_reserved_sectors = (uint32_t)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"volume-id")) {
 				if (libmsfat_formatting_params_set_volume_id(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
@@ -1273,7 +1271,7 @@ int main(int argc,char **argv) {
 				}
 			}
 			else if (!strcmp(a,"bpb-size")) {
-				set_boot_sector_bpb_size = (uint8_t)strtoul(argv[i++],NULL,0);
+				fmtparam->set_boot_sector_bpb_size = (uint8_t)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"no-partition-track-align")) {
 				fmtparam->dont_partition_track_align = 1;
@@ -1407,9 +1405,9 @@ int main(int argc,char **argv) {
 		(unsigned long)fmtparam->base_info.Total_data_clusters,
 		(unsigned long)fmtparam->base_info.Total_clusters);
 	printf("   Reserved sectors: %lu\n",
-		(unsigned long)reserved_sectors);
+		(unsigned long)fmtparam->reserved_sectors);
 	printf("   Root directory entries: %lu (%lu sectors)\n",
-		(unsigned long)root_directory_entries,
+		(unsigned long)fmtparam->root_directory_entries,
 		(unsigned long)fmtparam->base_info.RootDirectory_size);
 	printf("   %u FAT tables: %lu sectors per table\n",
 		(unsigned int)fmtparam->base_info.FAT_tables,
