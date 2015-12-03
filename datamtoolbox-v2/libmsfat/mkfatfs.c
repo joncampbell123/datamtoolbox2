@@ -860,6 +860,24 @@ int libmsfat_formatting_params_create_partition_table_and_write_entry(struct lib
 	return 0;
 }
 
+unsigned int libmsfat_formatting_params_get_bpb_size(struct libmsfat_formatting_params *f) {
+	unsigned int bs_sz;
+
+	if (f == NULL) return 0;
+
+	// TODO: options to emulate various DOS versions of the BPB
+	if (set_boot_sector_bpb_size != 0)
+		bs_sz = set_boot_sector_bpb_size;
+	else if (f->base_info.FAT_size == 32)
+		bs_sz = 90;	// MS-DOS 7.x / Windows 9x FAT32
+	else
+		bs_sz = 62;	// MS-DOS 6.x and earlier, FAT12/FAT16
+
+	if (bs_sz < 40 || bs_sz > (f->disk_bytes_per_sector - 2U)) return 0;
+	if (bs_sz < 90 && f->base_info.FAT_size == 32) return 0;
+	return bs_sz;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	struct libmsfat_context_t *msfatctx = NULL;
@@ -1167,35 +1185,16 @@ int main(int argc,char **argv) {
 
 	/* generate the boot sector! */
 	{
-		uint64_t offset;
+		unsigned int bs_sz = libmsfat_formatting_params_get_bpb_size(fmtparam);
 		unsigned char sector[512];
+
+		uint64_t offset;
 		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
 		struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
 		struct libmsfat_file_io_ctx_t *fioctx = NULL;
-		unsigned int bs_sz;
 
-		if (make_partition)
-			offset = fmtparam->partition_offset;
-		else
-			offset = 0;
-		offset *= (uint64_t)fmtparam->disk_bytes_per_sector;
-
-		// TODO: options to emulate various DOS versions of the BPB
-		if (set_boot_sector_bpb_size != 0)
-			bs_sz = set_boot_sector_bpb_size;
-		else if (fmtparam->base_info.FAT_size == 32)
-			bs_sz = 90;	// MS-DOS 7.x / Windows 9x FAT32
-		else
-			bs_sz = 62;	// MS-DOS 6.x and earlier, FAT12/FAT16
-
-		if (bs_sz < 40) {
-			fprintf(stderr,"BPB too small\n");
-			return 1;
-		}
-		if (bs_sz < 90 && fmtparam->base_info.FAT_size == 32) {
-			fprintf(stderr,"BPB too small for FAT32\n");
-			return 1;
-		}
+		if (make_partition) offset = fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
+		else offset = 0;
 
 		// BEGIN
 		memset(sector,0,sizeof(sector));
