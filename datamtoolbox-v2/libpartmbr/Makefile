@@ -10,10 +10,13 @@ CXX := g++
 # Linux: ensure lseek64
 CFLAGS_LSEEK64 = -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
 
-# I know GCC 4.8 has -std=gnu++11 but I want a wider 
+# I know GCC 4.8 has -std=gnu++11 but I want a wider target base
 CXXFLAGS := -D_FILE_OFFSET_BITS=64 -Wall -pedantic -std=gnu++0x -I../.. $(CFLAGS_LSEEK64)
 LDFLAGS := -L.. -L../..
 CFLAGS := -D_FILE_OFFSET_BITS=64 -Wall -pedantic -std=gnu99 -I../../ $(CFLAGS_LSEEK64)
+
+# identify the OS. Note the uname -o || uname, since Darwin (Mac OS) uname does not support -o
+include ../system.ident.makefile
 
 all: lib exe
 	for i in $(SUBDIR); do make -C "$$i" all || break; done
