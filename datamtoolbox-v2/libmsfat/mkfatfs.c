@@ -110,7 +110,6 @@ static int extend_sparse_file_to_size(int fd,uint64_t size) {
 	return 0;
 }
 
-static uint8_t					make_partition = 0;
 static uint16_t					set_cluster_size = 0;
 static uint8_t					allow_non_power_of_2_cluster_size = 0;
 static uint8_t					allow_64kb_or_larger_clusters = 0;
@@ -151,6 +150,7 @@ struct libmsfat_formatting_params {
 	unsigned int					backup_boot_sector_set:1;
 	unsigned int					disk_media_type_byte_set:1;
 	unsigned int					disk_bytes_per_sector_set:1;
+	unsigned int					make_partition:1;
 	unsigned int					allow_fat32:1;
 	unsigned int					allow_fat16:1;
 	unsigned int					allow_fat12:1;
@@ -443,7 +443,7 @@ int libmsfat_formatting_params_partition_autofill_and_align(struct libmsfat_form
 int libmsfat_formatting_params_update_total_sectors(struct libmsfat_formatting_params *f) {
 	if (f == NULL) return -1;
 
-	if (make_partition)
+	if (f->make_partition)
 		f->base_info.TotalSectors = (uint32_t)f->partition_size;
 	else
 		f->base_info.TotalSectors = (uint32_t)f->disk_sectors;
@@ -942,7 +942,7 @@ int libmsfat_formatting_params_generate_boot_sector(unsigned char *sector512,str
 		bs->at36.BPB_FAT32.BPB_RootClus = htole32(f->root_cluster);
 		bs->at36.BPB_FAT32.BPB_FSInfo = htole16(f->base_info.fat32.BPB_FSInfo);
 		bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(f->backup_boot_sector);
-		bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
+		bs->at36.BPB_FAT32.BS_DrvNum = (f->make_partition ? 0x80 : 0x00);
 		bs->at36.BPB_FAT32.BS_BootSig = 0x29;
 		bs->at36.BPB_FAT32.BS_VolID = htole32(f->volume_id);
 
@@ -958,7 +958,7 @@ int libmsfat_formatting_params_generate_boot_sector(unsigned char *sector512,str
 		memcpy(bs->at36.BPB_FAT32.BS_FilSysType,"FAT32   ",8);
 	}
 	else {
-		bs->at36.BPB_FAT.BS_DrvNum = (make_partition ? 0x80 : 0x00);
+		bs->at36.BPB_FAT.BS_DrvNum = (f->make_partition ? 0x80 : 0x00);
 		bs->at36.BPB_FAT.BS_BootSig = 0x29;
 		bs->at36.BPB_FAT.BS_VolID = htole32(f->volume_id);
 
@@ -995,7 +995,7 @@ int libmsfat_formatting_params_write_fat32_fsinfo(unsigned char *sector512,struc
 		return 0;
 
 	memset(&fsinfo,0,sizeof(fsinfo));
-	if (make_partition) offset = f->partition_offset * (uint64_t)f->disk_bytes_per_sector;
+	if (f->make_partition) offset = f->partition_offset * (uint64_t)f->disk_bytes_per_sector;
 	else offset = 0;
 	offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_FSInfo) * (uint64_t)f->disk_bytes_per_sector;
 
@@ -1020,7 +1020,7 @@ int libmsfat_formatting_params_write_boot_sector(unsigned char *sector512,struct
 	if (msfatctx->write == NULL)
 		return -1;
 
-	if (make_partition) offset = f->partition_offset * (uint64_t)f->disk_bytes_per_sector;
+	if (f->make_partition) offset = f->partition_offset * (uint64_t)f->disk_bytes_per_sector;
 	else offset = 0;
 
 	if (msfatctx->write(msfatctx,sector512,offset,512))
@@ -1028,7 +1028,7 @@ int libmsfat_formatting_params_write_boot_sector(unsigned char *sector512,struct
 
 	// backup copy too
 	if (f->base_info.FAT_size == 32) {
-		if (make_partition) offset = f->partition_offset * (uint64_t)f->disk_bytes_per_sector;
+		if (f->make_partition) offset = f->partition_offset * (uint64_t)f->disk_bytes_per_sector;
 		else offset = 0;
 		offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_BkBootSec) * (uint64_t)f->disk_bytes_per_sector;
 		if (msfatctx->write(msfatctx,sector512,offset,512))
@@ -1184,7 +1184,7 @@ int main(int argc,char **argv) {
 				}
 			}
 			else if (!strcmp(a,"partition")) {
-				make_partition = 1;
+				fmtparam->make_partition = 1;
 			}
 			else if (!strcmp(a,"partition-offset")) {
 				s_partition_offset = argv[i++];
@@ -1348,7 +1348,7 @@ int main(int argc,char **argv) {
 		if (libmsfat_formatting_params_auto_choose_lba_chs_from_geometry(fmtparam)) return 1;
 	}
 
-	if (make_partition) {
+	if (fmtparam->make_partition) {
 		if (s_partition_offset != NULL && libmsfat_formatting_params_set_partition_offset(fmtparam,(uint64_t)strtoull_with_unit_suffixes(s_partition_offset,NULL,0)))
 			return 1;
 		if (s_partition_size != NULL && libmsfat_formatting_params_set_partition_size(fmtparam,(uint64_t)strtoull_with_unit_suffixes(s_partition_size,NULL,0)))
@@ -1366,7 +1366,7 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_auto_choose_fat32_bpb_fsinfo_location(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(fmtparam)) return 1;
 	if (libmsfat_formatting_params_compute_cluster_count(fmtparam)) return 1;
-	if (make_partition && libmsfat_formatting_params_choose_partition_table(fmtparam)) return 1;
+	if (fmtparam->make_partition && libmsfat_formatting_params_choose_partition_table(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_media_type_byte(fmtparam)) return 1;
 	if (libmsfat_formatting_params_set_volume_label(fmtparam,set_volume_label)) return 1;
 	if (libmsfat_formatting_params_auto_choose_volume_id(fmtparam)) return 1;
@@ -1383,7 +1383,7 @@ int main(int argc,char **argv) {
 		(unsigned int)fmtparam->disk_media_type_byte,
 		fmtparam->lba_mode ? "LBA" : "CHS");
 
-	if (make_partition) {
+	if (fmtparam->make_partition) {
 		printf("   Partition: type=0x%02x sectors %llu-%llu\n",
 			(unsigned int)fmtparam->partition_type,
 			(unsigned long long)fmtparam->partition_offset,
@@ -1447,7 +1447,7 @@ int main(int argc,char **argv) {
 	}
 	dfd = -1; /* takes ownership, drop it */
 
-	if (make_partition) {
+	if (fmtparam->make_partition) {
 		msfatctx->partition_byte_offset = (uint64_t)fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
 		if (libmsfat_formatting_params_create_partition_table_and_write_entry(fmtparam,msfatctx)) return 1;
 	}
