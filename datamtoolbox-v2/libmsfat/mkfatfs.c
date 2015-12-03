@@ -820,7 +820,7 @@ int libmsfat_formatting_params_is_valid(struct libmsfat_formatting_params *f) {
 	return 0;
 }
 
-int libmsfat_formatting_params_create_partition_table(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx) {
+int libmsfat_formatting_params_create_partition_table_and_write_entry(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx) {
 	struct libpartmbr_state_t diskimage_state;
 	struct libpartmbr_entry_t ent;
 	struct chs_geometry_t chs;
@@ -1162,7 +1162,7 @@ int main(int argc,char **argv) {
 
 	if (make_partition) {
 		msfatctx->partition_byte_offset = (uint64_t)fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
-		if (libmsfat_formatting_params_create_partition_table(fmtparam,msfatctx)) return 1;
+		if (libmsfat_formatting_params_create_partition_table_and_write_entry(fmtparam,msfatctx)) return 1;
 	}
 
 	/* generate the boot sector! */
