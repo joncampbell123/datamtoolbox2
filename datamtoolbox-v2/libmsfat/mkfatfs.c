@@ -134,7 +134,7 @@ struct libmsfat_formatting_params {
 	uint32_t					set_fsinfo_sector;
 	uint32_t					reserved_sectors;
 	uint32_t					set_reserved_sectors;
-	const char*					volume_label;
+	char*						volume_label;
 	unsigned int					lba_mode:1;
 	unsigned int					chs_mode:1;
 	unsigned int					volume_id_set:1;
@@ -156,12 +156,21 @@ struct libmsfat_formatting_params {
 int libmsfat_formatting_params_set_volume_label(struct libmsfat_formatting_params *f,const char *n) {
 	if (f == NULL) return -1;
 
-	if (n != NULL) f->volume_label = n;
-	else f->volume_label = "NO LABEL";
+	if (f->volume_label != NULL) {
+		free(f->volume_label);
+		f->volume_label = NULL;
+	}
+
+	if (n != NULL) f->volume_label = strdup(n);
+	else f->volume_label = strdup("NO LABEL");
 	return 0;
 }
 
 void libmsfat_formatting_params_free(struct libmsfat_formatting_params *f) {
+	if (f->volume_label != NULL) {
+		free(f->volume_label);
+		f->volume_label = NULL;
+	}
 }
 
 int libmsfat_formatting_params_init(struct libmsfat_formatting_params *f) {
@@ -944,7 +953,7 @@ int libmsfat_formatting_params_generate_boot_sector(unsigned char *sector512,str
 		bs->at36.BPB_FAT32.BS_VolID = htole32(f->volume_id);
 
 		{
-			const char *s = f->volume_label;
+			char *s = f->volume_label;
 			uint8_t *d = bs->at36.BPB_FAT32.BS_VolLab;
 			uint8_t *df = d + 11;
 
@@ -960,7 +969,7 @@ int libmsfat_formatting_params_generate_boot_sector(unsigned char *sector512,str
 		bs->at36.BPB_FAT.BS_VolID = htole32(f->volume_id);
 
 		{
-			const char *s = f->volume_label;
+			char *s = f->volume_label;
 			uint8_t *d = bs->at36.BPB_FAT.BS_VolLab;
 			uint8_t *df = d + 11;
 
