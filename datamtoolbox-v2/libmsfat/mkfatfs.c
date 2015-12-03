@@ -859,6 +859,7 @@ int libmsfat_formatting_params_create_partition_table_and_write_entry(struct lib
 	if (msfatctx->write == NULL)
 		return -1;
 
+	memset(f->diskimage_sector,0,sizeof(f->diskimage_sector));
 	libpartmbr_state_zero(&diskimage_state);
 	if (libpartmbr_create_partition_table(f->diskimage_sector,&diskimage_state))
 		return -1;
