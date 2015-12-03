@@ -110,8 +110,6 @@ static int extend_sparse_file_to_size(int fd,uint64_t size) {
 	return 0;
 }
 
-static uint8_t					allow_non_power_of_2_cluster_size = 0;
-static uint8_t					allow_64kb_or_larger_clusters = 0;
 static uint32_t					set_root_directory_entries = 0;
 static uint32_t					root_directory_entries = 0;
 static uint32_t					set_fsinfo_sector = 0;
@@ -150,6 +148,8 @@ struct libmsfat_formatting_params {
 	unsigned int					backup_boot_sector_set:1;
 	unsigned int					disk_media_type_byte_set:1;
 	unsigned int					disk_bytes_per_sector_set:1;
+	unsigned int					allow_non_power_of_2_cluster_size:1;
+	unsigned int					allow_64kb_or_larger_clusters:1;
 	unsigned int					make_partition:1;
 	unsigned int					allow_fat32:1;
 	unsigned int					allow_fat16:1;
@@ -568,7 +568,7 @@ int libmsfat_formatting_params_auto_choose_cluster_size(struct libmsfat_formatti
 			f->base_info.Sectors_Per_Cluster++;
 	}
 
-	if (!allow_non_power_of_2_cluster_size) {
+	if (!f->allow_non_power_of_2_cluster_size) {
 		/* need to round to a power of 2 */
 		if (f->base_info.Sectors_Per_Cluster >= (64+1)/*65*/)
 			f->base_info.Sectors_Per_Cluster = 128;
@@ -588,14 +588,14 @@ int libmsfat_formatting_params_auto_choose_cluster_size(struct libmsfat_formatti
 			f->base_info.Sectors_Per_Cluster = 1;
 	}
 
-	if (!allow_64kb_or_larger_clusters) {
+	if (!f->allow_64kb_or_larger_clusters) {
 		uint32_t sz;
 
 		sz = (uint32_t)f->base_info.Sectors_Per_Cluster * (uint32_t)f->disk_bytes_per_sector;
 		if (sz >= (uint32_t)0x10000UL) {
 			fprintf(stderr,"WARNING: cluster size choice means cluster is 64KB or larger. choosing smaller cluster size.\n");
 
-			if (allow_non_power_of_2_cluster_size)
+			if (f->allow_non_power_of_2_cluster_size)
 				f->base_info.Sectors_Per_Cluster = (uint32_t)0xFFFFUL / (uint32_t)f->disk_bytes_per_sector;
 			else {
 				while (sz >= (uint32_t)0x10000UL && f->base_info.Sectors_Per_Cluster >= 2U) {
@@ -1232,10 +1232,10 @@ int main(int argc,char **argv) {
 				fmtparam->cluster_size = (uint16_t)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"cluster-non-power-of-2")) {
-				allow_non_power_of_2_cluster_size = 1;
+				fmtparam->allow_non_power_of_2_cluster_size = 1;
 			}
 			else if (!strcmp(a,"large-clusters")) {
-				allow_64kb_or_larger_clusters = 1;
+				fmtparam->allow_64kb_or_larger_clusters = 1;
 			}
 			else if (!strcmp(a,"fat-tables")) {
 				set_fat_tables = (uint8_t)strtoul(argv[i++],NULL,0);
