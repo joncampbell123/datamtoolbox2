@@ -57,12 +57,32 @@ static int extend_sparse_file_to_size(int fd,uint64_t size) {
 	if (fd < 0) return -1;
 
 #if defined(_LINUX)
-	/* Linux: we can easily make the file sparse and quickly generate what we want with ftruncate.
-	 * On ext3/ext4 volumes this is a very fast way to create a disk image of any size AND to make
-	 * it sparse so that disk space is allocated only to what we write data to. */
-	if (ftruncate(fd,(off_t)size)) {
-		fprintf(stderr,"ftruncate failed\n");
-		return -1;
+	{
+		struct stat st;
+
+		/* we support giving a block device for the image.
+		 * ftruncate() can't work with those, so we need to check first */
+		if (fstat(fd,&st)) {
+			fprintf(stderr,"Cannot identify file info\n");
+			return -1;
+		}
+
+		if (S_ISREG(st.st_mode)) {
+			/* Linux: we can easily make the file sparse and quickly generate what we want with ftruncate.
+			 * On ext3/ext4 volumes this is a very fast way to create a disk image of any size AND to make
+			 * it sparse so that disk space is allocated only to what we write data to. */
+			if (ftruncate(fd,(off_t)size)) {
+				fprintf(stderr,"ftruncate failed\n");
+				return -1;
+			}
+		}
+		else if (S_ISBLK(st.st_mode)) {
+			/* check to make sure the device is that large */
+			if (lseek(fd,(off_t)size,SEEK_SET) != (off_t)size) {
+				fprintf(stderr,"Block device is not that large\n");
+				return -1;
+			}
+		}
 	}
 #elif defined(_WIN32)
 	/* Windows: Assuming NTFS and NT kernel (XP/Vista/7/8/10), mark the file as sparse, then set the file size. */
