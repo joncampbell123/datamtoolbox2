@@ -52,6 +52,64 @@ unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned i
 	return res;
 }
 
+static int extend_sparse_file_to_size(int fd,uint64_t size) {
+	if (fd < 0) return -1;
+
+#if defined(_LINUX)
+	/* Linux: we can easily make the file sparse and quickly generate what we want with ftruncate.
+	 * On ext3/ext4 volumes this is a very fast way to create a disk image of any size AND to make
+	 * it sparse so that disk space is allocated only to what we write data to. */
+	if (ftruncate(fd,(off_t)size)) {
+		fprintf(stderr,"ftruncate failed\n");
+		return -1;
+	}
+#elif defined(_WIN32)
+	/* Windows: Assuming NTFS and NT kernel (XP/Vista/7/8/10), mark the file as sparse, then set the file size. */
+	{
+		DWORD dwTemp;
+		LONG lo,hi;
+		HANDLE h;
+
+		h = (HANDLE)_get_osfhandle(fd);
+		if (h == INVALID_HANDLE_VALUE) return -1; // <- what?
+		DeviceIoControl(h,FSCTL_SET_SPARSE,NULL,0,NULL,0,&dwTemp,NULL); // <- don't care if it fails.
+
+		/* FIXME: "LONG" is 32-bit wide even in Win64, right? Does SetFilePointer() work the same in Win64? */
+		lo = (LONG)(size & 0xFFFFFFFFUL);
+		hi = (LONG)(size >> (uint64_t)32UL);
+		if (SetFilePointer(h,lo,&hi,FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
+			fprintf(stderr,"SetFilePointer failed\n");
+			return -1;
+		}
+
+		/* and then make that the end of the file */
+		if (SetEndOfFile(h) == 0) {
+			fprintf(stderr,"SetEndOfFile failed\n");
+			return -1;
+		}
+	}
+#else
+	/* try to make it sparse using lseek then a write.
+	 * this is the most portable way I know to make a file of the size we want.
+	 * it may cause lseek+write to take a long time in the system kernel to
+	 * satisfy the request especially if the filesystem is not treating it as sparse i.e. FAT. */
+	{
+		char c = 0;
+
+		if (lseek(fd,(off_t)size - (off_t)1U,SEEK_SET) != ((off_t)size - (off_t)1U)) {
+			fprintf(stderr,"lseek failed\n");
+			return -1;
+		}
+		if (write(fd,&c,1) != 1) {
+			fprintf(stderr,"write failed\n");
+			return -1;
+		}
+	}
+#endif
+
+	return 0;
+}
+
 static uint8_t					make_partition = 0;
 static uint8_t					allow_fat32 = 1;
 static uint8_t					allow_fat16 = 1;
@@ -1045,57 +1103,8 @@ int main(int argc,char **argv) {
 	}
 
 	/* extend the file out to the size we want. */
-#if defined(_LINUX)
-	/* Linux: we can easily make the file sparse and quickly generate what we want with ftruncate.
-	 * On ext3/ext4 volumes this is a very fast way to create a disk image of any size AND to make
-	 * it sparse so that disk space is allocated only to what we write data to. */
-	if (ftruncate(fd,(off_t)fmtparam->disk_size_bytes)) {
-		fprintf(stderr,"ftruncate failed\n");
+	if (extend_sparse_file_to_size(fd,fmtparam->disk_size_bytes))
 		return 1;
-	}
-#elif defined(_WIN32)
-	/* Windows: Assuming NTFS and NT kernel (XP/Vista/7/8/10), mark the file as sparse, then set the file size. */
-	{
-		DWORD dwTemp;
-		LONG lo,hi;
-		HANDLE h;
-
-		h = (HANDLE)_get_osfhandle(fd);
-		if (h == INVALID_HANDLE_VALUE) return 1; // <- what?
-		DeviceIoControl(h,FSCTL_SET_SPARSE,NULL,0,NULL,0,&dwTemp,NULL); // <- don't care if it fails.
-
-		/* FIXME: "LONG" is 32-bit wide even in Win64, right? Does SetFilePointer() work the same in Win64? */
-		lo = (LONG)(disk_size_bytes & 0xFFFFFFFFUL);
-		hi = (LONG)(disk_size_bytes >> (uint64_t)32UL);
-		if (SetFilePointer(h,lo,&hi,FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
-			fprintf(stderr,"SetFilePointer failed\n");
-			return 1;
-		}
-
-		/* and then make that the end of the file */
-		if (SetEndOfFile(h) == 0) {
-			fprintf(stderr,"SetEndOfFile failed\n");
-			return 1;
-		}
-	}
-#else
-	/* try to make it sparse using lseek then a write.
-	 * this is the most portable way I know to make a file of the size we want.
-	 * it may cause lseek+write to take a long time in the system kernel to
-	 * satisfy the request especially if the filesystem is not treating it as sparse i.e. FAT. */
-	{
-		char c = 0;
-
-		if (lseek(fd,(off_t)disk_size_bytes - (off_t)1U,SEEK_SET) != ((off_t)disk_size_bytes - (off_t)1U)) {
-			fprintf(stderr,"lseek failed\n");
-			return 1;
-		}
-		if (write(fd,&c,1) != 1) {
-			fprintf(stderr,"write failed\n");
-			return 1;
-		}
-	}
-#endif
 
 	// good. we need to work on it a a bit.
 	msfatctx = libmsfat_context_create();
