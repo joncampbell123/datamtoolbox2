@@ -116,7 +116,6 @@ static uint32_t					set_fsinfo_sector = 0;
 static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
 static uint32_t					set_reserved_sectors = 0;
-static const char*				set_volume_label = NULL;
 static uint8_t					set_boot_sector_bpb_size = 0;
 
 struct libmsfat_formatting_params {
@@ -1256,7 +1255,10 @@ int main(int argc,char **argv) {
 				}
 			}
 			else if (!strcmp(a,"volume-label")) {
-				set_volume_label = argv[i++];
+				if (libmsfat_formatting_params_set_volume_label(fmtparam,argv[i++])) {
+					fprintf(stderr,"--volume-label: rejected\n");
+					return 1;
+				}
 			}
 			else if (!strcmp(a,"root-cluster")) {
 				if (libmsfat_formatting_params_set_root_cluster(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
@@ -1368,7 +1370,6 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_compute_cluster_count(fmtparam)) return 1;
 	if (fmtparam->make_partition && libmsfat_formatting_params_choose_partition_table(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_media_type_byte(fmtparam)) return 1;
-	if (libmsfat_formatting_params_set_volume_label(fmtparam,set_volume_label)) return 1;
 	if (libmsfat_formatting_params_auto_choose_volume_id(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_root_cluster(fmtparam)) return 1;
 
