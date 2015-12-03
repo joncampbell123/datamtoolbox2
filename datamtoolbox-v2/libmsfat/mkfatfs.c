@@ -124,8 +124,6 @@ static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
 static uint32_t					set_reserved_sectors = 0;
 static const char*				set_volume_label = NULL;
-static uint32_t					root_cluster = 0;
-static uint32_t					root_cluster_set = 0;
 static uint32_t					set_backup_boot_sector = 0;
 static uint8_t					set_boot_sector_bpb_size = 0;
 static uint8_t					dont_partition_track_align = 0;
@@ -145,11 +143,13 @@ struct libmsfat_formatting_params {
 	uint32_t					volume_id;
 	uint8_t						partition_type;
 	uint8_t						disk_media_type_byte;
+	uint32_t					root_cluster;
 	const char*					volume_label;
 
 	unsigned int					lba_mode:1;
 	unsigned int					chs_mode:1;
 	unsigned int					volume_id_set:1;
+	uint32_t					root_cluster_set:1;
 	unsigned int					partition_type_set:1;
 	unsigned int					disk_size_bytes_set:1;
 	unsigned int					disk_media_type_byte_set:1;
@@ -799,6 +799,19 @@ int libmsfat_formatting_params_set_volume_id(struct libmsfat_formatting_params *
 	return 0;
 }
 
+int libmsfat_formatting_params_set_root_cluster(struct libmsfat_formatting_params *f,uint32_t cluster) {
+	if (f == NULL) return -1;
+	f->root_cluster = cluster;
+	f->root_cluster_set = 1;
+	return 0;
+}
+
+int libmsfat_formatting_params_auto_choose_root_cluster(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+	if (!f->root_cluster_set) f->root_cluster = 2;
+	return 0;
+}
+
 int libmsfat_formatting_params_auto_choose_volume_id(struct libmsfat_formatting_params *f) {
 	if (f == NULL) return -1;
 
@@ -999,8 +1012,10 @@ int main(int argc,char **argv) {
 				set_volume_label = argv[i++];
 			}
 			else if (!strcmp(a,"root-cluster")) {
-				root_cluster = (uint32_t)strtoul(argv[i++],NULL,0);
-				root_cluster_set = 1;
+				if (libmsfat_formatting_params_set_root_cluster(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
+					fprintf(stderr,"--root-cluster: failed\n");
+					return 1;
+				}
 			}
 			else if (!strcmp(a,"backup-boot-sector")) {
 				set_backup_boot_sector = (uint32_t)strtoul(argv[i++],NULL,0);
@@ -1105,6 +1120,7 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_auto_choose_media_type_byte(fmtparam)) return 1;
 	if (libmsfat_formatting_params_set_volume_label(fmtparam,set_volume_label)) return 1;
 	if (libmsfat_formatting_params_auto_choose_volume_id(fmtparam)) return 1;
+	if (libmsfat_formatting_params_auto_choose_root_cluster(fmtparam)) return 1;
 
 	assert(fmtparam->lba_mode || fmtparam->chs_mode);
 	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x %s\n",
@@ -1185,9 +1201,6 @@ int main(int argc,char **argv) {
 		if (libmsfat_formatting_params_create_partition_table_and_write_entry(fmtparam,msfatctx)) return 1;
 	}
 
-	if (!root_cluster_set)
-		root_cluster = 2;
-
 	/* generate the boot sector! */
 	{
 		unsigned char sector[512];
@@ -1240,7 +1253,7 @@ int main(int argc,char **argv) {
 			bs->at36.BPB_FAT32.BPB_FATSz32 = htole32(fmtparam->base_info.FAT_table_size);
 			bs->at36.BPB_FAT32.BPB_ExtFlags = 0;
 			bs->at36.BPB_FAT32.BPB_FSVer = 0;
-			bs->at36.BPB_FAT32.BPB_RootClus = htole32(root_cluster);
+			bs->at36.BPB_FAT32.BPB_RootClus = htole32(fmtparam->root_cluster);
 			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(fmtparam->base_info.fat32.BPB_FSInfo);
 			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(backup_boot_sector);
 			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
