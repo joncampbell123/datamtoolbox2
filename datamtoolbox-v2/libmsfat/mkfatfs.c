@@ -68,7 +68,6 @@ static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
 static uint32_t					set_reserved_sectors = 0;
 static uint32_t					volume_id = 0;
-static const char*				volume_label = NULL;
 static uint32_t					set_volume_id = 0;
 static const char*				set_volume_label = NULL;
 static uint8_t					set_volume_id_flag = 0;
@@ -91,6 +90,7 @@ struct libmsfat_formatting_params {
 	uint64_t					disk_sectors;
 	uint8_t						partition_type;
 	uint8_t						disk_media_type_byte;
+	const char*					volume_label;
 
 	unsigned int					partition_type_set:1;
 	unsigned int					disk_size_bytes_set:1;
@@ -98,12 +98,21 @@ struct libmsfat_formatting_params {
 	unsigned int					disk_bytes_per_sector_set:1;
 };
 
+int libmsfat_formatting_params_set_volume_label(struct libmsfat_formatting_params *f,const char *n) {
+	if (f == NULL) return -1;
+
+	if (n != NULL) f->volume_label = n;
+	else f->volume_label = "NO LABEL";
+	return 0;
+}
+
 void libmsfat_formatting_params_free(struct libmsfat_formatting_params *f) {
 }
 
 int libmsfat_formatting_params_init(struct libmsfat_formatting_params *f) {
 	memset(f,0,sizeof(*f));
 	f->disk_bytes_per_sector = 512U;
+	libmsfat_formatting_params_set_volume_label(f,NULL);
 	return 0;
 }
 
@@ -946,6 +955,12 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_compute_cluster_count(fmtparam)) return 1;
 	if (make_partition && libmsfat_formatting_params_choose_partition_table(fmtparam)) return 1;
 	if (libmsfat_formatting_params_auto_choose_media_type_byte(fmtparam)) return 1;
+	if (libmsfat_formatting_params_set_volume_label(fmtparam,set_volume_label)) return 1;
+
+	if (set_volume_id_flag)
+		volume_id = set_volume_id;
+	else
+		volume_id = (uint32_t)time(NULL);
 
 	assert(lba_mode || chs_mode);
 	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x %s\n",
@@ -971,16 +986,6 @@ int main(int argc,char **argv) {
 
 		if (fmtparam->partition_offset == 0 || fmtparam->partition_size == 0) return 1;
 	}
-
-	if (set_volume_label != NULL)
-		volume_label = set_volume_label;
-	else
-		volume_label = "NO LABEL";
-
-	if (set_volume_id_flag)
-		volume_id = set_volume_id;
-	else
-		volume_id = (uint32_t)time(NULL);
 
 	printf("   FAT filesystem FAT%u. %lu x %lu (%lu bytes) per cluster. %lu sectors => %lu clusters (%lu)\n",
 		fmtparam->base_info.FAT_size,
@@ -1224,7 +1229,7 @@ int main(int argc,char **argv) {
 			bs->at36.BPB_FAT32.BS_VolID = htole32(volume_id);
 
 			{
-				const char *s = volume_label;
+				const char *s = fmtparam->volume_label;
 				uint8_t *d = bs->at36.BPB_FAT32.BS_VolLab;
 				uint8_t *df = d + 11;
 
@@ -1240,7 +1245,7 @@ int main(int argc,char **argv) {
 			bs->at36.BPB_FAT.BS_VolID = htole32(volume_id);
 
 			{
-				const char *s = volume_label;
+				const char *s = fmtparam->volume_label;
 				uint8_t *d = bs->at36.BPB_FAT.BS_VolLab;
 				uint8_t *df = d + 11;
 
@@ -1400,13 +1405,13 @@ int main(int argc,char **argv) {
 			return 1;
 		}
 
-		if (*volume_label != 0) {
+		if (*fmtparam->volume_label != 0) {
 			struct libmsfat_dirent_t dirent;
 
 			memset(&dirent,0,sizeof(dirent));
 
 			{
-				const char *s = volume_label;
+				const char *s = fmtparam->volume_label;
 				char *d = dirent.a.n.DIR_Name;
 				char *df = d + 11;
 
