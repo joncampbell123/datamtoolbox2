@@ -30,6 +30,36 @@
 #include <datamtoolbox-v2/libmsfat/libmsfat_unicode.h>
 #include <datamtoolbox-v2/libmsfat/libmsfmt.h>
 
+static void try_autofill_size(const char *path,struct libmsfat_formatting_params *f) {
+	if (path == NULL || f == NULL) return;
+
+#if defined(_LINUX)
+	if (!f->disk_size_bytes_set) {
+		struct stat st;
+
+		if (lstat(path,&st) == 0) {
+			if (S_ISREG(st.st_mode)) {
+				/* OK */
+			}
+			else if (S_ISBLK(st.st_mode)) {
+				/* block device. try to automatically determine it's capacity */
+				int fd = open(path,O_RDONLY);
+				if (fd >= 0) {
+					off_t sz = lseek(fd,0,SEEK_END);
+
+					if (sz >= (off_t)0UL) {
+						f->disk_size_bytes_set = 1;
+						f->disk_size_bytes = (uint64_t)sz;
+					}
+
+					close(fd);
+				}
+			}
+		}
+	}
+#endif
+}
+
 static unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned int base) {
 	unsigned long long res = 0;
 	char *l_r = NULL;
@@ -286,6 +316,9 @@ int main(int argc,char **argv) {
 		fprintf(stderr,"libmsfat sanity check fail\n");
 		return 1;
 	}
+
+	if (s_image != NULL && s_geometry == NULL && !fmtparam->disk_size_bytes_set)
+		try_autofill_size(s_image,fmtparam);
 
 	if (s_image == NULL || (s_geometry == NULL && !fmtparam->disk_size_bytes_set)) {
 		fprintf(stderr,"mkfatfs --image <image> ...\n");
