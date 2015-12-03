@@ -124,10 +124,8 @@ static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
 static uint32_t					set_reserved_sectors = 0;
 static const char*				set_volume_label = NULL;
-static uint32_t					set_backup_boot_sector = 0;
 static uint8_t					set_boot_sector_bpb_size = 0;
 static uint8_t					dont_partition_track_align = 0;
-static uint32_t					backup_boot_sector = 0;
 
 struct libmsfat_formatting_params {
 	uint8_t						force_fat;
@@ -143,6 +141,7 @@ struct libmsfat_formatting_params {
 	uint32_t					volume_id;
 	uint8_t						partition_type;
 	uint8_t						disk_media_type_byte;
+	uint32_t					backup_boot_sector;
 	uint32_t					root_cluster;
 	const char*					volume_label;
 
@@ -152,6 +151,7 @@ struct libmsfat_formatting_params {
 	uint32_t					root_cluster_set:1;
 	unsigned int					partition_type_set:1;
 	unsigned int					disk_size_bytes_set:1;
+	unsigned int					backup_boot_sector_set:1;
 	unsigned int					disk_media_type_byte_set:1;
 	unsigned int					disk_bytes_per_sector_set:1;
 };
@@ -651,18 +651,17 @@ int libmsfat_formatting_params_auto_choose_fat32_backup_boot_sector(struct libms
 	if (f == NULL) return -1;
 
 	if (f->base_info.FAT_size == 32) {
-		if (set_backup_boot_sector != 0) backup_boot_sector = set_backup_boot_sector;
-		else backup_boot_sector = 1;
+		if (!f->backup_boot_sector_set) f->backup_boot_sector = 1;
 
-		if (backup_boot_sector >= reserved_sectors)
-			backup_boot_sector = reserved_sectors - 1;
-		if (backup_boot_sector > 1 && backup_boot_sector == f->base_info.fat32.BPB_FSInfo)
-			backup_boot_sector--;
-		if (backup_boot_sector == f->base_info.fat32.BPB_FSInfo)
+		if (f->backup_boot_sector >= reserved_sectors)
+			f->backup_boot_sector = reserved_sectors - 1;
+		if (f->backup_boot_sector > 1 && f->backup_boot_sector == f->base_info.fat32.BPB_FSInfo)
+			f->backup_boot_sector--;
+		if (f->backup_boot_sector == f->base_info.fat32.BPB_FSInfo)
 			return 1;
 	}
 	else {
-		backup_boot_sector = 0;
+		f->backup_boot_sector = 0;
 	}
 
 	return 0;
@@ -796,6 +795,13 @@ int libmsfat_formatting_params_set_volume_id(struct libmsfat_formatting_params *
 	if (f == NULL) return -1;
 	f->volume_id = vol_id;
 	f->volume_id_set = 1;
+	return 0;
+}
+
+int libmsfat_formatting_params_set_backup_boot_sector(struct libmsfat_formatting_params *f,uint32_t sector) {
+	if (f == NULL) return -1;
+	f->backup_boot_sector = sector;
+	f->backup_boot_sector_set = 1;
 	return 0;
 }
 
@@ -1018,7 +1024,10 @@ int main(int argc,char **argv) {
 				}
 			}
 			else if (!strcmp(a,"backup-boot-sector")) {
-				set_backup_boot_sector = (uint32_t)strtoul(argv[i++],NULL,0);
+				if (libmsfat_formatting_params_set_backup_boot_sector(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
+					fprintf(stderr,"--backup-boot-sector: failed\n");
+					return 1;
+				}
 			}
 			else if (!strcmp(a,"bpb-size")) {
 				set_boot_sector_bpb_size = (uint8_t)strtoul(argv[i++],NULL,0);
@@ -1255,7 +1264,7 @@ int main(int argc,char **argv) {
 			bs->at36.BPB_FAT32.BPB_FSVer = 0;
 			bs->at36.BPB_FAT32.BPB_RootClus = htole32(fmtparam->root_cluster);
 			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(fmtparam->base_info.fat32.BPB_FSInfo);
-			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(backup_boot_sector);
+			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(fmtparam->backup_boot_sector);
 			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
 			bs->at36.BPB_FAT32.BS_BootSig = 0x29;
 			bs->at36.BPB_FAT32.BS_VolID = htole32(fmtparam->volume_id);
