@@ -110,7 +110,6 @@ static int extend_sparse_file_to_size(int fd,uint64_t size) {
 	return 0;
 }
 
-static uint16_t					set_cluster_size = 0;
 static uint8_t					allow_non_power_of_2_cluster_size = 0;
 static uint8_t					allow_64kb_or_larger_clusters = 0;
 static uint32_t					set_root_directory_entries = 0;
@@ -139,6 +138,7 @@ struct libmsfat_formatting_params {
 	uint8_t						disk_media_type_byte;
 	uint32_t					backup_boot_sector;
 	uint32_t					root_cluster;
+	uint16_t					cluster_size;
 	const char*					volume_label;
 
 	unsigned int					lba_mode:1;
@@ -531,10 +531,10 @@ int libmsfat_formatting_params_auto_choose_root_directory_size(struct libmsfat_f
 int libmsfat_formatting_params_auto_choose_cluster_size(struct libmsfat_formatting_params *f) {
 	if (f == NULL) return -1;
 
-	if (set_cluster_size != 0) {
+	if (f->cluster_size != 0) {
 		unsigned long x;
 
-		x = ((unsigned long)set_cluster_size + ((unsigned long)f->disk_bytes_per_sector / 2UL)) / (unsigned long)f->disk_bytes_per_sector;
+		x = ((unsigned long)f->cluster_size + ((unsigned long)f->disk_bytes_per_sector / 2UL)) / (unsigned long)f->disk_bytes_per_sector;
 		if (x == 0) x = f->disk_bytes_per_sector;
 		if (x > 255UL) x = 255UL;
 		f->base_info.Sectors_Per_Cluster = (uint8_t)x;
@@ -1229,7 +1229,7 @@ int main(int argc,char **argv) {
 				}
 			}
 			else if (!strcmp(a,"cluster-size")) {
-				set_cluster_size = (uint16_t)strtoul(argv[i++],NULL,0);
+				fmtparam->cluster_size = (uint16_t)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"cluster-non-power-of-2")) {
 				allow_non_power_of_2_cluster_size = 1;
