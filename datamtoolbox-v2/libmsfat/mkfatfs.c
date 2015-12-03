@@ -67,10 +67,7 @@ static uint32_t					set_fsinfo_sector = 0;
 static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
 static uint32_t					set_reserved_sectors = 0;
-static uint32_t					volume_id = 0;
-static uint32_t					set_volume_id = 0;
 static const char*				set_volume_label = NULL;
-static uint8_t					set_volume_id_flag = 0;
 static uint32_t					set_root_cluster = 0;
 static uint32_t					set_backup_boot_sector = 0;
 static uint8_t					set_boot_sector_bpb_size = 0;
@@ -88,10 +85,12 @@ struct libmsfat_formatting_params {
 	uint64_t					disk_size_bytes;
 	uint64_t					partition_size;
 	uint64_t					disk_sectors;
+	uint32_t					volume_id;
 	uint8_t						partition_type;
 	uint8_t						disk_media_type_byte;
 	const char*					volume_label;
 
+	unsigned int					volume_id_set:1;
 	unsigned int					partition_type_set:1;
 	unsigned int					disk_size_bytes_set:1;
 	unsigned int					disk_media_type_byte_set:1;
@@ -734,6 +733,13 @@ int libmsfat_formatting_params_auto_choose_media_type_byte(struct libmsfat_forma
 	return 0;
 }
 
+int libmsfat_formatting_params_set_volume_id(struct libmsfat_formatting_params *f,uint32_t vol_id) {
+	if (f == NULL) return -1;
+	f->volume_id = vol_id;
+	f->volume_id_set = 1;
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	struct libmsfat_context_t *msfatctx = NULL;
@@ -845,8 +851,10 @@ int main(int argc,char **argv) {
 				set_reserved_sectors = (uint32_t)strtoul(argv[i++],NULL,0);
 			}
 			else if (!strcmp(a,"volume-id")) {
-				set_volume_id = (uint32_t)strtoul(argv[i++],NULL,0);
-				set_volume_id_flag = 1;
+				if (libmsfat_formatting_params_set_volume_id(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
+					fprintf(stderr,"--volume-id: failed\n");
+					return 1;
+				}
 			}
 			else if (!strcmp(a,"volume-label")) {
 				set_volume_label = argv[i++];
@@ -957,10 +965,8 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_auto_choose_media_type_byte(fmtparam)) return 1;
 	if (libmsfat_formatting_params_set_volume_label(fmtparam,set_volume_label)) return 1;
 
-	if (set_volume_id_flag)
-		volume_id = set_volume_id;
-	else
-		volume_id = (uint32_t)time(NULL);
+	if (!fmtparam->volume_id_set)
+		fmtparam->volume_id = (uint32_t)time(NULL);
 
 	assert(lba_mode || chs_mode);
 	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x %s\n",
@@ -1004,7 +1010,7 @@ int main(int argc,char **argv) {
 		(unsigned int)fmtparam->base_info.FAT_tables,
 		(unsigned long)fmtparam->base_info.FAT_table_size);
 	printf("   Volume ID: 0x%08lx\n",
-		(unsigned long)volume_id);
+		(unsigned long)fmtparam->volume_id);
 
 	if (fmtparam->base_info.FAT_size == 32)
 		printf("   FAT32 FSInfo sector: %lu\n",
@@ -1226,7 +1232,7 @@ int main(int argc,char **argv) {
 			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(backup_boot_sector);
 			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
 			bs->at36.BPB_FAT32.BS_BootSig = 0x29;
-			bs->at36.BPB_FAT32.BS_VolID = htole32(volume_id);
+			bs->at36.BPB_FAT32.BS_VolID = htole32(fmtparam->volume_id);
 
 			{
 				const char *s = fmtparam->volume_label;
@@ -1242,7 +1248,7 @@ int main(int argc,char **argv) {
 		else {
 			bs->at36.BPB_FAT.BS_DrvNum = (make_partition ? 0x80 : 0x00);
 			bs->at36.BPB_FAT.BS_BootSig = 0x29;
-			bs->at36.BPB_FAT.BS_VolID = htole32(volume_id);
+			bs->at36.BPB_FAT.BS_VolID = htole32(fmtparam->volume_id);
 
 			{
 				const char *s = fmtparam->volume_label;
