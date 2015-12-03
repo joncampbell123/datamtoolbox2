@@ -98,7 +98,7 @@ static int do_editloc(int entry,uint32_t start,uint32_t num,int type) {
 	}
 
 	assert(diskimage_fd >= 0);
-	if (lseek(diskimage_fd,0,SEEK_SET) != 0 || write(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
+	if (lseek64(diskimage_fd,0,SEEK_SET) != 0 || write(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
 		fprintf(stderr,"Failed to write MBR back\n");
 		return 1;
 	}
@@ -127,7 +127,7 @@ static int do_remove(int entry) {
 	}
 
 	assert(diskimage_fd >= 0);
-	if (lseek(diskimage_fd,0,SEEK_SET) != 0 || write(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
+	if (lseek64(diskimage_fd,0,SEEK_SET) != 0 || write(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
 		fprintf(stderr,"Failed to write MBR back\n");
 		return 1;
 	}
@@ -144,7 +144,7 @@ static int do_create() {
 	}
 
 	assert(diskimage_fd >= 0);
-	if (lseek(diskimage_fd,0,SEEK_SET) != 0 || write(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
+	if (lseek64(diskimage_fd,0,SEEK_SET) != 0 || write(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
 		fprintf(stderr,"Failed to write MBR back\n");
 		return 1;
 	}
@@ -193,7 +193,7 @@ static int do_ext_list(uint32_t first_lba) {
 	scan_lba = first_lba;
 	while (1) {
 		seekofs = (lseek_off_t)512ULL * (lseek_off_t)scan_lba;
-		if (lseek(diskimage_fd,seekofs,SEEK_SET) != seekofs || read(diskimage_fd,sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE)
+		if (lseek64(diskimage_fd,seekofs,SEEK_SET) != seekofs || read(diskimage_fd,sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE)
 			break;
 		if (libpartmbr_state_probe(&state,sector))
 			break;
@@ -448,7 +448,7 @@ int main(int argc,char **argv) {
 			return 1;
 		}
 	}
-	if (lseek(diskimage_fd,0,SEEK_SET) != 0 || read(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
+	if (lseek64(diskimage_fd,0,SEEK_SET) != 0 || read(diskimage_fd,diskimage_sector,LIBPARTMBR_SECTOR_SIZE) != LIBPARTMBR_SECTOR_SIZE) {
 		fprintf(stderr,"Failed to read MBR\n");
 		return 1;
 	}
