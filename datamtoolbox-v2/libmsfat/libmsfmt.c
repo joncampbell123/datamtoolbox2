@@ -1023,3 +1023,40 @@ cleanup_err:
 	return -1;
 }
 
+int libmsfat_formatting_params_zero_fat_tables(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx) {
+	unsigned char buf[512];
+	unsigned int instance;
+	uint64_t offset;
+	uint64_t sz;
+	size_t rd;
+
+	if (f == NULL || msfatctx == NULL) return -1;
+	if (msfatctx->write == NULL) return -1;
+
+	for (instance=0;instance < msfatctx->fatinfo.FAT_tables;instance++) {
+		offset  = (uint64_t)msfatctx->fatinfo.FAT_offset * (uint64_t)msfatctx->fatinfo.BytesPerSector;
+		// and the partition offset
+		offset += msfatctx->partition_byte_offset;
+		// instance
+		offset += (uint64_t)instance * (uint64_t)msfatctx->fatinfo.BytesPerSector * (uint64_t)msfatctx->fatinfo.FAT_table_size;
+
+		// zero the FAT table
+		memset(buf,0x00,sizeof(buf));
+		sz = (uint64_t)msfatctx->fatinfo.BytesPerSector * (uint64_t)msfatctx->fatinfo.FAT_table_size;
+		while (sz != (uint64_t)0) {
+			if (sz > (uint64_t)sizeof(buf))
+				rd = sizeof(buf);
+			else
+				rd = (size_t)sz;
+
+			if (msfatctx->write(msfatctx,buf,offset,sizeof(buf)))
+				return -1;
+
+			offset += (uint64_t)rd;
+			sz -= (uint64_t)rd;
+		}
+	}
+
+	return 0;
+}
+

@@ -445,6 +445,7 @@ int main(int argc,char **argv) {
 		if (libmsfat_formatting_params_write_boot_sector(sector,msfatctx,fmtparam)) return 1;
 		if (libmsfat_formatting_params_write_fat32_fsinfo(sector,msfatctx,fmtparam)) return 1;
 		if (libmsfat_formatting_params_reinit_final_info(fmtparam,msfatctx,sector)) return 1;
+		if (libmsfat_formatting_params_zero_fat_tables(fmtparam,msfatctx)) return 1;
 		if (libmsfat_formatting_params_write_fat_clusters01(fmtparam,msfatctx)) return 1;
 		if (libmsfat_formatting_params_init_fat32_root_cluster(fmtparam,msfatctx,sector)) return 1;
 		if (libmsfat_formatting_params_init_root_directory_volume_label(fmtparam,msfatctx)) return 1;
