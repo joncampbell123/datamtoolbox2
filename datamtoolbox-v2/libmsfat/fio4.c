@@ -183,7 +183,7 @@ int main(int argc,char **argv) {
 	{
 		lseek_off_t x = (lseek_off_t)first_lba * (lseek_off_t)512UL;
 
-		if (lseek64(fd,x,SEEK_SET) != x || read(fd,sectorbuf,512) != 512) {
+		if (_polyfill_lseek(fd,x,SEEK_SET) != x || read(fd,sectorbuf,512) != 512) {
 			fprintf(stderr,"Unable to read boot sector\n");
 			return 1;
 		}

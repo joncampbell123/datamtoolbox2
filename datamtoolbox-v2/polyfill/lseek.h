@@ -5,7 +5,7 @@
 # define lseek_off_t __int64
 
 /* Map Linux-like lseek64 to Microsoft's _lseeki64 */
-static lseek_off_t lseek64(int fd, lseek_off_t ofs, int origin) {
+static lseek_off_t _polyfill_lseek(int fd, lseek_off_t ofs, int origin) {
 	return (lseek_off_t)_lseeki64(fd, (__int64)ofs, origin);
 }
 #else
@@ -20,8 +20,9 @@ static lseek_off_t lseek64(int fd, lseek_off_t ofs, int origin) {
 
 # include <sys/types.h>
 # include <unistd.h>
+/* Linux: we set _FILE_OFFSET_BITS == 64, off_t should be 64-bit and lseek() should invoke 64-bit version */
 # define lseek_off_t off_t
-/* Linux has lseek64() */
+# define _polyfill_lseek lseek
 #endif
 
 #endif /* __DATAMTOOLBOX_POLYFILL_LSEEK_H */

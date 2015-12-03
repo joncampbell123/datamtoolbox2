@@ -45,7 +45,7 @@ static void try_autofill_size(const char *path,struct libmsfat_formatting_params
 				/* block device. try to automatically determine it's capacity */
 				int fd = open(path,O_RDONLY);
 				if (fd >= 0) {
-					off_t sz = lseek64(fd,0,SEEK_END);
+					off_t sz = _polyfill_lseek(fd,0,SEEK_END);
 
 					if (sz >= (off_t)0UL) {
 						f->disk_size_bytes_set = 1;
@@ -108,7 +108,7 @@ static int extend_sparse_file_to_size(int fd,uint64_t size) {
 		}
 		else if (S_ISBLK(st.st_mode)) {
 			/* check to make sure the device is that large */
-			if (lseek64(fd,(off_t)size,SEEK_SET) != (off_t)size) {
+			if (_polyfill_lseek(fd,(off_t)size,SEEK_SET) != (off_t)size) {
 				fprintf(stderr,"Block device is not that large\n");
 				return -1;
 			}
@@ -147,7 +147,7 @@ static int extend_sparse_file_to_size(int fd,uint64_t size) {
 	{
 		char c = 0;
 
-		if (lseek64(fd,(off_t)size - (off_t)1U,SEEK_SET) != ((off_t)size - (off_t)1U)) {
+		if (_polyfill_lseek(fd,(off_t)size - (off_t)1U,SEEK_SET) != ((off_t)size - (off_t)1U)) {
 			fprintf(stderr,"lseek failed\n");
 			return -1;
 		}

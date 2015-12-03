@@ -178,12 +178,12 @@ int main(int argc,char **argv) {
 
 		first_lba = 0;
 
-		x = lseek64(fd,0,SEEK_END);
+		x = _polyfill_lseek(fd,0,SEEK_END);
 		if (x < (lseek_off_t)0) x = 0;
 		x /= (lseek_off_t)512UL;
 		if (x > (lseek_off_t)0xFFFFFFFFUL) x = (lseek_off_t)0xFFFFFFFFUL;
 		size_lba = (uint32_t)x;
-		lseek64(fd,0,SEEK_SET);
+		_polyfill_lseek(fd,0,SEEK_SET);
 	}
 
 	printf("Reading from disk sectors %lu-%lu (%lu sectors)\n",
@@ -194,7 +194,7 @@ int main(int argc,char **argv) {
 	{
 		lseek_off_t x = (lseek_off_t)first_lba * (lseek_off_t)512UL;
 
-		if (lseek64(fd,x,SEEK_SET) != x || read(fd,sectorbuf,512) != 512) {
+		if (_polyfill_lseek(fd,x,SEEK_SET) != x || read(fd,sectorbuf,512) != 512) {
 			fprintf(stderr,"Unable to read boot sector\n");
 			return 1;
 		}
