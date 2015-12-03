@@ -898,6 +898,143 @@ unsigned int libmsfat_formatting_params_get_bpb_size(struct libmsfat_formatting_
 	return bs_sz;
 }
 
+int libmsfat_formatting_params_generate_boot_sector(unsigned char *sector512,struct libmsfat_formatting_params *f) {
+	struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector512;
+	unsigned int bs_sz;
+
+	if (sector512 == NULL || f == NULL) return -1;
+	bs_sz = libmsfat_formatting_params_get_bpb_size(f);
+
+	// JMP instruction
+	bs->BS_header.BS_jmpBoot[0] = 0xEB;
+	bs->BS_header.BS_jmpBoot[1] = bs_sz - 2;
+	bs->BS_header.BS_jmpBoot[2] = 0x90;
+
+	// common BPB
+	bs->BPB_common.BPB_BytsPerSec = htole16(f->disk_bytes_per_sector);
+	bs->BPB_common.BPB_SecPerClus = f->base_info.Sectors_Per_Cluster;
+	bs->BPB_common.BPB_RsvdSecCnt = htole16(reserved_sectors);
+	bs->BPB_common.BPB_NumFATs = f->base_info.FAT_tables;
+	if (f->base_info.FAT_size == 32)
+		bs->BPB_common.BPB_RootEntCnt = 0;
+	else
+		bs->BPB_common.BPB_RootEntCnt = htole16(root_directory_entries);
+	if (f->base_info.TotalSectors >= (uint32_t)65536 || f->base_info.FAT_size == 32)
+		bs->BPB_common.BPB_TotSec16 = 0;
+	else
+		bs->BPB_common.BPB_TotSec16 = (uint16_t)htole16(f->base_info.TotalSectors);
+	bs->BPB_common.BPB_Media = f->disk_media_type_byte;
+	if (f->base_info.FAT_size == 32)
+		bs->BPB_common.BPB_FATSz16 = 0;
+	else
+		bs->BPB_common.BPB_FATSz16 = htole16(f->base_info.FAT_table_size);
+	bs->BPB_common.BPB_SecPerTrk = f->disk_geo.sectors;
+	bs->BPB_common.BPB_NumHeads = f->disk_geo.heads;
+	bs->BPB_common.BPB_TotSec32 = htole32(f->base_info.TotalSectors);
+
+	if (f->base_info.FAT_size == 32) {
+		bs->at36.BPB_FAT32.BPB_FATSz32 = htole32(f->base_info.FAT_table_size);
+		bs->at36.BPB_FAT32.BPB_ExtFlags = 0;
+		bs->at36.BPB_FAT32.BPB_FSVer = 0;
+		bs->at36.BPB_FAT32.BPB_RootClus = htole32(f->root_cluster);
+		bs->at36.BPB_FAT32.BPB_FSInfo = htole16(f->base_info.fat32.BPB_FSInfo);
+		bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(f->backup_boot_sector);
+		bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
+		bs->at36.BPB_FAT32.BS_BootSig = 0x29;
+		bs->at36.BPB_FAT32.BS_VolID = htole32(f->volume_id);
+
+		{
+			const char *s = f->volume_label;
+			uint8_t *d = bs->at36.BPB_FAT32.BS_VolLab;
+			uint8_t *df = d + 11;
+
+			while (*s && d < df) *d++ = *s++;
+			while (d < df) *d++ = ' ';
+		}
+
+		memcpy(bs->at36.BPB_FAT32.BS_FilSysType,"FAT32   ",8);
+	}
+	else {
+		bs->at36.BPB_FAT.BS_DrvNum = (make_partition ? 0x80 : 0x00);
+		bs->at36.BPB_FAT.BS_BootSig = 0x29;
+		bs->at36.BPB_FAT.BS_VolID = htole32(f->volume_id);
+
+		{
+			const char *s = f->volume_label;
+			uint8_t *d = bs->at36.BPB_FAT.BS_VolLab;
+			uint8_t *df = d + 11;
+
+			while (*s && d < df) *d++ = *s++;
+			while (d < df) *d++ = ' ';
+		}
+
+		if (f->base_info.FAT_size == 16)
+			memcpy(bs->at36.BPB_FAT.BS_FilSysType,"FAT16   ",8);
+		else
+			memcpy(bs->at36.BPB_FAT.BS_FilSysType,"FAT12   ",8);
+	}
+
+	// signature
+	sector512[510] = 0x55;
+	sector512[511] = 0xAA;
+
+	return 0;
+}
+
+int libmsfat_formatting_params_write_fat32_fsinfo(unsigned char *sector512,struct libmsfat_context_t *msfatctx,struct libmsfat_formatting_params *f) {
+	struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector512;
+	struct libmsfat_fat32_fsinfo_t fsinfo;
+	uint64_t offset;
+
+	if (sector512 == NULL || msfatctx == NULL || f == NULL)
+		return -1;
+	if (f->base_info.FAT_size != 32)
+		return 0;
+
+	memset(&fsinfo,0,sizeof(fsinfo));
+	if (make_partition) offset = f->partition_offset * (uint64_t)f->disk_bytes_per_sector;
+	else offset = 0;
+	offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_FSInfo) * (uint64_t)f->disk_bytes_per_sector;
+
+	fsinfo.FSI_LeadSig = htole32((uint32_t)0x41615252UL);
+	fsinfo.FSI_StrucSig = htole32((uint32_t)0x61417272UL);
+	fsinfo.FSI_Free_Count = (uint32_t)0xFFFFFFFFUL;
+	fsinfo.FSI_Nxt_Free = (uint32_t)0xFFFFFFFFUL;
+	fsinfo.FSI_TrailSig = htole32((uint32_t)0xAA550000UL);
+
+	if (msfatctx->write(msfatctx,(uint8_t*)(&fsinfo),offset,512))
+		return -1;
+
+	return 0;
+}
+
+int libmsfat_formatting_params_write_boot_sector(unsigned char *sector512,struct libmsfat_context_t *msfatctx,struct libmsfat_formatting_params *f) {
+	struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector512;
+	uint64_t offset;
+
+	if (sector512 == NULL || msfatctx == NULL || f == NULL)
+		return -1;
+	if (msfatctx->write == NULL)
+		return -1;
+
+	if (make_partition) offset = f->partition_offset * (uint64_t)f->disk_bytes_per_sector;
+	else offset = 0;
+
+	if (msfatctx->write(msfatctx,sector512,offset,512))
+		return -1;
+
+	// backup copy too
+	if (f->base_info.FAT_size == 32) {
+		if (make_partition) offset = f->partition_offset * (uint64_t)f->disk_bytes_per_sector;
+		else offset = 0;
+		offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_BkBootSec) * (uint64_t)f->disk_bytes_per_sector;
+		if (msfatctx->write(msfatctx,sector512,offset,512))
+			return -1;
+	}
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	struct libmsfat_context_t *msfatctx = NULL;
@@ -1181,6 +1318,7 @@ int main(int argc,char **argv) {
 
 	if (libmsfat_formatting_params_is_valid(fmtparam)) return 1;
 
+	/* create the file, then extend out to the desired size */
 	fd = open(s_image,O_RDWR|O_BINARY|O_CREAT|O_TRUNC,0644);
 	if (fd < 0) {
 		fprintf(stderr,"Unable to open disk image, %s\n",strerror(errno));
@@ -1216,12 +1354,9 @@ int main(int argc,char **argv) {
 		unsigned int bs_sz = libmsfat_formatting_params_get_bpb_size(fmtparam);
 		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
 
-		uint64_t offset;
 		struct libmsfat_file_io_ctx_t *fioctx_parent = NULL;
 		struct libmsfat_file_io_ctx_t *fioctx = NULL;
 
-		if (make_partition) offset = fmtparam->partition_offset * (uint64_t)fmtparam->disk_bytes_per_sector;
-		else offset = 0;
 
 		memset(sector,0,sizeof(sector));
 		memcpy(bs->BS_header.BS_OEMName,"DATATBOX",8);
@@ -1231,125 +1366,10 @@ int main(int argc,char **argv) {
 		sector[bs_sz+1] = 0x19;
 		strcpy((char*)sector+bs_sz+2,"Not bootable, data only");
 
-		// JMP instruction
-		bs->BS_header.BS_jmpBoot[0] = 0xEB;
-		bs->BS_header.BS_jmpBoot[1] = bs_sz - 2;
-		bs->BS_header.BS_jmpBoot[2] = 0x90;
-
-		// common BPB
-		bs->BPB_common.BPB_BytsPerSec = htole16(fmtparam->disk_bytes_per_sector);
-		bs->BPB_common.BPB_SecPerClus = fmtparam->base_info.Sectors_Per_Cluster;
-		bs->BPB_common.BPB_RsvdSecCnt = htole16(reserved_sectors);
-		bs->BPB_common.BPB_NumFATs = fmtparam->base_info.FAT_tables;
-		if (fmtparam->base_info.FAT_size == 32)
-			bs->BPB_common.BPB_RootEntCnt = 0;
-		else
-			bs->BPB_common.BPB_RootEntCnt = htole16(root_directory_entries);
-		if (fmtparam->base_info.TotalSectors >= (uint32_t)65536 || fmtparam->base_info.FAT_size == 32)
-			bs->BPB_common.BPB_TotSec16 = 0;
-		else
-			bs->BPB_common.BPB_TotSec16 = (uint16_t)htole16(fmtparam->base_info.TotalSectors);
-		bs->BPB_common.BPB_Media = fmtparam->disk_media_type_byte;
-		if (fmtparam->base_info.FAT_size == 32)
-			bs->BPB_common.BPB_FATSz16 = 0;
-		else
-			bs->BPB_common.BPB_FATSz16 = htole16(fmtparam->base_info.FAT_table_size);
-		bs->BPB_common.BPB_SecPerTrk = fmtparam->disk_geo.sectors;
-		bs->BPB_common.BPB_NumHeads = fmtparam->disk_geo.heads;
-		bs->BPB_common.BPB_TotSec32 = htole32(fmtparam->base_info.TotalSectors);
-
-		if (fmtparam->base_info.FAT_size == 32) {
-			bs->at36.BPB_FAT32.BPB_FATSz32 = htole32(fmtparam->base_info.FAT_table_size);
-			bs->at36.BPB_FAT32.BPB_ExtFlags = 0;
-			bs->at36.BPB_FAT32.BPB_FSVer = 0;
-			bs->at36.BPB_FAT32.BPB_RootClus = htole32(fmtparam->root_cluster);
-			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(fmtparam->base_info.fat32.BPB_FSInfo);
-			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(fmtparam->backup_boot_sector);
-			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
-			bs->at36.BPB_FAT32.BS_BootSig = 0x29;
-			bs->at36.BPB_FAT32.BS_VolID = htole32(fmtparam->volume_id);
-
-			{
-				const char *s = fmtparam->volume_label;
-				uint8_t *d = bs->at36.BPB_FAT32.BS_VolLab;
-				uint8_t *df = d + 11;
-
-				while (*s && d < df) *d++ = *s++;
-				while (d < df) *d++ = ' ';
-			}
-
-			memcpy(bs->at36.BPB_FAT32.BS_FilSysType,"FAT32   ",8);
-		}
-		else {
-			bs->at36.BPB_FAT.BS_DrvNum = (make_partition ? 0x80 : 0x00);
-			bs->at36.BPB_FAT.BS_BootSig = 0x29;
-			bs->at36.BPB_FAT.BS_VolID = htole32(fmtparam->volume_id);
-
-			{
-				const char *s = fmtparam->volume_label;
-				uint8_t *d = bs->at36.BPB_FAT.BS_VolLab;
-				uint8_t *df = d + 11;
-
-				while (*s && d < df) *d++ = *s++;
-				while (d < df) *d++ = ' ';
-			}
-
-			if (fmtparam->base_info.FAT_size == 16)
-				memcpy(bs->at36.BPB_FAT.BS_FilSysType,"FAT16   ",8);
-			else
-				memcpy(bs->at36.BPB_FAT.BS_FilSysType,"FAT12   ",8);
-		}
-
-		// signature
-		sector[510] = 0x55;
-		sector[511] = 0xAA;
-
-		// write it
-		if (lseek(fd,(off_t)offset,SEEK_SET) != (off_t)offset || write(fd,sector,512) != 512) {
-			fprintf(stderr,"Failed to write BPB back\n");
-			return 1;
-		}
-
-		// backup copy too
-		if (fmtparam->base_info.FAT_size == 32) {
-			if (make_partition)
-				offset = fmtparam->partition_offset;
-			else
-				offset = 0;
-
-			offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_BkBootSec);
-			offset *= (uint64_t)fmtparam->disk_bytes_per_sector;
-
-			if (lseek(fd,(off_t)offset,SEEK_SET) != (off_t)offset || write(fd,sector,512) != 512) {
-				fprintf(stderr,"Failed to write BPB back\n");
-				return 1;
-			}
-		}
-
-		// FSInfo
-		if (fmtparam->base_info.FAT_size == 32) {
-			struct libmsfat_fat32_fsinfo_t fsinfo;
-
-			if (make_partition)
-				offset = fmtparam->partition_offset;
-			else
-				offset = 0;
-
-			offset += (uint64_t)le16toh(bs->at36.BPB_FAT32.BPB_FSInfo);
-			offset *= (uint64_t)fmtparam->disk_bytes_per_sector;
-
-			memset(&fsinfo,0,sizeof(fsinfo));
-			fsinfo.FSI_LeadSig = htole32((uint32_t)0x41615252UL);
-			fsinfo.FSI_StrucSig = htole32((uint32_t)0x61417272UL);
-			fsinfo.FSI_Free_Count = (uint32_t)0xFFFFFFFFUL;
-			fsinfo.FSI_Nxt_Free = (uint32_t)0xFFFFFFFFUL;
-			fsinfo.FSI_TrailSig = htole32((uint32_t)0xAA550000UL);
-
-			if (lseek(fd,(off_t)offset,SEEK_SET) != (off_t)offset || write(fd,&fsinfo,512) != 512) {
-				fprintf(stderr,"Failed to write BPB back\n");
-				return 1;
-			}
-		}
+		// generate the rest
+		if (libmsfat_formatting_params_generate_boot_sector(sector,fmtparam)) return 1;
+		if (libmsfat_formatting_params_write_boot_sector(sector,msfatctx,fmtparam)) return 1;
+		if (libmsfat_formatting_params_write_fat32_fsinfo(sector,msfatctx,fmtparam)) return 1;
 
 		if (libmsfat_bs_compute_disk_locations(&fmtparam->final_info,bs)) {
 			printf("Unable to locate disk locations.\n");
