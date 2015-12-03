@@ -952,7 +952,7 @@ int libmsfat_formatting_params_write_fat_clusters01(struct libmsfat_formatting_p
 	return 0;
 }
 
-int libmsfat_formatting_params_init_fat32_root_cluster(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx,unsigned char *sector512) {
+int libmsfat_formatting_params_init_root_directory(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx,unsigned char *sector512) {
 	struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector512;
 	unsigned int i;
 

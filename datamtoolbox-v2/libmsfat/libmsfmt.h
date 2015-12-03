@@ -120,7 +120,7 @@ int libmsfat_formatting_params_write_fat32_fsinfo(unsigned char *sector512,struc
 int libmsfat_formatting_params_write_boot_sector(unsigned char *sector512,struct libmsfat_context_t *msfatctx,struct libmsfat_formatting_params *f);
 int libmsfat_formatting_params_reinit_final_info(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx,unsigned char *sector512);
 int libmsfat_formatting_params_write_fat_clusters01(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx);
-int libmsfat_formatting_params_init_fat32_root_cluster(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx,unsigned char *sector512);
+int libmsfat_formatting_params_init_root_directory(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx,unsigned char *sector512);
 int libmsfat_formatting_params_init_root_directory_volume_label(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx);
 int libmsfat_formatting_params_zero_fat_tables(struct libmsfat_formatting_params *f,struct libmsfat_context_t *msfatctx);
 
