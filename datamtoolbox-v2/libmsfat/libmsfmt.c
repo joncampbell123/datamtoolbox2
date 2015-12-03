@@ -975,6 +975,28 @@ int libmsfat_formatting_params_init_fat32_root_cluster(struct libmsfat_formattin
 		// make sure the cluster corresponding to the root dir is zeroed out
 		libmsfat_file_io_ctx_zero_cluster(rootclus,msfatctx);
 	}
+	else {
+		unsigned char buf[512];
+		uint64_t offset;
+		uint32_t sz,rd;
+
+		memset(buf,0x00,sizeof(buf));
+		offset  = (uint64_t)msfatctx->fatinfo.RootDirectory_offset * (uint64_t)msfatctx->fatinfo.BytesPerSector;
+		offset += msfatctx->partition_byte_offset;
+		sz = (uint64_t)msfatctx->fatinfo.BytesPerSector * (uint64_t)msfatctx->fatinfo.RootDirectory_size;
+		while (sz != (uint32_t)0) {
+			if (sz > (uint32_t)sizeof(buf))
+				rd = sizeof(buf);
+			else
+				rd = (size_t)sz;
+
+			if (msfatctx->write(msfatctx,buf,offset,sizeof(buf)))
+				return -1;
+
+			offset += (uint64_t)rd;
+			sz -= rd;
+		}
+	}
 
 	return 0;
 }
