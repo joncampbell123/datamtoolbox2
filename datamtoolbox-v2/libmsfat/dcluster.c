@@ -99,7 +99,7 @@ int main(int argc,char **argv) {
 	{
 		/* make sure it's a file */
 		struct stat st;
-		if (fstat(fd,&st) || !S_ISREG(st.st_mode)) {
+		if (fstat(fd,&st) || (!S_ISREG(st.st_mode) && !S_ISBLK(st.st_mode))) {
 			fprintf(stderr,"Image is not a file\n");
 			return 1;
 		}

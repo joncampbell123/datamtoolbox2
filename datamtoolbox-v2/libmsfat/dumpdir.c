@@ -308,9 +308,9 @@ int main(int argc,char **argv) {
 		return 1;
 	}
 	{
-		/* make sure it's a file */
+		/* make sure it's a file, or a block device */
 		struct stat st;
-		if (fstat(fd,&st) || !S_ISREG(st.st_mode)) {
+		if (fstat(fd,&st) || (!S_ISREG(st.st_mode) && !S_ISBLK(st.st_mode))) {
 			fprintf(stderr,"Image is not a file\n");
 			return 1;
 		}
