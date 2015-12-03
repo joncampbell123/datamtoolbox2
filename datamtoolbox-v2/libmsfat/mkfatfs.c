@@ -749,6 +749,19 @@ int libmsfat_formatting_params_auto_choose_volume_id(struct libmsfat_formatting_
 	return 0;
 }
 
+int libmsfat_formatting_params_is_valid(struct libmsfat_formatting_params *f) {
+	if (f == NULL) return -1;
+
+	if (f->base_info.FAT_size == 32 && f->base_info.fat32.BPB_FSInfo == 0)
+		return -1;
+	if (f->base_info.FAT_size == 0)
+		return -1;
+	if (f->base_info.Sectors_Per_Cluster == 0)
+		return -1;
+
+	return 0;
+}
+
 int main(int argc,char **argv) {
 	struct libmsfat_formatting_params *fmtparam;
 	struct libmsfat_context_t *msfatctx = NULL;
@@ -1023,19 +1036,7 @@ int main(int argc,char **argv) {
 		printf("   FAT32 FSInfo sector: %lu\n",
 			(unsigned long)fmtparam->base_info.fat32.BPB_FSInfo);
 
-	if (fmtparam->base_info.FAT_size == 32 && fmtparam->base_info.fat32.BPB_FSInfo == 0) {
-		fprintf(stderr,"FAT32 requires a sector set aside for FSInfo\n");
-		return 1;
-	}
-
-	if (fmtparam->base_info.FAT_size == 0) {
-		fprintf(stderr,"Unable to decide on a FAT bit width\n");
-		return 1;
-	}
-	if (fmtparam->base_info.Sectors_Per_Cluster == 0) {
-		fprintf(stderr,"Unable to determine cluster size\n");
-		return 1;
-	}
+	if (libmsfat_formatting_params_is_valid(fmtparam)) return 1;
 
 	fd = open(s_image,O_RDWR|O_BINARY|O_CREAT|O_TRUNC,0644);
 	if (fd < 0) {
