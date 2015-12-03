@@ -53,8 +53,6 @@ unsigned long long strtoull_with_unit_suffixes(const char *s,char **r,unsigned i
 }
 
 static uint8_t					make_partition = 0;
-static uint8_t					lba_mode = 0;
-static uint8_t					chs_mode = 0;
 static uint8_t					allow_fat32 = 1;
 static uint8_t					allow_fat16 = 1;
 static uint8_t					allow_fat12 = 1;
@@ -90,6 +88,8 @@ struct libmsfat_formatting_params {
 	uint8_t						disk_media_type_byte;
 	const char*					volume_label;
 
+	unsigned int					lba_mode:1;
+	unsigned int					chs_mode:1;
 	unsigned int					volume_id_set:1;
 	unsigned int					partition_type_set:1;
 	unsigned int					disk_size_bytes_set:1;
@@ -207,7 +207,7 @@ int libmsfat_formatting_params_autofill_geometry(struct libmsfat_formatting_para
 	if (f == NULL) return -1;
 	if (f->disk_size_bytes == 0) return 1;
 
-	if (lba_mode || f->disk_size_bytes > (uint64_t)(128ULL << 20ULL)) { // 64MB
+	if (f->lba_mode || f->disk_size_bytes > (uint64_t)(128ULL << 20ULL)) { // 64MB
 		if (f->disk_geo.heads == 0)
 			f->disk_geo.heads = 16;
 	}
@@ -216,7 +216,7 @@ int libmsfat_formatting_params_autofill_geometry(struct libmsfat_formatting_para
 			f->disk_geo.heads = 8;
 	}
 
-	if (lba_mode || f->disk_size_bytes > (uint64_t)(96ULL << 20ULL)) { // 96MB
+	if (f->lba_mode || f->disk_size_bytes > (uint64_t)(96ULL << 20ULL)) { // 96MB
 		if (f->disk_geo.sectors == 0)
 			f->disk_geo.sectors = 63;
 	}
@@ -235,11 +235,11 @@ int libmsfat_formatting_params_autofill_geometry(struct libmsfat_formatting_para
 int libmsfat_formatting_params_auto_choose_lba_chs_from_geometry(struct libmsfat_formatting_params *f) {
 	if (f == NULL) return -1;
 
-	if (!lba_mode && !chs_mode) {
+	if (!f->lba_mode && !f->chs_mode) {
 		if (f->disk_geo.sectors >= 63 && f->disk_geo.cylinders >= 1024)
-			lba_mode = 1;
+			f->lba_mode = 1;
 		else
-			chs_mode = 1;
+			f->chs_mode = 1;
 	}
 
 	return 0;
@@ -248,11 +248,11 @@ int libmsfat_formatting_params_auto_choose_lba_chs_from_geometry(struct libmsfat
 int libmsfat_formatting_params_auto_choose_lba_chs_from_disk_size(struct libmsfat_formatting_params *f) {
 	if (f == NULL) return -1;
 
-	if (!lba_mode && !chs_mode) {
+	if (!f->lba_mode && !f->chs_mode) {
 		if (f->disk_size_bytes >= (uint64_t)(8192ULL << 20ULL))
-			lba_mode = 1;
+			f->lba_mode = 1;
 		else
-			chs_mode = 1;
+			f->chs_mode = 1;
 	}
 
 	return 0;
@@ -696,9 +696,9 @@ int libmsfat_formatting_params_choose_partition_table(struct libmsfat_formatting
 		// resides in the first 8GB.
 		else if ((f->partition_offset+f->partition_size)*((uint64_t)f->disk_bytes_per_sector) <= ((uint64_t)8192UL << (uint64_t)20UL)) {
 			if (f->base_info.FAT_size == 32)
-				f->partition_type = lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
+				f->partition_type = f->lba_mode ? 0x0C : 0x0B;	// FAT32 with (lba_mode ? LBA : CHS) mode
 			else if (f->base_info.FAT_size == 16)
-				f->partition_type = lba_mode ? 0x0E : 0x06;	// FAT16B with (lba_mode ? LBA : CHS) mode
+				f->partition_type = f->lba_mode ? 0x0E : 0x06;	// FAT16B with (lba_mode ? LBA : CHS) mode
 			else
 				f->partition_type = 0x01; // FAT12
 		}
@@ -809,10 +809,10 @@ int main(int argc,char **argv) {
 				}
 			}
 			else if (!strcmp(a,"lba")) {
-				lba_mode = 1;
+				fmtparam->lba_mode = 1;
 			}
 			else if (!strcmp(a,"chs")) {
-				chs_mode = 1;
+				fmtparam->chs_mode = 1;
 			}
 			else if (!strcmp(a,"no-fat32")) {
 				allow_fat32 = 0;
@@ -945,7 +945,7 @@ int main(int argc,char **argv) {
 		if (libmsfat_formatting_params_auto_choose_lba_chs_from_disk_size(fmtparam)) return 1;
 		if (libmsfat_formatting_params_enlarge_sectors_4GB_count_workaround(fmtparam)) return 1;
 		if (libmsfat_formatting_params_update_geometry_from_size_bios_xlat(fmtparam)) return 1;
-		if (chs_mode && libmsfat_formatting_params_update_size_from_geometry(fmtparam)) return 1;
+		if (fmtparam->chs_mode && libmsfat_formatting_params_update_size_from_geometry(fmtparam)) return 1;
 	}
 	else {
 		if (libmsfat_formatting_params_update_size_from_geometry(fmtparam)) return 1;
@@ -975,7 +975,7 @@ int main(int argc,char **argv) {
 	if (libmsfat_formatting_params_set_volume_label(fmtparam,set_volume_label)) return 1;
 	if (libmsfat_formatting_params_auto_choose_volume_id(fmtparam)) return 1;
 
-	assert(lba_mode || chs_mode);
+	assert(fmtparam->lba_mode || fmtparam->chs_mode);
 	printf("Formatting: %llu sectors x %u bytes per sector = %llu bytes (C/H/S %u/%u/%u) media type 0x%02x %s\n",
 		(unsigned long long)fmtparam->disk_sectors,
 		(unsigned int)fmtparam->disk_bytes_per_sector,
@@ -984,7 +984,7 @@ int main(int argc,char **argv) {
 		(unsigned int)fmtparam->disk_geo.heads,
 		(unsigned int)fmtparam->disk_geo.sectors,
 		(unsigned int)fmtparam->disk_media_type_byte,
-		lba_mode ? "LBA" : "CHS");
+		fmtparam->lba_mode ? "LBA" : "CHS");
 
 	if (make_partition) {
 		printf("   Partition: type=0x%02x sectors %llu-%llu\n",
@@ -992,9 +992,9 @@ int main(int argc,char **argv) {
 			(unsigned long long)fmtparam->partition_offset,
 			(unsigned long long)(fmtparam->partition_offset + fmtparam->partition_size - (uint64_t)1UL));
 
-		if (chs_mode && (fmtparam->partition_offset % (uint64_t)fmtparam->disk_geo.sectors) != 0)
+		if (fmtparam->chs_mode && (fmtparam->partition_offset % (uint64_t)fmtparam->disk_geo.sectors) != 0)
 			printf("    WARNING: Partition does not start on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
-		if (chs_mode && ((fmtparam->partition_offset + fmtparam->partition_size) % (uint64_t)fmtparam->disk_geo.sectors) != 0)
+		if (fmtparam->chs_mode && ((fmtparam->partition_offset + fmtparam->partition_size) % (uint64_t)fmtparam->disk_geo.sectors) != 0)
 			printf("    WARNING: Partition does not end on track boundary (CHS mode warning). MS-DOS may have issues with it.\n");
 
 		if (fmtparam->partition_offset == 0 || fmtparam->partition_size == 0) return 1;
