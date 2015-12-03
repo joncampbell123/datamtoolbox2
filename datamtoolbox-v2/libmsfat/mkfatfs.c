@@ -124,7 +124,8 @@ static uint32_t					reserved_sectors = 0;
 static uint8_t					set_fat_tables = 0;
 static uint32_t					set_reserved_sectors = 0;
 static const char*				set_volume_label = NULL;
-static uint32_t					set_root_cluster = 0;
+static uint32_t					root_cluster = 0;
+static uint32_t					root_cluster_set = 0;
 static uint32_t					set_backup_boot_sector = 0;
 static uint8_t					set_boot_sector_bpb_size = 0;
 static uint8_t					dont_partition_track_align = 0;
@@ -998,7 +999,8 @@ int main(int argc,char **argv) {
 				set_volume_label = argv[i++];
 			}
 			else if (!strcmp(a,"root-cluster")) {
-				set_root_cluster = (uint32_t)strtoul(argv[i++],NULL,0);
+				root_cluster = (uint32_t)strtoul(argv[i++],NULL,0);
+				root_cluster_set = 1;
 			}
 			else if (!strcmp(a,"backup-boot-sector")) {
 				set_backup_boot_sector = (uint32_t)strtoul(argv[i++],NULL,0);
@@ -1183,10 +1185,13 @@ int main(int argc,char **argv) {
 		if (libmsfat_formatting_params_create_partition_table_and_write_entry(fmtparam,msfatctx)) return 1;
 	}
 
+	if (!root_cluster_set)
+		root_cluster = 2;
+
 	/* generate the boot sector! */
 	{
-		unsigned int bs_sz = libmsfat_formatting_params_get_bpb_size(fmtparam);
 		unsigned char sector[512];
+		unsigned int bs_sz = libmsfat_formatting_params_get_bpb_size(fmtparam);
 		struct libmsfat_bootsector *bs = (struct libmsfat_bootsector*)sector;
 
 		uint64_t offset;
@@ -1235,10 +1240,7 @@ int main(int argc,char **argv) {
 			bs->at36.BPB_FAT32.BPB_FATSz32 = htole32(fmtparam->base_info.FAT_table_size);
 			bs->at36.BPB_FAT32.BPB_ExtFlags = 0;
 			bs->at36.BPB_FAT32.BPB_FSVer = 0;
-			if (set_root_cluster != 0)
-				bs->at36.BPB_FAT32.BPB_RootClus = htole32(set_root_cluster);
-			else
-				bs->at36.BPB_FAT32.BPB_RootClus = htole32(2);
+			bs->at36.BPB_FAT32.BPB_RootClus = htole32(root_cluster);
 			bs->at36.BPB_FAT32.BPB_FSInfo = htole16(fmtparam->base_info.fat32.BPB_FSInfo);
 			bs->at36.BPB_FAT32.BPB_BkBootSec = htole16(backup_boot_sector);
 			bs->at36.BPB_FAT32.BS_DrvNum = (make_partition ? 0x80 : 0x00);
