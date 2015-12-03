@@ -6,7 +6,6 @@
 #endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
-# include <endian.h>
 #endif
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -24,6 +23,7 @@
 # include <datamtoolbox-v2/polyfill/ms_cpp.h>
 # include <windows.h>
 #endif
+#include <datamtoolbox-v2/polyfill/endian.h>
 #include <datamtoolbox-v2/polyfill/lseek.h>
 #include <datamtoolbox-v2/polyfill/unix.h>
 

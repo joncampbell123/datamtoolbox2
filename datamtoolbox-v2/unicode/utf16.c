@@ -1,11 +1,8 @@
 
-#if !defined(_MSC_VER)
-# include <endian.h>
-#endif
 #if defined(_MSC_VER)
 # include <datamtoolbox-v2/polyfill/ms_cpp.h>
 #endif
-
+#include <datamtoolbox-v2/polyfill/endian.h>
 #include <datamtoolbox-v2/unicode/utf16.h>
 
 /* [doc] utf16le_encode

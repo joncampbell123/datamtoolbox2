@@ -3,7 +3,6 @@
 #endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
-# include <endian.h>
 #endif
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -19,6 +18,7 @@
 #if defined(_MSC_VER)
 # include <datamtoolbox-v2/polyfill/ms_cpp.h>
 #endif
+#include <datamtoolbox-v2/polyfill/endian.h>
 #include <datamtoolbox-v2/polyfill/lseek.h>
 #include <datamtoolbox-v2/polyfill/stat.h>
 #include <datamtoolbox-v2/polyfill/unix.h>
@@ -66,7 +66,7 @@ static void print_dirent(const struct libmsfat_context_t *msfatctx,const struct 
 		if (!nohex)
 			printf("    <EMPTY, end of dir>\n");
 	}
-	else if (dir->a.n.DIR_Name[0] == 0xE5) {
+	else if (dir->a.n.DIR_Name[0] == (char)0xE5) {
 		if (!nohex)
 			printf("    <DELETED>\n");
 	}
