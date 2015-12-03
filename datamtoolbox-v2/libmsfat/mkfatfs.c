@@ -773,9 +773,9 @@ int main(int argc,char **argv) {
 		}
 
 		ent.partition_type = partition_type;
-		ent.first_lba_sector = partition_offset;
-		ent.number_lba_sectors = partition_size;
-		if (int13cnv_lba_to_chs(&chs,&disk_geo,partition_offset)) {
+		ent.first_lba_sector = (uint32_t)partition_offset;
+		ent.number_lba_sectors = (uint32_t)partition_size;
+		if (int13cnv_lba_to_chs(&chs,&disk_geo,(uint32_t)partition_offset)) {
 			fprintf(stderr,"Failed to convert start LBA -> CHS\n");
 			return 1;
 		}
