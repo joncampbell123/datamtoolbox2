@@ -111,9 +111,6 @@ static int extend_sparse_file_to_size(int fd,uint64_t size) {
 }
 
 static uint8_t					make_partition = 0;
-static uint8_t					allow_fat32 = 1;
-static uint8_t					allow_fat16 = 1;
-static uint8_t					allow_fat12 = 1;
 static uint16_t					set_cluster_size = 0;
 static uint8_t					allow_non_power_of_2_cluster_size = 0;
 static uint8_t					allow_64kb_or_larger_clusters = 0;
@@ -154,6 +151,9 @@ struct libmsfat_formatting_params {
 	unsigned int					backup_boot_sector_set:1;
 	unsigned int					disk_media_type_byte_set:1;
 	unsigned int					disk_bytes_per_sector_set:1;
+	unsigned int					allow_fat32:1;
+	unsigned int					allow_fat16:1;
+	unsigned int					allow_fat12:1;
 };
 
 int libmsfat_formatting_params_set_volume_label(struct libmsfat_formatting_params *f,const char *n) {
@@ -171,6 +171,9 @@ int libmsfat_formatting_params_init(struct libmsfat_formatting_params *f) {
 	memset(f,0,sizeof(*f));
 	f->disk_bytes_per_sector = 512U;
 	libmsfat_formatting_params_set_volume_label(f,NULL);
+	f->allow_fat32 = 1;
+	f->allow_fat16 = 1;
+	f->allow_fat12 = 1;
 	return 0;
 }
 
@@ -452,33 +455,33 @@ int libmsfat_formatting_params_auto_choose_FAT_size(struct libmsfat_formatting_p
 	if (f == NULL) return -1;
 
 	if (f->force_fat != 0) {
-		if (f->force_fat == 12 && !allow_fat12)
+		if (f->force_fat == 12 && !f->allow_fat12)
 			return -1;
-		else if (f->force_fat == 16 && !allow_fat16)
+		else if (f->force_fat == 16 && !f->allow_fat16)
 			return -1;
-		else if (f->force_fat == 32 && !allow_fat32)
+		else if (f->force_fat == 32 && !f->allow_fat32)
 			return -1;
 
 		f->base_info.FAT_size = f->force_fat;
 	}
 	if (f->base_info.FAT_size == 0) {
 		// if FAT32 allowed, and 2GB or larger, then do FAT32
-		if (allow_fat32 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) >= ((uint64_t)(2000ULL << 20ULL)))
+		if (f->allow_fat32 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) >= ((uint64_t)(2000ULL << 20ULL)))
 			f->base_info.FAT_size = 32;
 		// if FAT16 allowed, and 32MB or larger, then do FAT16
-		else if (allow_fat16 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) >= ((uint64_t)(30ULL << 20ULL)))
+		else if (f->allow_fat16 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) >= ((uint64_t)(30ULL << 20ULL)))
 			f->base_info.FAT_size = 16;
 		// if FAT12 allowed, then do it
-		else if (allow_fat12 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) < ((uint64_t)(31ULL << 20ULL)))
+		else if (f->allow_fat12 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) < ((uint64_t)(31ULL << 20ULL)))
 			f->base_info.FAT_size = 12;
 		// maybe we can do FAT32?
-		else if (allow_fat32 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) >= ((uint64_t)(200ULL << 20ULL)))
+		else if (f->allow_fat32 && ((uint64_t)f->base_info.TotalSectors * (uint64_t)f->disk_bytes_per_sector) >= ((uint64_t)(200ULL << 20ULL)))
 			f->base_info.FAT_size = 32;
-		else if (allow_fat16)
+		else if (f->allow_fat16)
 			f->base_info.FAT_size = 16;
-		else if (allow_fat12)
+		else if (f->allow_fat12)
 			f->base_info.FAT_size = 12;
-		else if (allow_fat32)
+		else if (f->allow_fat32)
 			f->base_info.FAT_size = 32;
 	}
 	if (f->base_info.FAT_size == 0)
@@ -1202,22 +1205,22 @@ int main(int argc,char **argv) {
 				fmtparam->chs_mode = 1;
 			}
 			else if (!strcmp(a,"no-fat32")) {
-				allow_fat32 = 0;
+				fmtparam->allow_fat32 = 0;
 			}
 			else if (!strcmp(a,"fat32")) {
-				allow_fat32 = 1;
+				fmtparam->allow_fat32 = 1;
 			}
 			else if (!strcmp(a,"no-fat16")) {
-				allow_fat16 = 0;
+				fmtparam->allow_fat16 = 0;
 			}
 			else if (!strcmp(a,"fat16")) {
-				allow_fat16 = 1;
+				fmtparam->allow_fat16 = 1;
 			}
 			else if (!strcmp(a,"no-fat12")) {
-				allow_fat12 = 0;
+				fmtparam->allow_fat12 = 0;
 			}
 			else if (!strcmp(a,"fat12")) {
-				allow_fat12 = 1;
+				fmtparam->allow_fat12 = 1;
 			}
 			else if (!strcmp(a,"fat")) {
 				if (libmsfat_formatting_params_set_FAT_width(fmtparam,(unsigned int)strtoul(argv[i++],NULL,0))) {
