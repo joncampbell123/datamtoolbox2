@@ -1,6 +1,14 @@
 #if defined(_MSC_VER)
 # include <datamtoolbox-v2/polyfill/ms_posix_stfu.h>
 #endif
+#if defined(_LINUX)
+# ifndef FALLOC_FL_KEEP_SIZE
+#  define FALLOC_FL_KEEP_SIZE 0x01
+# endif
+# ifndef FALLOC_FL_PUNCH_HOLE
+#  define FALLOC_FL_PUNCH_HOLE 0x02
+# endif
+#endif
 #if !defined(_MSC_VER)
 # include <unistd.h>
 #endif
